@@ -1,11 +1,78 @@
+// @ts-check
 // =============================================================================
 // TodoStore.js
 //
 // Core data store, schema v1 management, profile handling, and reminder logic
 // for the Omarchy Quattro Todo plugin (tablerase.todo).
+//
+// Intentionally pure stateless library; fully typed via TypeScript JSDoc.
 // =============================================================================
-.pragma library
 
+/**
+ * @typedef {Object} Task
+ * @property {number|string} id - Unique identifier (timestamp or string)
+ * @property {string} title - Task title/content
+ * @property {string} description - Detailed notes or description
+ * @property {string} profile - Profile/category name (e.g. "personal", "work")
+ * @property {boolean} done - Whether the task is completed
+ * @property {number} createdAt - Creation epoch timestamp (ms)
+ * @property {string|null} [dueDate] - Optional due date string
+ * @property {string|null} [reminder] - Optional reminder ISO timestamp string
+ * @property {boolean} [notified] - Whether desktop notification was triggered
+ */
+
+/**
+ * @typedef {Object} ArchivedTask
+ * @property {number|string} id - Task identifier
+ * @property {string} title - Task title
+ * @property {string} description - Task description
+ * @property {string} profile - Profile name
+ * @property {number} createdAt - Creation epoch timestamp (ms)
+ * @property {number} completedAt - Completion/archive epoch timestamp (ms)
+ */
+
+/**
+ * @typedef {Object} TodoStoreData
+ * @property {number} version - Schema version (always 1)
+ * @property {string} activeProfile - Currently active profile
+ * @property {string[]} profiles - List of configured profile names
+ * @property {Task[]} todos - Active tasks list
+ */
+
+/**
+ * @typedef {Object} ArchiveData
+ * @property {number} version - Archive schema version (always 1)
+ * @property {ArchivedTask[]} archived - List of archived completed tasks
+ */
+
+/**
+ * @typedef {Object} TaskUpdateFields
+ * @property {string} [title]
+ * @property {string} [description]
+ * @property {string} [profile]
+ * @property {boolean} [done]
+ * @property {string|null} [reminder]
+ * @property {string|null} [dueDate]
+ * @property {boolean} [notified]
+ */
+
+/**
+ * @typedef {Object} ReminderPreset
+ * @property {string} label
+ * @property {string} value
+ */
+
+/**
+ * @typedef {Object} ArchiveResult
+ * @property {TodoStoreData} updatedStore
+ * @property {ArchiveData} updatedArchive
+ * @property {number} clearedCount
+ */
+
+/**
+ * Creates an empty default Schema v1 store.
+ * @returns {TodoStoreData}
+ */
 function defaultStore() {
   return {
     version: 1,
@@ -15,6 +82,12 @@ function defaultStore() {
   }
 }
 
+/**
+ * Cleans and normalizes a profile name.
+ * Maps aliases (e.g. "perso" -> "personal").
+ * @param {string|null|undefined} name
+ * @returns {string}
+ */
 function cleanProfileName(name) {
   if (!name) return "personal"
   var cleaned = String(name).trim().toLowerCase().replace(/^#+/, "").replace(/[^a-z0-9_-]/g, "")
@@ -22,6 +95,11 @@ function cleanProfileName(name) {
   return cleaned || "personal"
 }
 
+/**
+ * Normalizes an arbitrary raw task object into a clean Schema v1 Task.
+ * @param {any} raw
+ * @returns {Task|null}
+ */
 function normalizeTask(raw) {
   if (!raw || typeof raw !== "object") return null
   var now = Date.now()
@@ -48,12 +126,18 @@ function normalizeTask(raw) {
   }
 }
 
+/**
+ * Normalizes raw JSON or object into a Schema v1 TodoStoreData structure.
+ * Handles legacy raw arrays and schema migrations.
+ * @param {any} raw
+ * @returns {TodoStoreData}
+ */
 function normalize(raw) {
   var data = raw
   if (typeof raw === "string") {
     try {
       data = JSON.parse(raw || "{}")
-    } catch (e) {
+    } catch (_e) {
       return defaultStore()
     }
   }
@@ -64,7 +148,9 @@ function normalize(raw) {
 
   // Legacy format: raw array of todos
   if (Array.isArray(data)) {
+    /** @type {Task[]} */
     var legacyTodos = []
+    /** @type {Record<string, boolean>} */
     var profileSet = { "personal": true, "work": true }
     for (var i = 0; i < data.length; i++) {
       var t = normalizeTask(data[i])
@@ -84,7 +170,9 @@ function normalize(raw) {
 
   // Schema v1 format
   var activeProfile = cleanProfileName(data.activeProfile)
+  /** @type {string[]} */
   var profiles = ["personal", "work"]
+  /** @type {Record<string, boolean>} */
   var seenProfiles = { "personal": true, "work": true }
 
   if (Array.isArray(data.profiles)) {
@@ -97,6 +185,7 @@ function normalize(raw) {
     }
   }
 
+  /** @type {Task[]} */
   var todos = []
   if (Array.isArray(data.todos)) {
     for (var j = 0; j < data.todos.length; j++) {
@@ -123,7 +212,12 @@ function normalize(raw) {
   }
 }
 
-// Parses input text for #hashtag profile syntax (e.g. "#work Fix bug" or "Deploy code #project1")
+/**
+ * Parses input text for #hashtag profile syntax (e.g. "#work Fix bug" or "Deploy code #project1").
+ * @param {string} input
+ * @param {string} [defaultProfile]
+ * @returns {{ title: string, profile: string }}
+ */
 function parseTitleAndProfile(input, defaultProfile) {
   var text = String(input || "").trim()
   var profile = defaultProfile ? cleanProfileName(defaultProfile) : "personal"
@@ -140,10 +234,24 @@ function parseTitleAndProfile(input, defaultProfile) {
   }
 }
 
+/**
+ * Deep clones a store object to maintain immutability.
+ * @param {TodoStoreData} store
+ * @returns {TodoStoreData}
+ */
 function cloneStore(store) {
   return JSON.parse(JSON.stringify(store || defaultStore()))
 }
 
+/**
+ * Adds a new task to the store.
+ * @param {TodoStoreData} store
+ * @param {string} rawTitle
+ * @param {string} [description]
+ * @param {string} [explicitProfile]
+ * @param {string|null} [reminderTime]
+ * @returns {TodoStoreData}
+ */
 function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
   var s = cloneStore(store)
   var parsed = parseTitleAndProfile(rawTitle, explicitProfile || s.activeProfile)
@@ -160,6 +268,7 @@ function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
   }
 
   var now = Date.now()
+  /** @type {Task} */
   var newTask = {
     id: now,
     title: title,
@@ -176,14 +285,20 @@ function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
   return s
 }
 
+/**
+ * Toggles a task completion state.
+ * @param {TodoStoreData} store
+ * @param {number|string} id
+ * @returns {TodoStoreData}
+ */
 function toggleTodo(store, id) {
   var s = cloneStore(store)
   for (var i = 0; i < s.todos.length; i++) {
-    if (s.todos[i].id == id) {
+    if (String(s.todos[i].id) === String(id)) {
       s.todos[i].done = !s.todos[i].done
       // If unmarked as done and reminder is in the future, allow notification again
       if (!s.todos[i].done && s.todos[i].reminder) {
-        var remTime = new Date(s.todos[i].reminder).getTime()
+        var remTime = new Date(s.todos[i].reminder || "").getTime()
         if (remTime > Date.now()) {
           s.todos[i].notified = false
         }
@@ -194,16 +309,29 @@ function toggleTodo(store, id) {
   return s
 }
 
+/**
+ * Removes a task by ID.
+ * @param {TodoStoreData} store
+ * @param {number|string} id
+ * @returns {TodoStoreData}
+ */
 function removeTodo(store, id) {
   var s = cloneStore(store)
-  s.todos = s.todos.filter(function(t) { return t.id != id })
+  s.todos = s.todos.filter(function(t) { return String(t.id) !== String(id) })
   return s
 }
 
+/**
+ * Updates specific fields of an existing task.
+ * @param {TodoStoreData} store
+ * @param {number|string} id
+ * @param {TaskUpdateFields} fields
+ * @returns {TodoStoreData}
+ */
 function updateTodo(store, id, fields) {
   var s = cloneStore(store)
   for (var i = 0; i < s.todos.length; i++) {
-    if (s.todos[i].id == id) {
+    if (String(s.todos[i].id) === String(id)) {
       var t = s.todos[i]
       if (fields.title !== undefined) t.title = String(fields.title).trim()
       if (fields.description !== undefined) t.description = String(fields.description)
@@ -224,6 +352,12 @@ function updateTodo(store, id, fields) {
   return s
 }
 
+/**
+ * Adds a new profile to the store.
+ * @param {TodoStoreData} store
+ * @param {string} name
+ * @returns {TodoStoreData}
+ */
 function addProfile(store, name) {
   var s = cloneStore(store)
   var p = cleanProfileName(name)
@@ -233,6 +367,12 @@ function addProfile(store, name) {
   return s
 }
 
+/**
+ * Removes a profile (tasks re-assigned to "personal").
+ * @param {TodoStoreData} store
+ * @param {string} name
+ * @returns {TodoStoreData}
+ */
 function removeProfile(store, name) {
   var s = cloneStore(store)
   var p = cleanProfileName(name)
@@ -250,6 +390,12 @@ function removeProfile(store, name) {
   return s
 }
 
+/**
+ * Clears completed tasks matching an optional profile filter.
+ * @param {TodoStoreData} store
+ * @param {string} [profileFilter]
+ * @returns {TodoStoreData}
+ */
 function clearCompleted(store, profileFilter) {
   var s = cloneStore(store)
   if (profileFilter && profileFilter !== "all") {
@@ -262,6 +408,12 @@ function clearCompleted(store, profileFilter) {
   return s
 }
 
+/**
+ * Counts pending (uncompleted) tasks matching an optional profile filter.
+ * @param {TodoStoreData} store
+ * @param {string} [profileFilter]
+ * @returns {number}
+ */
 function getPendingCount(store, profileFilter) {
   if (!store || !Array.isArray(store.todos)) return 0
   var count = 0
@@ -276,6 +428,12 @@ function getPendingCount(store, profileFilter) {
   return count
 }
 
+/**
+ * Filters tasks according to the active profile selection.
+ * @param {TodoStoreData} store
+ * @param {string} [profileFilter]
+ * @returns {Task[]}
+ */
 function getFilteredTodos(store, profileFilter) {
   if (!store || !Array.isArray(store.todos)) return []
   if (!profileFilter || profileFilter === "all") return store.todos
@@ -284,9 +442,15 @@ function getFilteredTodos(store, profileFilter) {
   })
 }
 
+/**
+ * Returns all unnotified tasks with reminders due at or before now.
+ * @param {TodoStoreData} store
+ * @returns {Task[]}
+ */
 function pendingReminders(store) {
   if (!store || !Array.isArray(store.todos)) return []
   var now = Date.now()
+  /** @type {Task[]} */
   var due = []
   for (var i = 0; i < store.todos.length; i++) {
     var t = store.todos[i]
@@ -300,6 +464,11 @@ function pendingReminders(store) {
   return due
 }
 
+/**
+ * Formats a reminder ISO string into a friendly user-facing label.
+ * @param {string|null|undefined} reminderStr
+ * @returns {string}
+ */
 function formatReminder(reminderStr) {
   if (!reminderStr) return ""
   var d = new Date(reminderStr)
@@ -329,6 +498,11 @@ function formatReminder(reminderStr) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + timeStr
 }
 
+/**
+ * Returns the Nerd Font icon glyph for a profile.
+ * @param {string} profile
+ * @returns {string}
+ */
 function getProfileGlyph(profile) {
   switch (String(profile).toLowerCase()) {
     case "personal": return "󰀉"
@@ -339,6 +513,10 @@ function getProfileGlyph(profile) {
   }
 }
 
+/**
+ * Returns preset quick reminder choices.
+ * @returns {ReminderPreset[]}
+ */
 function getReminderPresets() {
   var now = new Date()
   var in30m = new Date(now.getTime() + 30 * 60 * 1000)
@@ -360,12 +538,17 @@ function getReminderPresets() {
   ]
 }
 
+/**
+ * Normalizes archive data into Schema v1 format.
+ * @param {any} raw
+ * @returns {ArchiveData}
+ */
 function normalizeArchive(raw) {
   var data = raw
   if (typeof raw === "string") {
     try {
       data = JSON.parse(raw || "{}")
-    } catch (e) {
+    } catch (_e) {
       return { version: 1, archived: [] }
     }
   }
@@ -381,12 +564,21 @@ function normalizeArchive(raw) {
   }
 }
 
+/**
+ * Archives completed tasks matching the profile filter to todos-archive.json format.
+ * @param {TodoStoreData} store
+ * @param {string} [profileFilter]
+ * @param {string} [archiveRawText]
+ * @returns {ArchiveResult}
+ */
 function archiveCompleted(store, profileFilter, archiveRawText) {
   var s = cloneStore(store)
   var arc = normalizeArchive(archiveRawText)
   var now = Date.now()
 
+  /** @type {Task[]} */
   var keptTodos = []
+  /** @type {ArchivedTask[]} */
   var cleared = []
 
   for (var i = 0; i < s.todos.length; i++) {
@@ -398,7 +590,7 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
         title: task.title,
         description: task.description || "",
         profile: task.profile || "personal",
-        createdAt: task.createdAt || task.id || now,
+        createdAt: task.createdAt || (typeof task.id === "number" ? task.id : now),
         completedAt: now
       })
     } else {
@@ -416,9 +608,12 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
   }
 }
 
+/**
+ * Gets the total number of tasks in the archive file.
+ * @param {string} [archiveRawText]
+ * @returns {number}
+ */
 function getArchivedCount(archiveRawText) {
   var arc = normalizeArchive(archiveRawText)
   return arc.archived.length
 }
-
-
