@@ -286,7 +286,8 @@ omarchy-restart-shell
 ├── package.json          # Test runner & validation scripts
 ├── tsconfig.json         # TypeScript compiler & IDE configuration
 ├── BarWidget.qml         # Bar readout, mouse gestures, IPC handler, and panel loader
-├── Panel.qml             # Flyout panel with profile filters, thin scrollbar, and task rows
+├── Panel.qml             # Wayland layer-shell KeyboardPanel wrapper
+├── PanelContent.qml      # Reusable task slate UI with profile filters, scrollbar, and task rows
 ├── QuickAdd.qml          # Fullscreen overlay modal for rapid keyboard capture
 ├── Service.qml           # Headless background service monitoring scheduled reminders
 ├── TodoStore.js          # Fully-typed data store, Schema v1 normalization, and archive logic
