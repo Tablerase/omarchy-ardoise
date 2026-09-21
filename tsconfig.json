@@ -5,10 +5,10 @@
     "checkJs": true,
     "noEmit": true,
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["TodoStore.js"]
+  "include": ["TodoStore.js", "tests/**/*.ts"]
 }

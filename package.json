@@ -1,0 +1,16 @@
+{
+  "name": "tablerase-todo",
+  "version": "1.0.0",
+  "description": "Todo counter and flyout panel for the Omarchy Quattro bar.",
+  "private": true,
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mts",
+    "test:deno": "deno test --no-check --allow-read tests/",
+    "typecheck": "deno check TodoStore.js",
+    "lint:qml": "qmllint *.qml",
+    "validate:plugin": "omarchy plugin validate .",
+    "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test"
+  },
+  "author": "tablerase",
+  "license": "MIT"
+}

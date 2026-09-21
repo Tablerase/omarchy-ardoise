@@ -268,9 +268,17 @@ function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
   }
 
   var now = Date.now()
+  var taskId = now
+  for (var k = 0; k < s.todos.length; k++) {
+    var tid = Number(s.todos[k].id)
+    if (!isNaN(tid) && tid >= taskId) {
+      taskId = tid + 1
+    }
+  }
+
   /** @type {Task} */
   var newTask = {
-    id: now,
+    id: taskId,
     title: title,
     description: String(description || ""),
     profile: profile,
@@ -317,7 +325,7 @@ function toggleTodo(store, id) {
  */
 function removeTodo(store, id) {
   var s = cloneStore(store)
-  s.todos = s.todos.filter(function(t) { return String(t.id) !== String(id) })
+  s.todos = s.todos.filter(function (t) { return String(t.id) !== String(id) })
   return s
 }
 
@@ -378,7 +386,7 @@ function removeProfile(store, name) {
   var p = cleanProfileName(name)
   if (p === "personal") return s // Protected default profile
 
-  s.profiles = s.profiles.filter(function(item) { return item !== p })
+  s.profiles = s.profiles.filter(function (item) { return item !== p })
   for (var i = 0; i < s.todos.length; i++) {
     if (s.todos[i].profile === p) {
       s.todos[i].profile = "personal"
@@ -399,11 +407,11 @@ function removeProfile(store, name) {
 function clearCompleted(store, profileFilter) {
   var s = cloneStore(store)
   if (profileFilter && profileFilter !== "all") {
-    s.todos = s.todos.filter(function(t) {
+    s.todos = s.todos.filter(function (t) {
       return !t.done || t.profile !== profileFilter
     })
   } else {
-    s.todos = s.todos.filter(function(t) { return !t.done })
+    s.todos = s.todos.filter(function (t) { return !t.done })
   }
   return s
 }
@@ -437,7 +445,7 @@ function getPendingCount(store, profileFilter) {
 function getFilteredTodos(store, profileFilter) {
   if (!store || !Array.isArray(store.todos)) return []
   if (!profileFilter || profileFilter === "all") return store.todos
-  return store.todos.filter(function(t) {
+  return store.todos.filter(function (t) {
     return t.profile === profileFilter
   })
 }
@@ -478,7 +486,7 @@ function formatReminder(reminderStr) {
   var diff = d.getTime() - now.getTime()
 
   var timeStr = (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" +
-                (d.getMinutes() < 10 ? "0" : "") + d.getMinutes()
+    (d.getMinutes() < 10 ? "0" : "") + d.getMinutes()
 
   var isToday = d.toDateString() === now.toDateString()
   var tomorrow = new Date(now.getTime() + 86400000)
@@ -616,4 +624,31 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
 function getArchivedCount(archiveRawText) {
   var arc = normalizeArchive(archiveRawText)
   return arc.archived.length
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    defaultStore,
+    cleanProfileName,
+    normalizeTask,
+    normalize,
+    parseTitleAndProfile,
+    cloneStore,
+    addTodo,
+    toggleTodo,
+    removeTodo,
+    updateTodo,
+    addProfile,
+    removeProfile,
+    clearCompleted,
+    getPendingCount,
+    getFilteredTodos,
+    pendingReminders,
+    formatReminder,
+    getProfileGlyph,
+    getReminderPresets,
+    normalizeArchive,
+    archiveCompleted,
+    getArchivedCount
+  }
 }

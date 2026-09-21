@@ -252,14 +252,18 @@ omarchy plugin enable tablerase.todo right
 omarchy bar move tablerase.todo center 0
 ```
 
-### 4. Verify Code Quality
+### 4. Verify Code Quality & Run Tests
 
 ```bash
-# Validate manifest kinds and entry points
-omarchy plugin validate .
+# Run the complete test and verification pipeline
+npm run check
 
-# Lint all QML files
-qmllint *.qml
+# Or run individual checks:
+npm test            # Run unit tests via native Node runner (fast, zero dependencies)
+npm run test:deno   # Run unit tests via Deno test runner
+npm run typecheck   # Typecheck TodoStore.js via TypeScript
+npm run lint:qml    # Lint all QML files
+npm run validate:plugin # Validate Omarchy plugin manifest & structure
 ```
 
 ### 5. Restart Shell (After Modifying Service)
@@ -272,16 +276,20 @@ omarchy-restart-shell
 
 ## Project Structure
 
-```
+```text
 .
-├── manifest.json   # Plugin manifest (kinds: ["bar-widget", "overlay", "service"])
-├── BarWidget.qml   # Bar readout, mouse gestures, IPC handler, and panel loader
-├── Panel.qml       # Flyout panel with profile filters, thin scrollbar, and task rows
-├── QuickAdd.qml    # Fullscreen overlay modal for rapid keyboard capture
-├── Service.qml     # Headless background service monitoring scheduled reminders
-├── TodoStore.js    # Data store logic, Schema v1 normalization, profile & reminder helpers
-├── InboxIcon.qml   # Vector inbox tray icon rendered via Canvas 2D
-└── README.md       # Documentation and API reference
+├── manifest.json         # Plugin manifest (kinds: ["bar-widget", "overlay", "service"])
+├── package.json          # Test runner & validation scripts
+├── tsconfig.json         # TypeScript compiler & IDE configuration
+├── BarWidget.qml         # Bar readout, mouse gestures, IPC handler, and panel loader
+├── Panel.qml             # Flyout panel with profile filters, thin scrollbar, and task rows
+├── QuickAdd.qml          # Fullscreen overlay modal for rapid keyboard capture
+├── Service.qml           # Headless background service monitoring scheduled reminders
+├── TodoStore.js          # Fully-typed data store, Schema v1 normalization, and archive logic
+├── InboxIcon.qml         # Vector inbox tray icon rendered via Canvas 2D
+├── tests/                # Unit test suite
+│   └── TodoStore.test.mts # 16 automated tests covering CRUD, profiles, reminders, and archives
+└── README.md             # Documentation and API reference
 ```
 
 ---
