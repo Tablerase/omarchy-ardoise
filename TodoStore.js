@@ -3,7 +3,7 @@
 // TodoStore.js
 //
 // Core data store, schema v1 management, profile handling, and reminder logic
-// for the Omarchy Quattro Todo plugin (tablerase.todo).
+// for the Omarchy Quattro Todo plugin Ardoise (tablerase.ardoise).
 //
 // Intentionally pure stateless library; fully typed via TypeScript JSDoc.
 // =============================================================================

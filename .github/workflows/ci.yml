@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Lint, Typecheck & Test (Arch Linux)
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - name: Install Dependencies
+        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno jq
+
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Lint QML Files
+        run: qmllint *.qml
+
+      - name: Typecheck Store Logic
+        run: deno check TodoStore.js
+
+      - name: Run Unit Tests
+        run: deno test --no-check --allow-read tests/
+
+      - name: Validate Plugin Manifest
+        run: |
+          jq -e . manifest.json
+          jq -e '.schemaVersion == 1' manifest.json
+          jq -e '.id == "tablerase.ardoise"' manifest.json
+          test -f BarWidget.qml
+          test -f QuickAdd.qml
+          test -f Service.qml
+
+  release:
+    name: GitHub Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Publish Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes

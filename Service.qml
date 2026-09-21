@@ -1,7 +1,7 @@
 // =============================================================================
 // Service.qml
 //
-// Background headless service for tablerase.todo.
+// Background headless service for tablerase.ardoise (Ardoise).
 // Monitors scheduled reminders and triggers Omarchy desktop notifications.
 // =============================================================================
 
@@ -44,12 +44,12 @@ Item {
 
       Quickshell.execDetached([
         bin,
-        "--app-name", "Omarchy Todo",
+        "--app-name", "Ardoise",
         "-g", "󰀉",
         "-u", "normal",
         headline,
         desc,
-        "--exec", "omarchy-shell", "shell", "toggle", "tablerase.todo", "{}"
+        "--exec", "omarchy-shell", "shell", "toggle", "tablerase.ardoise", "{}"
       ])
 
       updated = TodoStore.updateTodo(updated, task.id, { notified: true })

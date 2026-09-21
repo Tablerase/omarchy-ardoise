@@ -1,7 +1,7 @@
 {
-  "name": "tablerase-todo",
+  "name": "omarchy-ardoise",
   "version": "1.0.0",
-  "description": "Todo counter and flyout panel for the Omarchy Quattro bar.",
+  "description": "Minimalist task slate for the Omarchy Quattro bar: profiles, reminders, and archives.",
   "private": true,
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mts",

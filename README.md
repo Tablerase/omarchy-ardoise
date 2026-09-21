@@ -1,4 +1,4 @@
-# Omarchy Todo Bar Plugin
+# Ardoise — Minimalist Task Slate for Omarchy
 
 A productivity status bar widget, flyout panel, quick-add modal, and background reminder service for **Omarchy Quattro (Omarchy 4.x)**, built with Quickshell and QtQuick.
 
@@ -28,7 +28,7 @@ A productivity status bar widget, flyout panel, quick-add modal, and background 
 - **Configurable Reminders & Background Service**:
   - Scheduled timestamps with quick presets (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`).
   - Headless background service (`Service.qml`) running 24/7 in the Omarchy Quattro shell.
-  - Native desktop notifications via `omarchy-notification-send` with direct click-to-open actions (`--exec omarchy-shell shell toggle tablerase.todo "{}"`).
+  - Native desktop notifications via `omarchy-notification-send` with direct click-to-open actions (`--exec omarchy-shell shell toggle tablerase.ardoise "{}"`).
 - **Keyboard-First Task Capture (Quick Add)**:
   - Summon from anywhere via global hotkey (`SUPER + SHIFT + T`).
   - 1-second capture: type task and hit `Enter` to add instantly.
@@ -128,48 +128,48 @@ You can control and query the todo plugin directly from terminal commands, shell
 
 ```bash
 # Get pending task count
-omarchy-shell tablerase.todo count
+omarchy-shell tablerase.ardoise count
 
 # List all tasks in JSON format
-omarchy-shell tablerase.todo list
+omarchy-shell tablerase.ardoise list
 
 # Get list of registered profiles in JSON format
-omarchy-shell tablerase.todo profiles
+omarchy-shell tablerase.ardoise profiles
 
 # Add a new task (supports #tags and # space tags)
-omarchy-shell tablerase.todo add "Review PR #work"
-omarchy-shell tablerase.todo add "Buy groceries #personal"
+omarchy-shell tablerase.ardoise add "Review PR #work"
+omarchy-shell tablerase.ardoise add "Buy groceries #personal"
 
 # Switch active profile
-omarchy-shell tablerase.todo setProfile "work"
+omarchy-shell tablerase.ardoise setProfile "work"
 
 # Toggle the task list flyout panel
-omarchy-shell tablerase.todo toggle
+omarchy-shell tablerase.ardoise toggle
 
 # Open or close the panel explicitly
-omarchy-shell tablerase.todo open
-omarchy-shell tablerase.todo close
+omarchy-shell tablerase.ardoise open
+omarchy-shell tablerase.ardoise close
 
 # Clear all completed tasks and move them to archive
-omarchy-shell tablerase.todo clear
+omarchy-shell tablerase.ardoise clear
 
 # View all archived completed tasks in JSON format
-omarchy-shell tablerase.todo archived
+omarchy-shell tablerase.ardoise archived
 
 # Get total count of archived completed tasks
-omarchy-shell tablerase.todo archiveCount
+omarchy-shell tablerase.ardoise archiveCount
 ```
 
 ### Scripting & AI Integration Examples
 
 Filter pending work tasks using `jq`:
 ```bash
-omarchy-shell tablerase.todo list | jq '[.[] | select(.done == false and .profile == "work")]'
+omarchy-shell tablerase.ardoise list | jq '[.[] | select(.done == false and .profile == "work")]'
 ```
 
 Add tasks directly via CLI or agy skill:
 ```bash
-omarchy-shell tablerase.todo add "#project1 Implement user authentication"
+omarchy-shell tablerase.ardoise add "#project1 Implement user authentication"
 ```
 
 Because the plugin monitors `~/.config/omarchy/todos.json` with inotify (`watchChanges: true`), external programs, git hooks, and synchronization clients (Nextcloud, Syncthing) can write directly to the JSON file, and changes will reflect across the bar widget and panel in real-time.
@@ -185,13 +185,13 @@ Summon the Quick Add modal anywhere on your desktop:
 **Omarchy Quattro (Omarchy 4.x / Lua):**
 Add to `~/.config/hypr/bindings.lua`:
 ```lua
-o.bind("SUPER + SHIFT + T", "Todo Quick Add", "omarchy-shell shell toggle tablerase.todo '{}'")
+o.bind("SUPER + SHIFT + T", "Ardoise Quick Add", "omarchy-shell shell toggle tablerase.ardoise '{}'")
 ```
 
 **Classic Omarchy (Omarchy 3.x / Conf):**
 Add to `~/.config/hypr/bindings.conf`:
 ```ini
-bindd = SUPER SHIFT, T, Todo Quick Add, exec, omarchy-shell shell toggle tablerase.todo "{}"
+bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise "{}"
 ```
 
 Then reload Hyprland:
@@ -221,7 +221,7 @@ The plugin includes a headless service (`Service.qml`) declared with kind `"serv
   - Glyph: `󰀉` (reminder clock).
   - Headline: Task title.
   - Body: Profile tag and description notes.
-  - Click Action: Clicking the desktop notification triggers `omarchy-shell shell toggle tablerase.todo "{}"` to open the task panel.
+  - Click Action: Clicking the desktop notification triggers `omarchy-shell shell toggle tablerase.ardoise "{}"` to open the task panel.
 - **State Update**: Marks `notified: true` and writes back atomically to prevent duplicate alerts.
 
 ---
@@ -232,7 +232,7 @@ The plugin includes a headless service (`Service.qml`) declared with kind `"serv
 
 ```bash
 mkdir -p "$HOME/.config/omarchy/plugins"
-ln -s "$(pwd)" "$HOME/.config/omarchy/plugins/tablerase.todo"
+ln -s "$(pwd)" "$HOME/.config/omarchy/plugins/tablerase.ardoise"
 ```
 
 ### 2. Rescan and Enable
@@ -242,14 +242,14 @@ ln -s "$(pwd)" "$HOME/.config/omarchy/plugins/tablerase.todo"
 omarchy-shell shell rescanPlugins
 
 # Enable on the bar
-omarchy plugin enable tablerase.todo right
+omarchy plugin enable tablerase.ardoise right
 ```
 
 ### 3. Move or Reorder (Optional)
 
 ```bash
 # Position widget in the center or left section
-omarchy bar move tablerase.todo center 0
+omarchy bar move tablerase.ardoise center 0
 ```
 
 ### 4. Verify Code Quality & Run Tests

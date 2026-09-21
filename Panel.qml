@@ -8,7 +8,7 @@ import "TodoStore.js" as TodoStore
 
 Panel {
   id: root
-  moduleName: "tablerase.todo"
+  moduleName: "tablerase.ardoise"
   manageIpc: false
 
   property var anchorItem: null
@@ -75,7 +75,7 @@ Panel {
     command: [
       "bash",
       "-c",
-      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + SHIFT + T\\\", \\\"Todo Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.todo '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER SHIFT, T, Todo Quick Add, exec, omarchy-shell shell toggle tablerase.todo \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Omarchy Todo' 'Keybinding Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
+      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybinding Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
     ]
     onExited: function(exitCode) {
       checkShortcutProc.running = true

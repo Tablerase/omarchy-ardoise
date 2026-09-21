@@ -7,7 +7,7 @@ import "TodoStore.js" as TodoStore
 
 BarWidget {
   id: root
-  moduleName: "tablerase.todo"
+  moduleName: "tablerase.ardoise"
 
   property var store: TodoStore.defaultStore()
   readonly property var todos: store.todos || []
@@ -156,7 +156,7 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "tablerase.todo"
+    target: "tablerase.ardoise"
 
     function toggle(): string { root.toggle(); return "ok" }
     function open(): string { root.open(); return "ok" }
