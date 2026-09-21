@@ -33,7 +33,8 @@ const {
   formatKeybind,
   formatRelativeDiff,
   getTaskUrgencyBreakdown,
-  makeProgressBar
+  makeProgressBar,
+  markTasksNotified
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -490,6 +491,54 @@ test("makeProgressBar: renders visual progress block bars", () => {
   assert.equal(makeProgressBar(5, 10), "[████░░░░]");
   assert.equal(makeProgressBar(10, 10), "[████████]");
   assert.equal(makeProgressBar(1, 4, 4), "[█░░░]");
+});
+
+test("updateTodo: correctly updates notified flag and resets on new reminder", () => {
+  const pastIso = new Date(Date.now() - 3600 * 1000).toISOString();
+  let store = defaultStore();
+  store = addTodo(store, "Test task", "", "personal", pastIso);
+  const taskId = store.todos[0].id;
+  assert.equal(store.todos[0].notified, false);
+
+  // Update notified flag
+  store = updateTodo(store, taskId, { notified: true });
+  assert.equal(store.todos[0].notified, true);
+
+  // When changing reminder, notified must reset to false
+  const futureIso = new Date(Date.now() + 7200 * 1000).toISOString();
+  store = updateTodo(store, taskId, { reminder: futureIso });
+  assert.equal(store.todos[0].notified, false);
+});
+
+test("markTasksNotified: batch updates notified flag for multiple tasks", () => {
+  let store = defaultStore();
+  store = addTodo(store, "Task 1", "", "personal", "2026-09-21T10:00:00.000Z");
+  store = addTodo(store, "Task 2", "", "personal", "2026-09-21T10:00:00.000Z");
+  store = addTodo(store, "Task 3", "", "personal", "2026-09-21T10:00:00.000Z");
+
+  const id1 = store.todos[0].id;
+  const id3 = store.todos[2].id;
+
+  const updated = markTasksNotified(store, [id1, id3]);
+  assert.equal(updated.todos.find(t => t.id === id1)?.notified, true);
+  assert.equal(updated.todos.find(t => t.id === store.todos[1].id)?.notified, false);
+  assert.equal(updated.todos.find(t => t.id === id3)?.notified, true);
+});
+
+test("reminder loop prevention: pendingReminders never returns notified tasks", () => {
+  const pastIso = new Date(Date.now() - 1800 * 1000).toISOString();
+  let store = defaultStore();
+  store = addTodo(store, "Overdue 1", "", "personal", pastIso);
+  store = addTodo(store, "Overdue 2", "", "personal", pastIso);
+
+  // Initially both are due
+  const due = pendingReminders(store);
+  assert.equal(due.length, 2);
+
+  // After marking notified, pendingReminders must return 0, breaking any infinite loop
+  const notifiedStore = markTasksNotified(store, due.map(t => t.id));
+  const remainingDue = pendingReminders(notifiedStore);
+  assert.equal(remainingDue.length, 0);
 });
 
 

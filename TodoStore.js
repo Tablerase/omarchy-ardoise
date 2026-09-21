@@ -372,7 +372,32 @@ function updateTodo(store, id, fields) {
         t.notified = false
       }
       if (fields.dueDate !== undefined) t.dueDate = fields.dueDate ? String(fields.dueDate) : null
+      if (fields.notified !== undefined) t.notified = Boolean(fields.notified)
       break
+    }
+  }
+  return s
+}
+
+/**
+ * Marks multiple tasks by ID as notified in a single immutable pass.
+ * @param {TodoStoreData} store
+ * @param {(number|string)[]} ids
+ * @returns {TodoStoreData}
+ */
+function markTasksNotified(store, ids) {
+  if (!store || !Array.isArray(store.todos) || !Array.isArray(ids) || ids.length === 0) return store
+  /** @type {Record<string, boolean>} */
+  var idSet = {}
+  for (var k = 0; k < ids.length; k++) {
+    idSet[String(ids[k])] = true
+  }
+  var s = cloneStore(store)
+  var now = Date.now()
+  for (var i = 0; i < s.todos.length; i++) {
+    if (idSet[String(s.todos[i].id)]) {
+      s.todos[i].notified = true
+      s.todos[i].updatedAt = now
     }
   }
   return s
@@ -909,7 +934,8 @@ if (typeof module !== "undefined" && module.exports) {
     formatKeybind,
     formatRelativeDiff,
     getTaskUrgencyBreakdown,
-    makeProgressBar
+    makeProgressBar,
+    markTasksNotified
   }
 }
 

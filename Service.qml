@@ -20,11 +20,17 @@ Item {
   readonly property string todoFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos.json"
   property var store: TodoStore.defaultStore()
 
+  // In-memory deduplication cache: key is taskId + "_" + reminderIso
+  // Prevents duplicate notifications during a session even if disk writes are in-flight
+  property var sentNotifications: ({})
+  property bool isSelfSaving: false
+
   function loadStore(raw) {
     root.store = TodoStore.normalize(raw)
   }
 
   function saveStore(newStore) {
+    root.isSelfSaving = true
     root.store = newStore
     todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")
   }
@@ -34,13 +40,28 @@ Item {
     if (!due || due.length === 0) return
 
     var bin = root.omarchyPath + "/bin/omarchy-notification-send"
-    var updated = root.store
+    var toNotify = []
+    var idsToMark = []
 
     for (var i = 0; i < due.length; i++) {
       var task = due[i]
-      var headline = "Todo: " + task.title
-      var desc = (task.profile && task.profile !== "personal" ? "[" + task.profile + "] " : "")
-        + (task.description ? task.description : "Scheduled reminder")
+      var reminderKey = String(task.id) + "_" + String(task.reminder)
+      if (root.sentNotifications[reminderKey]) {
+        // Already notified in this session
+        idsToMark.push(task.id)
+        continue
+      }
+      root.sentNotifications[reminderKey] = true
+      toNotify.push(task)
+      idsToMark.push(task.id)
+    }
+
+    // Fire notifications only for unsent reminders
+    for (var j = 0; j < toNotify.length; j++) {
+      var t = toNotify[j]
+      var headline = "Todo: " + t.title
+      var desc = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "")
+        + (t.description ? t.description : "Scheduled reminder")
 
       Quickshell.execDetached([
         bin,
@@ -51,11 +72,13 @@ Item {
         desc,
         "--exec", "omarchy-shell", "shell", "toggle", "tablerase.ardoise", "{}"
       ])
-
-      updated = TodoStore.updateTodo(updated, task.id, { notified: true })
     }
 
-    root.saveStore(updated)
+    // Batch update notified state in store and persist once
+    if (idsToMark.length > 0) {
+      var updated = TodoStore.markTasksNotified(root.store, idsToMark)
+      root.saveStore(updated)
+    }
   }
 
   FileView {
@@ -67,6 +90,10 @@ Item {
     onLoaded: root.loadStore(text())
     onLoadFailed: root.loadStore("{}")
     onFileChanged: {
+      if (root.isSelfSaving) {
+        root.isSelfSaving = false
+        return
+      }
       reload()
       Qt.callLater(root.checkReminders)
     }
