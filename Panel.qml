@@ -937,9 +937,22 @@ Panel {
               text: root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter)
               fontSize: Style.font.caption
               fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-              tooltipText: "Clear completed tasks"
+              tooltipText: "Archive and clear completed tasks"
               onClicked: {
                 if (root.barWidget) root.barWidget.clearCompleted(root.currentFilter)
+              }
+            }
+
+            Button {
+              iconText: "󰋚"
+              text: "Archive"
+              fontSize: Style.font.caption
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              tooltipText: "Open todos-archive.json in editor"
+              onClicked: {
+                var p = root.barWidget ? root.barWidget.archiveFilePath : "$HOME/.config/omarchy/todos-archive.json"
+                if (root.bar) root.bar.run("omarchy-launch-editor " + p)
+                root.close()
               }
             }
 

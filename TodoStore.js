@@ -360,3 +360,65 @@ function getReminderPresets() {
   ]
 }
 
+function normalizeArchive(raw) {
+  var data = raw
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw || "{}")
+    } catch (e) {
+      return { version: 1, archived: [] }
+    }
+  }
+  if (!data || typeof data !== "object") {
+    return { version: 1, archived: [] }
+  }
+  if (Array.isArray(data)) {
+    return { version: 1, archived: data }
+  }
+  return {
+    version: Number(data.version) || 1,
+    archived: Array.isArray(data.archived) ? data.archived : []
+  }
+}
+
+function archiveCompleted(store, profileFilter, archiveRawText) {
+  var s = cloneStore(store)
+  var arc = normalizeArchive(archiveRawText)
+  var now = Date.now()
+
+  var keptTodos = []
+  var cleared = []
+
+  for (var i = 0; i < s.todos.length; i++) {
+    var task = s.todos[i]
+    var matchesFilter = (!profileFilter || profileFilter === "all" || task.profile === profileFilter)
+    if (task.done && matchesFilter) {
+      cleared.push({
+        id: task.id,
+        title: task.title,
+        description: task.description || "",
+        profile: task.profile || "personal",
+        createdAt: task.createdAt || task.id || now,
+        completedAt: now
+      })
+    } else {
+      keptTodos.push(task)
+    }
+  }
+
+  s.todos = keptTodos
+  arc.archived = cleared.concat(arc.archived)
+
+  return {
+    updatedStore: s,
+    updatedArchive: arc,
+    clearedCount: cleared.length
+  }
+}
+
+function getArchivedCount(archiveRawText) {
+  var arc = normalizeArchive(archiveRawText)
+  return arc.archived.length
+}
+
+

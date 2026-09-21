@@ -88,6 +88,40 @@ Stored at `~/.config/omarchy/todos.json`:
 
 ---
 
+## Archive Schema (`todos-archive.json`)
+
+Stored at `~/.config/omarchy/todos-archive.json`. When tasks are marked as done and cleared, they are moved to this dedicated archive with completion timestamps for productivity tracking and analytics:
+
+```json
+{
+  "version": 1,
+  "archived": [
+    {
+      "id": 1789992760433,
+      "title": "Fix database query performance",
+      "description": "Index the user_id column on orders table",
+      "profile": "work",
+      "createdAt": 1789992760433,
+      "completedAt": 1789999999999
+    }
+  ]
+}
+```
+
+### Archive Properties
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `version` | `number` | Archive schema version (`1`). |
+| `archived[].id` | `number` | Original task identifier. |
+| `archived[].title` | `string` | Task title. |
+| `archived[].description` | `string` | Task notes or description. |
+| `archived[].profile` | `string` | Tag/profile when completed. |
+| `archived[].createdAt` | `number` | Epoch millisecond timestamp when task was created. |
+| `archived[].completedAt` | `number` | Epoch millisecond timestamp when task was cleared/archived. |
+
+---
+
 ## Shell IPC Reference
 
 You can control and query the todo plugin directly from terminal commands, shell scripts, or AI agents:
@@ -116,8 +150,14 @@ omarchy-shell tablerase.todo toggle
 omarchy-shell tablerase.todo open
 omarchy-shell tablerase.todo close
 
-# Clear all completed tasks
+# Clear all completed tasks and move them to archive
 omarchy-shell tablerase.todo clear
+
+# View all archived completed tasks in JSON format
+omarchy-shell tablerase.todo archived
+
+# Get total count of archived completed tasks
+omarchy-shell tablerase.todo archiveCount
 ```
 
 ### Scripting & AI Integration Examples

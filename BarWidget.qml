@@ -16,6 +16,7 @@ BarWidget {
   readonly property var profiles: store.profiles || ["personal", "work"]
 
   readonly property string todoFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos.json"
+  readonly property string archiveFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos-archive.json"
 
   function loadTodos(raw) {
     root.store = TodoStore.normalize(raw)
@@ -43,7 +44,9 @@ BarWidget {
   }
 
   function clearCompleted(profile) {
-    saveStore(TodoStore.clearCompleted(root.store, profile))
+    var result = TodoStore.archiveCompleted(root.store, profile, archiveFile.text())
+    saveStore(result.updatedStore)
+    archiveFile.setText(JSON.stringify(result.updatedArchive, null, 2) + "\n")
   }
 
   function setActiveProfile(profile) {
@@ -109,11 +112,14 @@ BarWidget {
 
   onBarChanged: injectPanel()
 
-  // Ensure config folder and todos.json exist so FileView can watch it
+  // Ensure config folder, todos.json, and todos-archive.json exist so FileView can watch them
   Process {
     id: initFileProc
-    command: ["bash", "-c", "mkdir -p \"$HOME/.config/omarchy\" && [ -f \"$HOME/.config/omarchy/todos.json\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"$HOME/.config/omarchy/todos.json\""]
-    onExited: todoFile.reload()
+    command: ["bash", "-c", "mkdir -p \"$HOME/.config/omarchy\" && [ -f \"$HOME/.config/omarchy/todos.json\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"$HOME/.config/omarchy/todos.json\"; [ -f \"$HOME/.config/omarchy/todos-archive.json\" ] || echo '{\"version\":1,\"archived\":[]}' > \"$HOME/.config/omarchy/todos-archive.json\""]
+    onExited: {
+      todoFile.reload()
+      archiveFile.reload()
+    }
   }
 
   Component.onCompleted: initFileProc.running = true
@@ -126,6 +132,15 @@ BarWidget {
     printErrors: false
     onLoaded: root.loadTodos(text())
     onLoadFailed: root.loadTodos("{}")
+    onFileChanged: reload()
+  }
+
+  FileView {
+    id: archiveFile
+    path: root.archiveFilePath
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
     onFileChanged: reload()
   }
 
@@ -152,6 +167,8 @@ BarWidget {
     function list(): string { return JSON.stringify(root.todos) }
     function profiles(): string { return JSON.stringify(root.profiles) }
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
+    function archived(): string { return archiveFile.text() || "{\"version\":1,\"archived\":[]}" }
+    function archiveCount(): string { return String(TodoStore.getArchivedCount(archiveFile.text())) }
   }
 
   WidgetButton {
