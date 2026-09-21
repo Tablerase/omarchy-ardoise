@@ -317,19 +317,17 @@ Item {
         }
 
         // Profile Selector Pills with horizontal Flickable & fade edges
-        Item {
-          id: profileSection
+        // Profile selection (responsive wrap Flow)
+        Flow {
+          id: profileFlow
           width: parent.width
-          implicitHeight: Style.space(26)
+          spacing: Style.space(6)
 
           Row {
-            id: profileLabelRow
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(6)
+            spacing: Style.space(4)
+            height: Style.space(24)
 
             Text {
-              id: profileLabel
               anchors.verticalCenter: parent.verticalCenter
               text: "Profile:"
               color: Color.muted
@@ -338,136 +336,62 @@ Item {
             }
           }
 
-          Item {
-            id: profileFlickableContainer
-            anchors.left: profileLabelRow.right
-            anchors.leftMargin: Style.space(6)
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
+          Repeater {
+            id: profileRepeater
+            model: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
 
-            WheelHandler {
-              target: null
-              acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-              onWheel: function(event) {
-                profileFlickable.scrollHorizontal(event.angleDelta.y, event.angleDelta.x)
-              }
-            }
-
-            Flickable {
-              id: profileFlickable
-              anchors.fill: parent
-              contentWidth: profilePillsRow.implicitWidth
-              flickableDirection: Flickable.HorizontalFlick
-              clip: true
-              boundsBehavior: Flickable.StopAtBounds
-
-              function scrollHorizontal(deltaY, deltaX) {
-                var delta = deltaY !== 0 ? deltaY : deltaX
-                if (delta === 0) return
-                var step = (delta > 0 ? Style.space(60) : -Style.space(60))
-                var maxContentX = Math.max(0, contentWidth - width)
-                contentX = Math.max(0, Math.min(maxContentX, contentX - step))
-              }
+            Rectangle {
+              id: profilePill
+              required property string modelData
+              implicitWidth: pillRow.implicitWidth + Style.space(12)
+              implicitHeight: Style.space(24)
+              radius: implicitHeight / 2
+              color: root.selectedProfile === modelData ? Color.accent : Color.menu.selectedBackground
+              border.color: root.selectedProfile === modelData ? Color.accent : Color.menu.border
+              border.width: 1
 
               Row {
-                id: profilePillsRow
-                spacing: Style.space(6)
+                id: pillRow
+                anchors.centerIn: parent
+                spacing: Style.space(4)
 
-                Repeater {
-                  id: profileRepeater
-                  model: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: TodoStore.getProfileGlyph(profilePill.modelData)
+                  color: root.selectedProfile === profilePill.modelData ? "white" : Color.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
 
-                  Rectangle {
-                    id: profilePill
-                    required property string modelData
-                    implicitWidth: pillRow.implicitWidth + Style.space(12)
-                    implicitHeight: Style.space(24)
-                    radius: implicitHeight / 2
-                    color: root.selectedProfile === modelData ? Color.accent : Color.menu.selectedBackground
-                    border.color: root.selectedProfile === modelData ? Color.accent : Color.menu.border
-                    border.width: 1
-
-                    Row {
-                      id: pillRow
-                      anchors.centerIn: parent
-                      spacing: Style.space(4)
-
-                      Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: TodoStore.getProfileGlyph(profilePill.modelData)
-                        color: root.selectedProfile === profilePill.modelData ? "white" : Color.muted
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                      }
-
-                      Text {
-                        id: pillLabel
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: profilePill.modelData
-                        color: root.selectedProfile === profilePill.modelData ? "white" : (Color.menu.text || Color.foreground)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        font.bold: root.selectedProfile === profilePill.modelData
-                        width: Math.min(implicitWidth, Style.space(90))
-                        elide: Text.ElideRight
-                      }
-                    }
-
-                    MouseArea {
-                      anchors.fill: parent
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: {
-                        root.selectedProfile = profilePill.modelData
-                      }
-                      onWheel: function(wheel) {
-                        profileFlickable.scrollHorizontal(wheel.angleDelta.y, wheel.angleDelta.x)
-                      }
-                    }
-                  }
+                Text {
+                  id: pillLabel
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: profilePill.modelData
+                  color: root.selectedProfile === profilePill.modelData ? "white" : (Color.menu.text || Color.foreground)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.bold: root.selectedProfile === profilePill.modelData
+                  width: Math.min(implicitWidth, Style.space(90))
+                  elide: Text.ElideRight
                 }
               }
-            }
 
-            // Soft blur/fade edge on the left
-            Rectangle {
-              id: leftFadeEdge
-              anchors.left: parent.left
-              anchors.top: parent.top
-              anchors.bottom: parent.bottom
-              width: Style.space(16)
-              visible: opacity > 0
-              opacity: (profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX > 4) ? 1.0 : 0.0
-
-              Behavior on opacity {
-                NumberAnimation { duration: 150 }
+              HoverHandler {
+                id: pillHover
               }
 
-              gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: Color.menu.background }
-                GradientStop { position: 1.0; color: "transparent" }
-              }
-            }
-
-            // Soft blur/fade edge on the right
-            Rectangle {
-              id: rightFadeEdge
-              anchors.right: parent.right
-              anchors.top: parent.top
-              anchors.bottom: parent.bottom
-              width: Style.space(20)
-              visible: opacity > 0
-              opacity: (profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX < (profileFlickable.contentWidth - profileFlickable.width - 2)) ? 1.0 : 0.0
-
-              Behavior on opacity {
-                NumberAnimation { duration: 150 }
+              ToolTip {
+                visible: pillHover.hovered && pillLabel.truncated
+                text: profilePill.modelData
+                delay: 300
               }
 
-              gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 1.0; color: Color.menu.background }
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.selectedProfile = profilePill.modelData
+                }
               }
             }
           }

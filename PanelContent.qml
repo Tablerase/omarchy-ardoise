@@ -397,6 +397,16 @@ Item {
                   profileFlickable.scrollHorizontal(wheel.angleDelta.y, wheel.angleDelta.x)
                 }
               }
+
+              HoverHandler {
+                id: profPillHover
+              }
+
+              PanelToolTip {
+                visible: profPillHover.hovered && profPillText.truncated
+                text: profPill.modelData
+                fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+              }
             }
           }
         }
@@ -526,7 +536,7 @@ Item {
         width: parent.width - addBtn.implicitWidth - Style.space(6)
         placeholderText: root.currentFilter === "all"
           ? "Add new task (e.g. #work Fix bug)..."
-          : ("Add task to #" + root.currentFilter + "...")
+          : ("Add task to #" + (root.currentFilter.length > 15 ? (root.currentFilter.slice(0, 13) + "…") : root.currentFilter) + "...")
         font.pixelSize: Style.font.caption
         onAccepted: {
           if (text.trim() !== "") {
@@ -561,12 +571,13 @@ Item {
       visible: root.filteredTodos.length === 0
       text: root.currentFilter === "all"
         ? "No tasks yet. Type a task above and press Enter!"
-        : ("No tasks in #" + root.currentFilter + ". Add one above!")
+        : ("No tasks in #" + (root.currentFilter.length > 20 ? (root.currentFilter.slice(0, 18) + "…") : root.currentFilter) + ". Add one above!")
       color: Color.muted
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.font.caption
       font.italic: true
       horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.Wrap
       width: parent.width
       topPadding: Style.space(8)
       bottomPadding: Style.space(8)
@@ -803,6 +814,16 @@ Item {
                       font.pixelSize: Style.space(8.5)
                       elide: Text.ElideRight
                       horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    HoverHandler {
+                      id: profBadgeHover
+                    }
+
+                    PanelToolTip {
+                      visible: profBadgeHover.hovered && profLabel.truncated
+                      text: "#" + itemRow.modelData.profile
+                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     }
                   }
 
@@ -1075,6 +1096,16 @@ Item {
                           root.updateTodo(itemRow.modelData.id, { profile: profReassignBtn.modelData })
                         }
                       }
+
+                      HoverHandler {
+                        id: profReassignHover
+                      }
+
+                      PanelToolTip {
+                        visible: profReassignHover.hovered && profReassignText.truncated
+                        text: profReassignBtn.modelData
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
                     }
                   }
                 }
@@ -1103,10 +1134,10 @@ Item {
 
         Button {
           iconText: "󰃢"
-          text: root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter)
+          text: root.currentFilter === "all" ? "Clear" : ("Clear #" + (root.currentFilter.length > 10 ? (root.currentFilter.slice(0, 8) + "…") : root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-          tooltipText: "Archive and clear completed tasks"
+          tooltipText: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
           onClicked: root.clearCompleted(root.currentFilter)
         }
 
