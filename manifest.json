@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "tablerase.todo",
+  "name": "Todo List",
+  "version": "1.0.0",
+  "author": "tablerase",
+  "license": "MIT",
+  "description": "Todo counter and flyout panel for the Omarchy Quattro bar.",
+  "kinds": [
+    "bar-widget",
+    "overlay",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "overlay": "QuickAdd.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Todo List",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
