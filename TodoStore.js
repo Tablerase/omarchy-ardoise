@@ -548,6 +548,17 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
 }
 
 /**
+ * Checks whether a task is overdue (reminder date is past now and not completed).
+ * @param {Task|null|undefined} task
+ * @returns {boolean}
+ */
+function isOverdue(task) {
+  if (!task || task.done || !task.reminder) return false
+  var time = new Date(task.reminder).getTime()
+  return !isNaN(time) && time < Date.now()
+}
+
+/**
  * Returns all unnotified tasks with reminders due at or before now.
  * @param {TodoStoreData} store
  * @returns {Task[]}
@@ -741,6 +752,7 @@ if (typeof module !== "undefined" && module.exports) {
     getPendingCount,
     getFilteredTodos,
     getSortedProfiles,
+    isOverdue,
     pendingReminders,
     formatReminder,
     getProfileGlyph,

@@ -34,7 +34,7 @@ Item {
   function open(payloadJson) {
     root.opened = true
     taskInput.text = ""
-    descInput.text = ""
+    if (descNotesArea) descNotesArea.text = ""
     showNote = false
     showReminderOptions = false
     selectedReminder = ""
@@ -90,7 +90,7 @@ Item {
       return
     }
 
-    var desc = showNote ? descInput.text.trim() : ""
+    var desc = (showNote && descNotesArea) ? descNotesArea.text.trim() : ""
     var rem = selectedReminder || null
 
     var newStore = TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem)
@@ -371,7 +371,7 @@ Item {
             onClicked: {
               root.showNote = !root.showNote
               if (root.showNote) {
-                Qt.callLater(function() { descInput.forceActiveFocus() })
+                Qt.callLater(function() { descNotesArea.forceActiveFocus() })
               }
             }
           }
@@ -388,20 +388,18 @@ Item {
           }
         }
 
-        // Expandable Description field
+        // Expandable Description field (multi-line auto-expanding)
         Column {
           width: parent.width
           visible: root.showNote
           spacing: Style.space(4)
 
-          TextField {
-            id: descInput
+          TaskNotesArea {
+            id: descNotesArea
             width: parent.width
-            placeholderText: "Add note / description..."
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            onAccepted: root.submit()
-            Keys.onEscapePressed: root.dismiss()
+            placeholderText: "Add note / description (Shift+Enter for newline)..."
+            onSubmitted: root.submit()
+            onEscapePressed: root.dismiss()
           }
         }
 

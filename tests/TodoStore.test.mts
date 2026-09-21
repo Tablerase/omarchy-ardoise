@@ -22,6 +22,7 @@ const {
   getPendingCount,
   getFilteredTodos,
   getSortedProfiles,
+  isOverdue,
   pendingReminders,
   formatReminder,
   getProfileGlyph,
@@ -380,3 +381,15 @@ test("getSortedProfiles: onlyActive filters out empty profiles unless matching c
   const fallback = getSortedProfiles(emptyStore, true, "");
   assert.deepEqual(fallback, ["custom"]);
 });
+
+test("isOverdue: correctly identifies overdue incomplete tasks", () => {
+  const pastIso = new Date(Date.now() - 3600 * 1000).toISOString();
+  const futureIso = new Date(Date.now() + 3600 * 1000).toISOString();
+
+  assert.equal(isOverdue(null), false);
+  assert.equal(isOverdue({ id: 1, title: "No reminder", done: false, reminder: null }), false);
+  assert.equal(isOverdue({ id: 2, title: "Done task", done: true, reminder: pastIso }), false);
+  assert.equal(isOverdue({ id: 3, title: "Future task", done: false, reminder: futureIso }), false);
+  assert.equal(isOverdue({ id: 4, title: "Overdue task", done: false, reminder: pastIso }), true);
+});
+

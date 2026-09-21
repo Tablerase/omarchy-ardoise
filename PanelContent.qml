@@ -24,20 +24,20 @@ Item {
   property bool addingProfile: false
   property string shortcutState: "active"
   property string moduleName: "tablerase.ardoise"
-  property var descField: null
+  property var descArea: null
 
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
   readonly property int filteredPendingCount: TodoStore.getPendingCount(root.store, root.currentFilter)
   readonly property var reminderPresets: TodoStore.getReminderPresets()
-  readonly property bool activeFocusBlocked: Boolean((newTodoField && newTodoField.activeFocus) || (descField && descField.activeFocus) || addingProfile)
+  readonly property bool activeFocusBlocked: Boolean((newTodoField && newTodoField.activeFocus) || (descArea && descArea.editorActiveFocus) || addingProfile)
 
   signal closeRequested()
   signal shortcutClicked()
   signal switchPanelRequested(int direction)
 
   function savePendingNotes() {
-    if (root.descField && typeof root.descField.saveDescription === "function") {
-      root.descField.saveDescription()
+    if (root.descArea && typeof root.descArea.save === "function") {
+      root.descArea.save()
     }
   }
 
@@ -591,7 +591,7 @@ Item {
             readonly property bool isDone: Boolean(modelData.done)
 
             width: parent.width
-            implicitHeight: isExpanded ? expandedContent.implicitHeight + Style.space(12) : Style.space(34)
+            implicitHeight: isExpanded ? expandedContent.implicitHeight + Style.space(14) : Style.space(40)
             radius: Style.cornerRadius
             color: isExpanded
               ? Color.menu.selectedBackground
@@ -613,7 +613,7 @@ Item {
               width: parent.width
               spacing: Style.space(6)
               anchors.top: parent.top
-              anchors.topMargin: Style.space(4)
+              anchors.topMargin: Style.space(5)
               anchors.left: parent.left
               anchors.leftMargin: Style.space(6)
               anchors.right: parent.right
@@ -622,7 +622,7 @@ Item {
               // Primary row
               Item {
                 width: parent.width
-                implicitHeight: Style.space(26)
+                implicitHeight: Style.space(30)
 
                 Row {
                   id: titleRow
@@ -632,12 +632,14 @@ Item {
                   anchors.verticalCenter: parent.verticalCenter
                   spacing: Style.space(6)
 
-                  // Checkbox icon
+                  // Checkbox icon (neutral by default, urgent red only when overdue)
                   Text {
                     id: checkboxIcon
                     anchors.verticalCenter: parent.verticalCenter
                     text: itemRow.isDone ? "󰄲" : "󰄱"
-                    color: itemRow.isDone ? Color.muted : (root.bar ? root.bar.urgent : Color.urgent)
+                    color: itemRow.isDone
+                      ? Color.muted
+                      : (TodoStore.isOverdue(itemRow.modelData) ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted)
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.body
                   }
@@ -783,124 +785,30 @@ Item {
 
                 PanelSeparator { width: parent.width }
 
-                // Description / Notes input (multi-line, auto-expanding with scroll)
-                ScrollView {
-                  id: descScroll
+                // Description / Notes input (reusable multi-line TaskNotesArea component)
+                TaskNotesArea {
+                  id: descArea
                   width: parent.width
-                  implicitHeight: Math.min(Style.space(130), Math.max(Style.space(56), descField.implicitHeight))
-                  clip: true
-
-                  background: BorderSurface {
-                    color: Style.controlFill(descField.activeFocus, descField.hovered, root.barForeground, Color.accent)
-                    borderSpec: Border.controlSpec(descField.activeFocus ? "focus" : (descField.hovered ? "hover-cursor" : "normal"), root.barForeground, Color.accent)
-                    radius: Style.cornerRadius
-                  }
-
-                  ScrollBar.vertical: ScrollBar {
-                    id: descScrollBar
-                    policy: descField.implicitHeight > descScroll.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
-                    interactive: true
-                    padding: 0
-                    implicitWidth: Style.space(3)
-
-                    contentItem: Rectangle {
-                      implicitWidth: Style.space(3)
-                      radius: Style.space(1.5)
-                      color: descScrollBar.pressed ? Color.accent : (descScrollBar.hovered ? Color.accent : Color.muted)
-                      opacity: descScrollBar.active ? 0.9 : 0.4
-                    }
-
-                    background: Rectangle {
-                      implicitWidth: Style.space(3)
-                      radius: Style.space(1.5)
-                      color: Color.menu.selectedBackground
-                      opacity: 0.25
+                  text: itemRow.modelData.description || ""
+                  placeholderText: "Notes / description (Shift+Enter for newline)..."
+                  bar: root.bar
+                  foreground: root.barForeground
+                  accentColor: Color.accent
+                  onEditorActiveFocusChanged: {
+                    if (editorActiveFocus) {
+                      root.descArea = descArea
+                    } else if (root.descArea === descArea) {
+                      root.descArea = null
                     }
                   }
-
-                  TextArea {
-                    id: descField
-                    width: descScroll.availableWidth
-                    text: itemRow.modelData.description || ""
-                    placeholderText: "Notes / description (Shift+Enter for newline)..."
-                    wrapMode: TextEdit.Wrap
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.caption
-                    color: root.barForeground
-                    selectionColor: Style.selectionFillFor(root.barForeground, Color.accent)
-                    selectedTextColor: root.barForeground
-                    placeholderTextColor: Qt.darker(root.barForeground, 1.6)
-                    leftPadding: Style.space(8)
-                    rightPadding: Style.space(8)
-                    topPadding: Style.space(6)
-                    bottomPadding: Style.space(6)
-                    background: null
-
-                    function saveDescription() {
-                      if (itemRow.modelData && descField.text !== (itemRow.modelData.description || "")) {
-                        root.updateTodo(itemRow.modelData.id, { description: descField.text })
-                      }
+                  Component.onDestruction: {
+                    if (root.descArea === descArea) {
+                      root.descArea = null
                     }
-
-                    function insertLineBreak() {
-                      if (descField.selectedText && descField.selectedText.length > 0) {
-                        var s = descField.selectionStart
-                        var e = descField.selectionEnd
-                        descField.remove(s, e)
-                        descField.insert(s, "\n")
-                      } else {
-                        descField.insert(descField.cursorPosition, "\n")
-                      }
-                    }
-
-                    Keys.onReturnPressed: function(event) {
-                      if (event.modifiers & Qt.ShiftModifier) {
-                        descField.insertLineBreak()
-                        event.accepted = true
-                      } else {
-                        event.accepted = true
-                        descField.saveDescription()
-                        descField.focus = false
-                      }
-                    }
-
-                    Keys.onEnterPressed: function(event) {
-                      if (event.modifiers & Qt.ShiftModifier) {
-                        descField.insertLineBreak()
-                        event.accepted = true
-                      } else {
-                        event.accepted = true
-                        descField.saveDescription()
-                        descField.focus = false
-                      }
-                    }
-
-                    Keys.onEscapePressed: function(event) {
-                      event.accepted = true
-                      descField.saveDescription()
-                      descField.focus = false
-                    }
-
-                    onActiveFocusChanged: {
-                      if (activeFocus) {
-                        root.descField = descField
-                      } else {
-                        if (root.descField === descField) {
-                          root.descField = null
-                        }
-                        saveDescription()
-                      }
-                    }
-
-                    onEditingFinished: {
-                      saveDescription()
-                    }
-
-                    Component.onDestruction: {
-                      if (root.descField === descField) {
-                        root.descField = null
-                      }
-                      saveDescription()
+                  }
+                  onSaved: function(newText) {
+                    if (itemRow.modelData && newText !== (itemRow.modelData.description || "")) {
+                      root.updateTodo(itemRow.modelData.id, { description: newText })
                     }
                   }
                 }
@@ -1047,8 +955,11 @@ Item {
       Row {
         id: footerLeft
         anchors.left: parent.left
+        anchors.right: quickAddBtn.left
+        anchors.rightMargin: Style.space(6)
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Style.space(6)
+        spacing: Style.space(4)
+        clip: true
 
         Button {
           iconText: "󰃢"
