@@ -1120,8 +1120,15 @@ Item {
 
     // Footer quick actions
     Item {
+      id: footerContainer
       width: parent.width
       implicitHeight: Math.max(footerLeft.implicitHeight, quickAddBtn.implicitHeight)
+
+      readonly property bool wrapNeeded: {
+        var filterLabel = (root.currentFilter === "all") ? "Clear" : ("Clear #" + root.currentFilter)
+        var fullButtonsWidth = Style.space(288) + (filterLabel.length * Style.space(7.2))
+        return fullButtonsWidth > (parent.width - Style.space(12))
+      }
 
       Row {
         id: footerLeft
@@ -1134,7 +1141,7 @@ Item {
 
         Button {
           iconText: "󰃢"
-          text: root.currentFilter === "all" ? "Clear" : ("Clear #" + (root.currentFilter.length > 10 ? (root.currentFilter.slice(0, 8) + "…") : root.currentFilter))
+          text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           tooltipText: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
@@ -1143,7 +1150,7 @@ Item {
 
         Button {
           iconText: "󰋚"
-          text: "Archive"
+          text: footerContainer.wrapNeeded ? "" : "Archive"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           tooltipText: "Open todos-archive.json in editor"
@@ -1152,7 +1159,7 @@ Item {
 
         Button {
           iconText: "󰏫"
-          text: "Edit"
+          text: footerContainer.wrapNeeded ? "" : "Edit"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           tooltipText: "Open todos.json in editor"
@@ -1165,7 +1172,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         iconText: "󰐕"
-        text: "Quick Add"
+        text: footerContainer.wrapNeeded ? "" : "Quick Add"
         fontSize: Style.font.caption
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         tooltipText: "Open Quick Add modal (" + root.detectedShortcut + ")"
