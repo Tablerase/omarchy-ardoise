@@ -30,7 +30,10 @@ const {
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
-  formatKeybind
+  formatKeybind,
+  formatRelativeDiff,
+  getTaskUrgencyBreakdown,
+  makeProgressBar
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -421,6 +424,72 @@ test("formatKeybind: formats Hyprland bitmasks and keys into readable shortcut s
   assert.equal(formatKeybind(undefined, "t"), "T");
   assert.equal(formatKeybind(64, ""), "SUPER");
   assert.equal(formatKeybind(0, ""), "");
+});
+
+test("formatRelativeDiff: formats past and future time durations", () => {
+  // Past (overdue)
+  assert.equal(formatRelativeDiff(10 * 1000, true), "just now");
+  assert.equal(formatRelativeDiff(45 * 60 * 1000, true), "45m overdue");
+  assert.equal(formatRelativeDiff(2 * 3600 * 1000, true), "2h overdue");
+  assert.equal(formatRelativeDiff(3 * 86400 * 1000, true), "3d overdue");
+
+  // Future
+  assert.equal(formatRelativeDiff(20 * 1000, false), "in <1m");
+  assert.equal(formatRelativeDiff(30 * 60 * 1000, false), "in 30m");
+  assert.equal(formatRelativeDiff(5 * 3600 * 1000, false), "in 5h");
+  assert.equal(formatRelativeDiff(2 * 86400 * 1000, false), "in 2d");
+});
+
+test("getTaskUrgencyBreakdown: categorizes tasks by urgency and extracts closest diffs", () => {
+  // Empty or invalid store
+  assert.deepEqual(getTaskUrgencyBreakdown(null), {
+    total: 0,
+    overdue: 0,
+    dueToday: 0,
+    upcoming: 0,
+    noReminder: 0,
+    earliestOverdueDiff: "",
+    nextDueDiff: ""
+  });
+
+  const now = new Date("2026-09-21T12:00:00.000Z").getTime();
+
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      // Overdue 2 hours ago (earliest overdue)
+      { id: 1, title: "T1", done: false, reminder: new Date(now - 2 * 3600 * 1000).toISOString() },
+      // Overdue 30 mins ago
+      { id: 2, title: "T2", done: false, reminder: new Date(now - 30 * 60 * 1000).toISOString() },
+      // Due today in 1 hour (next due)
+      { id: 3, title: "T3", done: false, reminder: new Date(now + 1 * 3600 * 1000).toISOString() },
+      // Due tomorrow (upcoming)
+      { id: 4, title: "T4", done: false, reminder: new Date(now + 30 * 3600 * 1000).toISOString() },
+      // No reminder
+      { id: 5, title: "T5", done: false, reminder: null },
+      // Done task with past reminder (must be ignored)
+      { id: 6, title: "T6", done: true, reminder: new Date(now - 5 * 3600 * 1000).toISOString() }
+    ]
+  };
+
+  const breakdown = getTaskUrgencyBreakdown(store, now);
+  assert.equal(breakdown.total, 5);
+  assert.equal(breakdown.overdue, 2);
+  assert.equal(breakdown.dueToday, 1);
+  assert.equal(breakdown.upcoming, 1);
+  assert.equal(breakdown.noReminder, 1);
+  assert.equal(breakdown.earliestOverdueDiff, "2h overdue");
+  assert.equal(breakdown.nextDueDiff, "in 1h");
+});
+
+test("makeProgressBar: renders visual progress block bars", () => {
+  assert.equal(makeProgressBar(0, 0), "[░░░░░░░░]");
+  assert.equal(makeProgressBar(0, 10), "[░░░░░░░░]");
+  assert.equal(makeProgressBar(5, 10), "[████░░░░]");
+  assert.equal(makeProgressBar(10, 10), "[████████]");
+  assert.equal(makeProgressBar(1, 4, 4), "[█░░░]");
 });
 
 

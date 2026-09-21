@@ -64,18 +64,72 @@ BarWidget {
   }
 
   function getTooltip() {
+    var lines = []
+
+    // 1. Navigation and controls first
+    lines.push("󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit")
+
+    // Empty state
     if (root.pendingCount === 0) {
-      return "Inbox zero! All done.\n󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit"
+      lines.push("──────────────────────────────────────────")
+      lines.push("󰄲 Inbox zero! All tasks completed.")
+      return lines.join("\n")
     }
-    var parts = []
-    for (var i = 0; i < root.profiles.length; i++) {
-      var p = root.profiles[i]
+
+    lines.push("──────────────────────────────────────────")
+
+    // 2. Completion Progress & Counts
+    var completedCount = 0
+    if (root.store && Array.isArray(root.store.todos)) {
+      for (var i = 0; i < root.store.todos.length; i++) {
+        if (root.store.todos[i].done) completedCount++
+      }
+    }
+    var allTasks = root.pendingCount + completedCount
+    var pct = allTasks > 0 ? Math.round((completedCount / allTasks) * 100) : 0
+    var meter = TodoStore.makeProgressBar(completedCount, allTasks, 8)
+    lines.push("󰄲 " + root.pendingCount + " pending   󰁯 " + completedCount + " done   " + meter + " " + pct + "%")
+
+    // 3. Urgency & Deadlines (if any reminders)
+    var urg = TodoStore.getTaskUrgencyBreakdown(root.store)
+    var urgItems = []
+    if (urg.overdue > 0) {
+      urgItems.push("󰀦 " + urg.overdue + " overdue" + (urg.earliestOverdueDiff ? " (" + urg.earliestOverdueDiff + ")" : ""))
+    }
+    if (urg.dueToday > 0) {
+      urgItems.push("󰥔 " + urg.dueToday + " due today" + (urg.nextDueDiff ? " (" + urg.nextDueDiff + ")" : ""))
+    } else if (urg.upcoming > 0 && urg.nextDueDiff) {
+      urgItems.push("󰥔 next " + urg.nextDueDiff)
+    }
+
+    if (urgItems.length > 0) {
+      lines.push(urgItems.join("   "))
+    }
+
+    // 4. Profiles with Glyphs
+    lines.push("──────────────────────────────────────────")
+    var sortedProfs = TodoStore.getSortedProfiles(root.store, true, "")
+    var profItems = []
+    for (var j = 0; j < sortedProfs.length; j++) {
+      var p = sortedProfs[j]
       var c = TodoStore.getPendingCount(root.store, p)
-      if (c > 0) parts.push(c + " " + p)
+      if (c > 0) {
+        var glyph = TodoStore.getProfileGlyph(p)
+        profItems.push(glyph + " " + c + " " + p)
+      }
     }
-    var breakdown = parts.length > 1 ? " (" + parts.join(", ") + ")" : ""
-    var summary = root.pendingCount + " pending task" + (root.pendingCount > 1 ? "s" : "") + breakdown
-    return summary + "\n󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit"
+
+    if (profItems.length > 0) {
+      if (profItems.length <= 3) {
+        lines.push(profItems.join("   "))
+      } else {
+        var top3 = profItems.slice(0, 3).join("   ")
+        var extra = profItems.length - 3
+        lines.push(top3 + "   (+" + extra + " more)")
+      }
+    }
+
+    return lines.join("\n")
   }
 
   // ---- Panel lifecycle contract for Omarchy Quattro shell
@@ -180,7 +234,7 @@ BarWidget {
     fixedWidth: root.vertical ? barSize : readout.implicitWidth + scaledHorizontalMargin * 2
     fixedHeight: root.vertical ? readout.implicitHeight + scaledVerticalPadding * 2 : barSize
     tooltipText: root.getTooltip()
-    active: root.pendingCount > 0
+    active: false
 
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.LeftButton) {
@@ -204,7 +258,7 @@ BarWidget {
         anchors.verticalCenter: parent.verticalCenter
         width: Style.space(16)
         height: width
-        color: button.active ? (root.bar ? root.bar.urgent : Color.urgent) : button.foreground
+        color: button.foreground
       }
 
       Text {
@@ -214,7 +268,7 @@ BarWidget {
         text: String(root.pendingCount)
         font.family: button.fontFamily
         font.pixelSize: button.fontSize
-        color: button.active ? (root.bar ? root.bar.urgent : Color.urgent) : button.foreground
+        color: button.foreground
       }
     }
   }

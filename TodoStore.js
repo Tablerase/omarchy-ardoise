@@ -72,6 +72,17 @@
  */
 
 /**
+ * @typedef {Object} UrgencyBreakdown
+ * @property {number} total
+ * @property {number} overdue
+ * @property {number} dueToday
+ * @property {number} upcoming
+ * @property {number} noReminder
+ * @property {string} earliestOverdueDiff
+ * @property {string} nextDueDiff
+ */
+
+/**
  * Creates an empty default Schema v1 store.
  * @returns {TodoStoreData}
  */
@@ -559,6 +570,117 @@ function isOverdue(task) {
 }
 
 /**
+ * Formats a millisecond time difference into a compact relative duration label.
+ * @param {number} diffMs - Difference in ms.
+ * @param {boolean} isPast - True if the event is in the past.
+ * @returns {string}
+ */
+function formatRelativeDiff(diffMs, isPast) {
+  var abs = Math.abs(diffMs)
+  var mins = Math.floor(abs / 60000)
+  var hours = Math.floor(abs / 3600000)
+  var days = Math.floor(abs / 86400000)
+
+  if (isPast) {
+    if (mins < 1) return "just now"
+    if (mins < 60) return mins + "m overdue"
+    if (hours < 24) return hours + "h overdue"
+    return days + "d overdue"
+  } else {
+    if (mins < 1) return "in <1m"
+    if (mins < 60) return "in " + mins + "m"
+    if (hours < 24) return "in " + hours + "h"
+    return "in " + days + "d"
+  }
+}
+
+/**
+ * Creates a text progress bar string (e.g. [████░░░░]).
+ * @param {number} done
+ * @param {number} total
+ * @param {number} [barLen]
+ * @returns {string}
+ */
+function makeProgressBar(done, total, barLen) {
+  var len = barLen || 8
+  if (!total || total <= 0) return "[" + "░".repeat(len) + "]"
+  var ratio = Math.max(0, Math.min(1, done / total))
+  var filled = Math.round(ratio * len)
+  var empty = len - filled
+  return "[" + "█".repeat(filled) + "░".repeat(empty) + "]"
+}
+
+/**
+ * Calculates a detailed urgency breakdown of all pending tasks.
+ * @param {TodoStoreData} store
+ * @param {number} [customNow] - Optional timestamp for testing
+ * @returns {UrgencyBreakdown}
+ */
+function getTaskUrgencyBreakdown(store, customNow) {
+  var now = typeof customNow === "number" ? customNow : Date.now()
+  var nowDate = new Date(now)
+  var endOfToday = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), 23, 59, 59, 999).getTime()
+
+  var result = {
+    total: 0,
+    overdue: 0,
+    dueToday: 0,
+    upcoming: 0,
+    noReminder: 0,
+    earliestOverdueDiff: "",
+    nextDueDiff: ""
+  }
+
+  if (!store || !Array.isArray(store.todos)) return result
+
+  var minOverdueTime = Infinity
+  var minFutureTime = Infinity
+
+  for (var i = 0; i < store.todos.length; i++) {
+    var t = store.todos[i]
+    if (t.done) continue
+    result.total++
+
+    if (!t.reminder) {
+      result.noReminder++
+      continue
+    }
+
+    var time = new Date(t.reminder).getTime()
+    if (isNaN(time)) {
+      result.noReminder++
+      continue
+    }
+
+    if (time < now) {
+      result.overdue++
+      if (time < minOverdueTime) {
+        minOverdueTime = time
+      }
+    } else if (time <= endOfToday) {
+      result.dueToday++
+      if (time < minFutureTime) {
+        minFutureTime = time
+      }
+    } else {
+      result.upcoming++
+      if (time < minFutureTime) {
+        minFutureTime = time
+      }
+    }
+  }
+
+  if (minOverdueTime !== Infinity) {
+    result.earliestOverdueDiff = formatRelativeDiff(now - minOverdueTime, true)
+  }
+  if (minFutureTime !== Infinity) {
+    result.nextDueDiff = formatRelativeDiff(minFutureTime - now, false)
+  }
+
+  return result
+}
+
+/**
  * Returns all unnotified tasks with reminders due at or before now.
  * @param {TodoStoreData} store
  * @returns {Task[]}
@@ -784,7 +906,10 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,
-    formatKeybind
+    formatKeybind,
+    formatRelativeDiff,
+    getTaskUrgencyBreakdown,
+    makeProgressBar
   }
 }
 
