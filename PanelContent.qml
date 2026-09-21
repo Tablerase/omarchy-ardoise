@@ -28,6 +28,13 @@ Item {
   property string moduleName: "tablerase.ardoise"
   property var descArea: null
 
+  onVisibleChanged: {
+    if (!visible) {
+      savePendingNotes()
+      expandedTaskId = -1
+    }
+  }
+
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
   readonly property int filteredPendingCount: TodoStore.getPendingCount(root.store, root.currentFilter)
   readonly property var reminderPresets: TodoStore.getReminderPresets()
@@ -567,12 +574,39 @@ Item {
 
     // Task items list
     Flickable {
+      id: todoListFlickable
       visible: root.filteredTodos.length > 0
       width: parent.width
       implicitHeight: Math.min(Style.space(280), todoListCol.implicitHeight)
       contentHeight: todoListCol.implicitHeight
       clip: true
       boundsBehavior: Flickable.StopAtBounds
+
+      HoverHandler {
+        id: listHoverHandler
+        onHoveredChanged: {
+          if (!hovered && root.expandedTaskId !== -1) {
+            listFoldTimer.restart()
+          } else {
+            listFoldTimer.stop()
+          }
+        }
+      }
+
+      Timer {
+        id: listFoldTimer
+        interval: 350
+        repeat: false
+        onTriggered: {
+          if (root.expandedTaskId !== -1) {
+            if (root.descArea && root.descArea.editorActiveFocus) {
+              return
+            }
+            root.savePendingNotes()
+            root.expandedTaskId = -1
+          }
+        }
+      }
 
       Column {
         id: todoListCol
@@ -597,7 +631,7 @@ Item {
             radius: Style.cornerRadius
             color: isExpanded
               ? Color.menu.selectedBackground
-              : (rowMouseArea.containsMouse ? Color.menu.selectedBackground : "transparent")
+              : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent")
             border.color: isExpanded
               ? Color.menu.border
               : (isOverdueTask ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.35) : (isDueTodayTask ? Util.alpha(Color.accent, 0.35) : "transparent"))
@@ -652,35 +686,61 @@ Item {
                 : Color.accent
             }
 
+            HoverHandler {
+              id: rowHoverHandler
+              onHoveredChanged: {
+                if (hovered) {
+                  hoverFoldTimer.stop()
+                  if (!itemRow.isExpanded) {
+                    hoverExpandTimer.restart()
+                  }
+                } else {
+                  hoverExpandTimer.stop()
+                  if (itemRow.isExpanded) {
+                    hoverFoldTimer.restart()
+                  }
+                }
+              }
+            }
+
             Timer {
               id: hoverExpandTimer
               interval: 800
               repeat: false
               onTriggered: {
-                if (rowMouseArea.containsMouse && !itemRow.isExpanded) {
+                if (rowHoverHandler.hovered && !itemRow.isExpanded) {
                   root.savePendingNotes()
                   root.expandedTaskId = itemRow.modelData.id
                 }
               }
             }
 
+            Timer {
+              id: hoverFoldTimer
+              interval: 350
+              repeat: false
+              onTriggered: {
+                if (itemRow.isExpanded && !rowHoverHandler.hovered) {
+                  if (root.descArea && root.descArea.editorActiveFocus) {
+                    return
+                  }
+                  root.savePendingNotes()
+                  root.expandedTaskId = -1
+                }
+              }
+            }
+
             onIsExpandedChanged: {
-              if (isExpanded) hoverExpandTimer.stop()
+              hoverExpandTimer.stop()
+              hoverFoldTimer.stop()
             }
 
             MouseArea {
               id: rowMouseArea
               anchors.fill: parent
-              hoverEnabled: true
-              onContainsMouseChanged: {
-                if (containsMouse && !itemRow.isExpanded) {
-                  hoverExpandTimer.restart()
-                } else {
-                  hoverExpandTimer.stop()
-                }
-              }
               onClicked: {
                 hoverExpandTimer.stop()
+                hoverFoldTimer.stop()
                 root.toggleTodo(itemRow.modelData.id)
               }
             }
@@ -876,6 +936,9 @@ Item {
                       root.descArea = descArea
                     } else if (root.descArea === descArea) {
                       root.descArea = null
+                      if (itemRow.isExpanded && !rowHoverHandler.hovered) {
+                        hoverFoldTimer.restart()
+                      }
                     }
                   }
                   Component.onDestruction: {
