@@ -29,16 +29,64 @@ Item {
   property bool showNote: false
   property bool showReminderOptions: false
 
+  property string draftTitle: ""
+  property string draftDescription: ""
+  property string draftProfile: ""
+  property string draftReminder: ""
+  readonly property bool hasDraft: draftTitle.trim().length > 0 || draftDescription.trim().length > 0
+
   readonly property var reminderPresets: TodoStore.getReminderPresets()
 
-  function open(payloadJson) {
-    root.opened = true
+  function clearDraft() {
+    draftTitle = ""
+    draftDescription = ""
+    draftProfile = ""
+    draftReminder = ""
     taskInput.text = ""
-    if (descNotesArea) descNotesArea.text = ""
+    if (descNotesArea) {
+      descNotesArea.text = ""
+      if (descNotesArea.textArea) descNotesArea.textArea.text = ""
+    }
     showNote = false
     showReminderOptions = false
     selectedReminder = ""
     selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
+    Qt.callLater(function() {
+      taskInput.forceActiveFocus()
+    })
+  }
+
+  function open(payloadJson) {
+    root.opened = true
+    if (root.hasDraft) {
+      taskInput.text = root.draftTitle
+      if (root.draftDescription) {
+        root.showNote = true
+        Qt.callLater(function() {
+          if (descNotesArea) {
+            descNotesArea.text = root.draftDescription
+            if (descNotesArea.textArea) descNotesArea.textArea.text = root.draftDescription
+          }
+        })
+      }
+      if (root.draftProfile) {
+        root.selectedProfile = root.draftProfile
+      }
+      if (root.draftReminder) {
+        root.selectedReminder = root.draftReminder
+        root.showReminderOptions = true
+      }
+    } else {
+      taskInput.text = ""
+      if (descNotesArea) {
+        descNotesArea.text = ""
+        if (descNotesArea.textArea) descNotesArea.textArea.text = ""
+      }
+      showNote = false
+      showReminderOptions = false
+      selectedReminder = ""
+      selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
+    }
     Qt.callLater(function() {
       taskInput.forceActiveFocus()
     })
@@ -80,7 +128,16 @@ Item {
   }
 
   onSelectedProfileChanged: {
+    if (root.opened) {
+      root.draftProfile = root.selectedProfile
+    }
     Qt.callLater(function() { root.ensureProfileVisible(root.selectedProfile) })
+  }
+
+  onSelectedReminderChanged: {
+    if (root.opened) {
+      root.draftReminder = root.selectedReminder
+    }
   }
 
   function submit() {
@@ -96,6 +153,7 @@ Item {
     var newStore = TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem)
     root.store = newStore
     todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")
+    root.clearDraft()
     root.dismiss()
   }
 
@@ -192,10 +250,68 @@ Item {
           font.pixelSize: Style.font.body
           onAccepted: root.submit()
           Keys.onEscapePressed: root.dismiss()
+          Keys.onPressed: function(event) {
+            if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
+              if (root.hasDraft) {
+                root.clearDraft()
+                event.accepted = true
+              }
+            }
+          }
           onTextChanged: {
+            root.draftTitle = text
             var match = text.match(/#\s*([a-zA-Z0-9_-]+)/)
             if (match) {
               root.selectedProfile = TodoStore.cleanProfileName(match[1])
+            }
+          }
+        }
+
+        // Draft notice banner when a saved draft is active
+        Row {
+          width: parent.width
+          visible: root.hasDraft
+          spacing: Style.space(6)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰁯"
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Draft restored"
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "•"
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            id: clearDraftAction
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Clear"
+            color: clearDraftMouse.containsMouse ? Color.urgent : Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+
+            MouseArea {
+              id: clearDraftMouse
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              hoverEnabled: true
+              onClicked: root.clearDraft()
             }
           }
         }
@@ -400,6 +516,27 @@ Item {
             placeholderText: "Add note / description (Shift+Enter for newline)..."
             onSubmitted: root.submit()
             onEscapePressed: root.dismiss()
+            onTextChanged: {
+              if (root.opened) {
+                root.draftDescription = text
+              }
+            }
+            Connections {
+              target: descNotesArea.textArea
+              function onTextChanged() {
+                if (root.opened) {
+                  root.draftDescription = descNotesArea.textArea.text
+                }
+              }
+            }
+            Keys.onPressed: function(event) {
+              if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
+                if (root.hasDraft) {
+                  root.clearDraft()
+                  event.accepted = true
+                }
+              }
+            }
           }
         }
 
@@ -454,7 +591,7 @@ Item {
             id: hintText
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "󰌑 Enter  •  Esc Cancel"
+            text: root.hasDraft ? "󰌑 Enter  •  Esc Dismiss  •  Ctrl+⌫ Discard" : "󰌑 Enter  •  Esc Cancel"
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption

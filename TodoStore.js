@@ -734,6 +734,30 @@ function getArchivedCount(archiveRawText) {
   return arc.archived.length
 }
 
+/**
+ * Formats Hyprland modmask and key into a human-readable shortcut string.
+ * Hyprland bitmasks:
+ * - Bit 6 (64): SUPER
+ * - Bit 2 (4): CTRL
+ * - Bit 3 (8): ALT
+ * - Bit 0 (1): SHIFT
+ * @param {number|null|undefined} modmask
+ * @param {string|null|undefined} key
+ * @returns {string}
+ */
+function formatKeybind(modmask, key) {
+  var mask = Number(modmask) || 0
+  var parts = []
+  if (mask & 64) parts.push("SUPER")
+  if (mask & 4) parts.push("CTRL")
+  if (mask & 8) parts.push("ALT")
+  if (mask & 1) parts.push("SHIFT")
+  if (key) {
+    parts.push(String(key).trim().toUpperCase())
+  }
+  return parts.join(" + ")
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     defaultStore,
@@ -759,6 +783,8 @@ if (typeof module !== "undefined" && module.exports) {
     getReminderPresets,
     normalizeArchive,
     archiveCompleted,
-    getArchivedCount
+    getArchivedCount,
+    formatKeybind
   }
 }
+

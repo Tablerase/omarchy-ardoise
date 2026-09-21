@@ -29,7 +29,8 @@ const {
   getReminderPresets,
   normalizeArchive,
   archiveCompleted,
-  getArchivedCount
+  getArchivedCount,
+  formatKeybind
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -392,4 +393,34 @@ test("isOverdue: correctly identifies overdue incomplete tasks", () => {
   assert.equal(isOverdue({ id: 3, title: "Future task", done: false, reminder: futureIso }), false);
   assert.equal(isOverdue({ id: 4, title: "Overdue task", done: false, reminder: pastIso }), true);
 });
+
+test("formatKeybind: formats Hyprland bitmasks and keys into readable shortcut strings", () => {
+  // Single modifier
+  assert.equal(formatKeybind(64, "T"), "SUPER + T");
+  assert.equal(formatKeybind(4, "T"), "CTRL + T");
+  assert.equal(formatKeybind(8, "T"), "ALT + T");
+  assert.equal(formatKeybind(1, "T"), "SHIFT + T");
+
+  // Combinations
+  assert.equal(formatKeybind(65, "T"), "SUPER + SHIFT + T");
+  assert.equal(formatKeybind(68, "T"), "SUPER + CTRL + T");
+  assert.equal(formatKeybind(72, "T"), "SUPER + ALT + T");
+  assert.equal(formatKeybind(73, "T"), "SUPER + ALT + SHIFT + T");
+  assert.equal(formatKeybind(77, "T"), "SUPER + CTRL + ALT + SHIFT + T");
+
+  // No modifiers
+  assert.equal(formatKeybind(0, "T"), "T");
+  assert.equal(formatKeybind(0, "space"), "SPACE");
+
+  // Lowercase key conversion and whitespace trimming
+  assert.equal(formatKeybind(65, "t"), "SUPER + SHIFT + T");
+  assert.equal(formatKeybind(64, " return "), "SUPER + RETURN");
+
+  // Missing or empty arguments
+  assert.equal(formatKeybind(null, "T"), "T");
+  assert.equal(formatKeybind(undefined, "t"), "T");
+  assert.equal(formatKeybind(64, ""), "SUPER");
+  assert.equal(formatKeybind(0, ""), "");
+});
+
 

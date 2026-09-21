@@ -23,6 +23,8 @@ Item {
   property var expandedTaskId: -1
   property bool addingProfile: false
   property string shortcutState: "active"
+  property string detectedShortcut: "SUPER + SHIFT + T"
+  property bool shortcutRegistered: false
   property string moduleName: "tablerase.ardoise"
   property var descArea: null
 
@@ -189,12 +191,10 @@ Item {
         iconText: "󰌌"
         fontSize: Style.font.subtitle
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-        foreground: root.shortcutState === "active" ? root.barForeground : Color.muted
-        tooltipText: root.shortcutState === "active"
-          ? "Shortcut active: SUPER + SHIFT + T (click to copy & edit config)"
-          : (root.shortcutState === "commented"
-            ? "Shortcut commented out in config (click to edit)"
-            : "Click to copy shortcut & open bindings in editor")
+        foreground: root.shortcutRegistered ? root.barForeground : Color.muted
+        tooltipText: root.shortcutRegistered
+          ? ("Shortcut active: " + root.detectedShortcut + " (click to copy & edit config)")
+          : ("Set shortcut: " + root.detectedShortcut + " (click to copy & edit config)")
         onClicked: root.shortcutClicked()
 
         Rectangle {
@@ -206,14 +206,14 @@ Item {
           anchors.right: parent.right
           anchors.bottomMargin: Style.space(1)
           anchors.rightMargin: Style.space(1)
-          color: root.shortcutState === "active" ? Color.accent
+          color: root.shortcutRegistered ? Color.accent
             : (root.shortcutState === "commented" ? "#e67e22" : Color.urgent)
           border.color: Color.menu.background
           border.width: 1
 
           Text {
             anchors.centerIn: parent
-            text: root.shortcutState === "missing" ? "✕" : "✓"
+            text: root.shortcutRegistered ? "✓" : "✕"
             color: "white"
             font.pixelSize: Style.space(6.5)
             font.bold: true
@@ -997,7 +997,7 @@ Item {
         text: "Quick Add"
         fontSize: Style.font.caption
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-        tooltipText: "Open Quick Add modal (SUPER + SHIFT + T)"
+        tooltipText: "Open Quick Add modal (" + root.detectedShortcut + ")"
         onClicked: root.openQuickAdd()
       }
     }

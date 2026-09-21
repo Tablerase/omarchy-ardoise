@@ -15,26 +15,55 @@ Panel {
   property var hostWidget: null
   property var barWidget: null
 
-  property string shortcutState: "missing"
-  readonly property bool hasShortcut: shortcutState === "active"
+  property string detectedShortcut: "SUPER + SHIFT + T"
+  property bool shortcutRegistered: false
+  property string shortcutState: shortcutRegistered ? "active" : "missing"
+  readonly property bool hasShortcut: shortcutRegistered
 
   onOpenedChanged: if (opened) checkShortcutProc.running = true
   Component.onCompleted: checkShortcutProc.running = true
 
-  // Query running Hyprland compositor or config files for active/commented keybinding
+  function parseBinds(rawText) {
+    var found = false
+    var shortcut = "SUPER + SHIFT + T"
+    try {
+      var list = JSON.parse(rawText)
+      if (Array.isArray(list)) {
+        for (var i = 0; i < list.length; i++) {
+          var item = list[i]
+          if (!item) continue
+          var desc = (item.description && typeof item.description === "string") ? item.description.toLowerCase() : ""
+          var arg = (item.arg && typeof item.arg === "string") ? item.arg : ""
+          var matches = (desc && (desc.includes("todo") || desc.includes("ardoise"))) ||
+                        (arg && (arg.includes("tablerase.ardoise") || arg.includes("tablerase.todo")))
+          if (matches) {
+            shortcut = TodoStore.formatKeybind(item.modmask, item.key)
+            found = true
+            break
+          }
+        }
+      }
+    } catch (e) {
+      found = false
+      shortcut = "SUPER + SHIFT + T"
+    }
+
+    root.detectedShortcut = shortcut
+    root.shortcutRegistered = found
+  }
+
+  // Query running Hyprland compositor for active keybinding
   Process {
     id: checkShortcutProc
-    command: [
-      "bash",
-      "-c",
-      "if hyprctl binds 2>/dev/null | grep -E -q 'Todo Quick Add|tablerase\\.todo'; then echo 'active'; elif grep -E -s -q '^[[:space:]]*(o\\.bind|bindd?).*(tablerase\\.todo|Todo Quick Add)' \"$HOME/.config/hypr/bindings.lua\" \"$HOME/.config/hypr/bindings.conf\" 2>/dev/null; then echo 'active'; elif grep -E -s -q '^[[:space:]]*(--|#).*(tablerase\\.todo|Todo Quick Add)' \"$HOME/.config/hypr/bindings.lua\" \"$HOME/.config/hypr/bindings.conf\" 2>/dev/null; then echo 'commented'; else echo 'missing'; fi"
-    ]
-    stdout: SplitParser {
-      onRead: function(line) {
-        var s = String(line).trim()
-        if (s === "active" || s === "commented" || s === "missing") {
-          root.shortcutState = s
-        }
+    command: ["bash", "-c", "hyprctl -j binds 2>/dev/null || echo '[]'"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.parseBinds(text)
+    }
+    onExited: function(exitCode) {
+      if (exitCode !== 0 && !root.shortcutRegistered) {
+        root.detectedShortcut = "SUPER + SHIFT + T"
+        root.shortcutRegistered = false
       }
     }
   }
@@ -85,6 +114,8 @@ Panel {
         bar: root.bar
         barWidget: root.barWidget
         shortcutState: root.shortcutState
+        detectedShortcut: root.detectedShortcut
+        shortcutRegistered: root.shortcutRegistered
         onCloseRequested: root.close()
         onShortcutClicked: {
           copyAndOpenProc.running = true
