@@ -257,7 +257,7 @@ Item {
           }
 
           Button {
-            iconText: "󰀉"
+            iconText: "󰥔"
             text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
             selected: Boolean(root.selectedReminder)
             fontSize: Style.font.caption

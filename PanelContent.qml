@@ -38,17 +38,25 @@ Item {
   property bool addingProfile: false
   property string shortcutState: "active"
   property string moduleName: "tablerase.ardoise"
+  property var descField: null
 
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
   readonly property int filteredPendingCount: TodoStore.getPendingCount(root.store, root.currentFilter)
   readonly property var reminderPresets: TodoStore.getReminderPresets()
-  readonly property bool activeFocusBlocked: (newTodoField && newTodoField.activeFocus) || expandedTaskId !== -1 || addingProfile
+  readonly property bool activeFocusBlocked: Boolean((newTodoField && newTodoField.activeFocus) || (descField && descField.activeFocus) || addingProfile)
 
   signal closeRequested()
   signal shortcutClicked()
   signal switchPanelRequested(int direction)
 
+  function savePendingNotes() {
+    if (root.descField && typeof root.descField.saveDescription === "function") {
+      root.descField.saveDescription()
+    }
+  }
+
   function addTodo(title, description, profile, reminder) {
+    savePendingNotes()
     if (barWidget) {
       barWidget.addTodo(title, description, profile, reminder)
     } else {
@@ -57,6 +65,7 @@ Item {
   }
 
   function toggleTodo(id) {
+    savePendingNotes()
     if (barWidget) {
       barWidget.toggleTodo(id)
     } else {
@@ -65,6 +74,7 @@ Item {
   }
 
   function removeTodo(id) {
+    savePendingNotes()
     if (barWidget) {
       barWidget.removeTodo(id)
     } else {
@@ -81,6 +91,7 @@ Item {
   }
 
   function clearCompleted(profile) {
+    savePendingNotes()
     if (barWidget) {
       barWidget.clearCompleted(profile)
     } else {
@@ -90,6 +101,7 @@ Item {
   }
 
   function addProfile(name) {
+    savePendingNotes()
     if (barWidget) {
       barWidget.addProfile(name)
     } else {
@@ -98,18 +110,21 @@ Item {
   }
 
   function openArchive() {
+    savePendingNotes()
     var p = barWidget ? barWidget.archiveFilePath : Quickshell.env("HOME") + "/.config/omarchy/todos-archive.json"
     if (bar) bar.run("omarchy-launch-editor " + p)
     root.closeRequested()
   }
 
   function openEditor() {
+    savePendingNotes()
     var p = barWidget ? barWidget.todoFilePath : Quickshell.env("HOME") + "/.config/omarchy/todos.json"
     if (bar) bar.run("omarchy-launch-editor " + p)
     root.closeRequested()
   }
 
   function openQuickAdd() {
+    savePendingNotes()
     root.closeRequested()
     if (bar && bar.shell) {
       bar.shell.summon(root.moduleName, "{}")
@@ -138,7 +153,10 @@ Item {
     }
   }
 
-  onCurrentFilterChanged: Qt.callLater(function() { root.ensureProfileVisible(root.currentFilter) })
+  onCurrentFilterChanged: {
+    savePendingNotes()
+    Qt.callLater(function() { root.ensureProfileVisible(root.currentFilter) })
+  }
 
   implicitWidth: content.implicitWidth
   implicitHeight: content.implicitHeight
@@ -716,7 +734,7 @@ Item {
 
                       Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "󰀉"
+                        text: "󰥔"
                         color: itemRow.isDone ? Color.muted : Color.accent
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(8.5)
@@ -743,6 +761,7 @@ Item {
                     hoverColor: Color.accent
                     tooltipText: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
                     onClicked: {
+                      root.savePendingNotes()
                       root.expandedTaskId = itemRow.isExpanded ? -1 : itemRow.modelData.id
                     }
                   }
@@ -772,18 +791,125 @@ Item {
 
                 PanelSeparator { width: parent.width }
 
-                // Description / Notes input
-                TextField {
-                  id: descField
+                // Description / Notes input (multi-line, auto-expanding with scroll)
+                ScrollView {
+                  id: descScroll
                   width: parent.width
-                  text: itemRow.modelData.description || ""
-                  placeholderText: "Notes / description..."
-                  font.pixelSize: Style.font.caption
-                  onAccepted: {
-                    root.updateTodo(itemRow.modelData.id, { description: text })
+                  implicitHeight: Math.min(Style.space(130), Math.max(Style.space(56), descField.implicitHeight))
+                  clip: true
+
+                  background: BorderSurface {
+                    color: Style.controlFill(descField.activeFocus, descField.hovered, root.barForeground, Color.accent)
+                    borderSpec: Border.controlSpec(descField.activeFocus ? "focus" : (descField.hovered ? "hover-cursor" : "normal"), root.barForeground, Color.accent)
+                    radius: Style.cornerRadius
                   }
-                  onEditingFinished: {
-                    root.updateTodo(itemRow.modelData.id, { description: text })
+
+                  ScrollBar.vertical: ScrollBar {
+                    id: descScrollBar
+                    policy: descField.implicitHeight > descScroll.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+                    interactive: true
+                    padding: 0
+                    implicitWidth: Style.space(3)
+
+                    contentItem: Rectangle {
+                      implicitWidth: Style.space(3)
+                      radius: Style.space(1.5)
+                      color: descScrollBar.pressed ? Color.accent : (descScrollBar.hovered ? Color.accent : Color.muted)
+                      opacity: descScrollBar.active ? 0.9 : 0.4
+                    }
+
+                    background: Rectangle {
+                      implicitWidth: Style.space(3)
+                      radius: Style.space(1.5)
+                      color: Color.menu.selectedBackground
+                      opacity: 0.25
+                    }
+                  }
+
+                  TextArea {
+                    id: descField
+                    width: descScroll.availableWidth
+                    text: itemRow.modelData.description || ""
+                    placeholderText: "Notes / description (Shift+Enter for newline)..."
+                    wrapMode: TextEdit.Wrap
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption
+                    color: root.barForeground
+                    selectionColor: Style.selectionFillFor(root.barForeground, Color.accent)
+                    selectedTextColor: root.barForeground
+                    placeholderTextColor: Qt.darker(root.barForeground, 1.6)
+                    leftPadding: Style.space(8)
+                    rightPadding: Style.space(8)
+                    topPadding: Style.space(6)
+                    bottomPadding: Style.space(6)
+                    background: null
+
+                    function saveDescription() {
+                      if (itemRow.modelData && descField.text !== (itemRow.modelData.description || "")) {
+                        root.updateTodo(itemRow.modelData.id, { description: descField.text })
+                      }
+                    }
+
+                    function insertLineBreak() {
+                      if (descField.selectedText && descField.selectedText.length > 0) {
+                        var s = descField.selectionStart
+                        var e = descField.selectionEnd
+                        descField.remove(s, e)
+                        descField.insert(s, "\n")
+                      } else {
+                        descField.insert(descField.cursorPosition, "\n")
+                      }
+                    }
+
+                    Keys.onReturnPressed: function(event) {
+                      if (event.modifiers & Qt.ShiftModifier) {
+                        descField.insertLineBreak()
+                        event.accepted = true
+                      } else {
+                        event.accepted = true
+                        descField.saveDescription()
+                        descField.focus = false
+                      }
+                    }
+
+                    Keys.onEnterPressed: function(event) {
+                      if (event.modifiers & Qt.ShiftModifier) {
+                        descField.insertLineBreak()
+                        event.accepted = true
+                      } else {
+                        event.accepted = true
+                        descField.saveDescription()
+                        descField.focus = false
+                      }
+                    }
+
+                    Keys.onEscapePressed: function(event) {
+                      event.accepted = true
+                      descField.saveDescription()
+                      descField.focus = false
+                    }
+
+                    onActiveFocusChanged: {
+                      if (activeFocus) {
+                        root.descField = descField
+                      } else {
+                        if (root.descField === descField) {
+                          root.descField = null
+                        }
+                        saveDescription()
+                      }
+                    }
+
+                    onEditingFinished: {
+                      saveDescription()
+                    }
+
+                    Component.onDestruction: {
+                      if (root.descField === descField) {
+                        root.descField = null
+                      }
+                      saveDescription()
+                    }
                   }
                 }
 
@@ -794,7 +920,7 @@ Item {
 
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "󰀉 Reminder:"
+                    text: "󰥔 Reminder:"
                     color: Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.space(9.5)

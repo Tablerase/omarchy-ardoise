@@ -222,7 +222,7 @@ The plugin includes a headless service (`Service.qml`) declared with kind `"serv
 - **Lifecycle**: Loaded automatically by `shell.qml` when Omarchy starts and runs 24/7.
 - **Monitoring**: Inspects `todos.json` every 15 seconds for uncompleted tasks with `reminder <= now` and `notified == false`.
 - **Notification**: Calls `/usr/share/omarchy/bin/omarchy-notification-send`:
-  - Glyph: `󰀉` (reminder clock).
+  - Glyph: `󰥔` (reminder clock).
   - Headline: Task title.
   - Body: Profile tag and description notes.
   - Click Action: Clicking the desktop notification triggers `omarchy-shell shell toggle tablerase.ardoise "{}"` to open the task panel.

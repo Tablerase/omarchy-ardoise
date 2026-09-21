@@ -45,7 +45,7 @@ Item {
       Quickshell.execDetached([
         bin,
         "--app-name", "Ardoise",
-        "-g", "󰀉",
+        "-g", "󰥔",
         "-u", "normal",
         headline,
         desc,
