@@ -600,7 +600,7 @@ Item {
               : (rowMouseArea.containsMouse ? Color.menu.selectedBackground : "transparent")
             border.color: isExpanded
               ? Color.menu.border
-              : (isOverdueTask ? (root.bar ? root.bar.urgent + "55" : Color.urgent + "55") : (isDueTodayTask ? Color.accent + "55" : "transparent"))
+              : (isOverdueTask ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.35) : (isDueTodayTask ? Util.alpha(Color.accent, 0.35) : "transparent"))
             border.width: isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0
 
             Behavior on implicitHeight {
@@ -612,20 +612,21 @@ Item {
               id: urgencyGradient
               anchors.fill: parent
               radius: parent.radius
+              color: "transparent"
               visible: itemRow.isOverdueTask || itemRow.isDueTodayTask
               gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop {
                   position: 0.0
                   color: itemRow.isOverdueTask
-                    ? (root.bar ? root.bar.urgent + "26" : Color.urgent + "26")
-                    : (Color.accent + "1e")
+                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.15)
+                    : Util.alpha(Color.accent, 0.12)
                 }
                 GradientStop {
-                  position: 0.45
+                  position: 0.4
                   color: itemRow.isOverdueTask
-                    ? (root.bar ? root.bar.urgent + "08" : Color.urgent + "08")
-                    : (Color.accent + "06")
+                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.03)
+                    : Util.alpha(Color.accent, 0.02)
                 }
                 GradientStop {
                   position: 1.0
@@ -793,7 +794,7 @@ Item {
                     implicitWidth: remRow.implicitWidth + Style.space(6)
                     implicitHeight: Style.space(18)
                     radius: implicitHeight / 2
-                    color: itemRow.isDone ? Color.menu.background : (Color.accent + "22")
+                    color: itemRow.isDone ? Color.menu.background : Util.alpha(Color.accent, 0.14)
                     border.color: itemRow.isDone ? Color.menu.border : Color.accent
                     border.width: 1
 
