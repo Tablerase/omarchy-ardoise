@@ -34,7 +34,8 @@ const {
   formatRelativeDiff,
   getTaskUrgencyBreakdown,
   makeProgressBar,
-  markTasksNotified
+  markTasksNotified,
+  capitalizeTitle
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -539,6 +540,18 @@ test("reminder loop prevention: pendingReminders never returns notified tasks", 
   const notifiedStore = markTasksNotified(store, due.map(t => t.id));
   const remainingDue = pendingReminders(notifiedStore);
   assert.equal(remainingDue.length, 0);
+});
+
+test("capitalizeTitle: capitalizes first letter and handles symbols/whitespace cleanly", () => {
+  assert.equal(capitalizeTitle(""), "");
+  assert.equal(capitalizeTitle(null), "");
+  assert.equal(capitalizeTitle(undefined), "");
+  assert.equal(capitalizeTitle("capitalize item title"), "Capitalize item title");
+  assert.equal(capitalizeTitle("already Capitalized"), "Already Capitalized");
+  assert.equal(capitalizeTitle("  spaced text"), "  Spaced text");
+  assert.equal(capitalizeTitle("#hashtag first"), "#hashtag first");
+  assert.equal(capitalizeTitle("123 numbers"), "123 numbers");
+  assert.equal(capitalizeTitle("npm run check"), "Npm run check");
 });
 
 

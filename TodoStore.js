@@ -109,6 +109,18 @@ function cleanProfileName(name) {
 }
 
 /**
+ * Capitalizes the first letter of a task title while preserving the rest of the text.
+ * @param {string|null|undefined} title
+ * @returns {string}
+ */
+function capitalizeTitle(title) {
+  if (!title) return ""
+  return String(title).replace(/^\s*\S/, function (c) {
+    return c.toUpperCase()
+  })
+}
+
+/**
  * Normalizes an arbitrary raw task object into a clean Schema v1 Task.
  * @param {any} raw
  * @returns {Task|null}
@@ -117,7 +129,7 @@ function normalizeTask(raw) {
   if (!raw || typeof raw !== "object") return null
   var now = Date.now()
   var id = raw.id !== undefined && raw.id !== null ? raw.id : now
-  var title = String(raw.title || raw.text || "").trim()
+  var title = capitalizeTitle(String(raw.title || raw.text || "").trim())
   var description = String(raw.description || "")
   var profile = cleanProfileName(raw.profile)
   var done = Boolean(raw.done)
@@ -270,7 +282,7 @@ function cloneStore(store) {
 function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
   var s = cloneStore(store)
   var parsed = parseTitleAndProfile(rawTitle, explicitProfile || s.activeProfile)
-  var title = parsed.title
+  var title = capitalizeTitle(parsed.title)
   var profile = (explicitProfile && !rawTitle.match(/#\s*([a-zA-Z0-9_-]+)/))
     ? cleanProfileName(explicitProfile)
     : parsed.profile
@@ -359,7 +371,7 @@ function updateTodo(store, id, fields) {
     if (String(s.todos[i].id) === String(id)) {
       var t = s.todos[i]
       t.updatedAt = (fields.updatedAt !== undefined) ? Number(fields.updatedAt) : now
-      if (fields.title !== undefined) t.title = String(fields.title).trim()
+      if (fields.title !== undefined) t.title = capitalizeTitle(String(fields.title).trim())
       if (fields.description !== undefined) t.description = String(fields.description)
       if (fields.profile !== undefined) {
         var p = cleanProfileName(fields.profile)
@@ -935,7 +947,8 @@ if (typeof module !== "undefined" && module.exports) {
     formatRelativeDiff,
     getTaskUrgencyBreakdown,
     makeProgressBar,
-    markTasksNotified
+    markTasksNotified,
+    capitalizeTitle
   }
 }
 

@@ -589,6 +589,8 @@ Item {
 
             readonly property bool isExpanded: root.expandedTaskId === modelData.id
             readonly property bool isDone: Boolean(modelData.done)
+            readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(modelData)
+            readonly property bool isDueTodayTask: !isDone && !isOverdueTask && Boolean(modelData.reminder) && (new Date(modelData.reminder).toDateString() === new Date().toDateString())
 
             width: parent.width
             implicitHeight: isExpanded ? expandedContent.implicitHeight + Style.space(14) : Style.space(40)
@@ -596,14 +598,88 @@ Item {
             color: isExpanded
               ? Color.menu.selectedBackground
               : (rowMouseArea.containsMouse ? Color.menu.selectedBackground : "transparent")
-            border.color: isExpanded ? Color.menu.border : "transparent"
-            border.width: isExpanded ? 1 : 0
+            border.color: isExpanded
+              ? Color.menu.border
+              : (isOverdueTask ? (root.bar ? root.bar.urgent + "55" : Color.urgent + "55") : (isDueTodayTask ? Color.accent + "55" : "transparent"))
+            border.width: isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0
+
+            Behavior on implicitHeight {
+              NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+            }
+
+            // Subtle horizontal gradient tint for overdue and due-today tasks
+            Rectangle {
+              id: urgencyGradient
+              anchors.fill: parent
+              radius: parent.radius
+              visible: itemRow.isOverdueTask || itemRow.isDueTodayTask
+              gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop {
+                  position: 0.0
+                  color: itemRow.isOverdueTask
+                    ? (root.bar ? root.bar.urgent + "26" : Color.urgent + "26")
+                    : (Color.accent + "1e")
+                }
+                GradientStop {
+                  position: 0.45
+                  color: itemRow.isOverdueTask
+                    ? (root.bar ? root.bar.urgent + "08" : Color.urgent + "08")
+                    : (Color.accent + "06")
+                }
+                GradientStop {
+                  position: 1.0
+                  color: "transparent"
+                }
+              }
+            }
+
+            // Left edge indicator stripe
+            Rectangle {
+              id: urgencyStripe
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(2)
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              anchors.topMargin: Style.space(4)
+              anchors.bottomMargin: Style.space(4)
+              width: Style.space(2.5)
+              radius: width / 2
+              visible: itemRow.isOverdueTask || itemRow.isDueTodayTask
+              color: itemRow.isOverdueTask
+                ? (root.bar ? root.bar.urgent : Color.urgent)
+                : Color.accent
+            }
+
+            Timer {
+              id: hoverExpandTimer
+              interval: 800
+              repeat: false
+              onTriggered: {
+                if (rowMouseArea.containsMouse && !itemRow.isExpanded) {
+                  root.savePendingNotes()
+                  root.expandedTaskId = itemRow.modelData.id
+                }
+              }
+            }
+
+            onIsExpandedChanged: {
+              if (isExpanded) hoverExpandTimer.stop()
+            }
 
             MouseArea {
               id: rowMouseArea
               anchors.fill: parent
               hoverEnabled: true
+              onContainsMouseChanged: {
+                if (containsMouse && !itemRow.isExpanded) {
+                  hoverExpandTimer.restart()
+                } else {
+                  hoverExpandTimer.stop()
+                }
+              }
               onClicked: {
+                hoverExpandTimer.stop()
                 root.toggleTodo(itemRow.modelData.id)
               }
             }
@@ -674,7 +750,7 @@ Item {
                     id: titleLabel
                     anchors.verticalCenter: parent.verticalCenter
                     width: Math.max(Style.space(40), titleRow.width - checkboxIcon.implicitWidth - (profBadge.visible ? profBadge.implicitWidth + titleRow.spacing : 0) - titleRow.spacing)
-                    text: itemRow.modelData.title || ""
+                    text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                     color: itemRow.isDone ? Color.muted : root.barForeground
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.strikeout: itemRow.isDone
@@ -687,7 +763,7 @@ Item {
 
                     PanelToolTip {
                       visible: titleHover.hovered && titleLabel.truncated
-                      text: itemRow.modelData.title || ""
+                      text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     }
                   }
