@@ -1,5 +1,9 @@
 # Ardoise — Minimalist Task Slate for Omarchy
 
+<p align="center">
+  <img src="preview.png" alt="Ardoise for Omarchy" width="960">
+</p>
+
 A productivity status bar widget, flyout panel, quick-add modal, and background reminder service for **Omarchy Quattro (Omarchy 4.x)**, built with Quickshell and QtQuick.
 
 ---
@@ -287,6 +291,12 @@ omarchy-restart-shell
 ├── Service.qml           # Headless background service monitoring scheduled reminders
 ├── TodoStore.js          # Fully-typed data store, Schema v1 normalization, and archive logic
 ├── InboxIcon.qml         # Vector inbox tray icon rendered via Canvas 2D
+├── preview.png           # 1600x900 marketplace artwork & preview banner
+├── screenshots/          # High-resolution screenshots for documentation
+│   └── panel.png         # Flyout task panel screenshot
+├── tools/                # Development & asset generation tools
+│   ├── preview.qml       # Offscreen QML render definition
+│   └── render-preview.sh # Automated Quickshell headless capture script
 ├── tests/                # Unit test suite
 │   └── TodoStore.test.mts # 16 automated tests covering CRUD, profiles, reminders, and archives
 └── README.md             # Documentation and API reference
@@ -299,6 +309,7 @@ omarchy-restart-shell
 - **[OmaTasks for Todoist](https://github.com/crmne/omatasks)** by **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT License):
   - Canvas 2D vector inbox icon architecture.
   - Multi-kind overlay pattern for fullscreen keyboard-first Quick Add modal.
+  - Headless Quickshell offscreen preview rendering and banner generation pipeline (`tools/render-preview`).
 - **[Planova / PlaneTxt](https://github.com/brvier/PlanovaQuickShell)** by **Benoît HERVIER** ([@brvier](https://github.com/brvier)):
   - Separation of reactive data stores from visual UI presentation.
 - **[Omarchy](https://github.com/omacom/omarchy)**:
