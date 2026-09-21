@@ -16,6 +16,7 @@
  * @property {string} profile - Profile/category name (e.g. "personal", "work")
  * @property {boolean} done - Whether the task is completed
  * @property {number} createdAt - Creation epoch timestamp (ms)
+ * @property {number} [updatedAt] - Last updated epoch timestamp (ms)
  * @property {string|null} [dueDate] - Optional due date string
  * @property {string|null} [reminder] - Optional reminder ISO timestamp string
  * @property {boolean} [notified] - Whether desktop notification was triggered
@@ -51,6 +52,7 @@
  * @property {string} [description]
  * @property {string} [profile]
  * @property {boolean} [done]
+ * @property {number} [updatedAt]
  * @property {string|null} [reminder]
  * @property {string|null} [dueDate]
  * @property {boolean} [notified]
@@ -109,6 +111,7 @@ function normalizeTask(raw) {
   var profile = cleanProfileName(raw.profile)
   var done = Boolean(raw.done)
   var createdAt = Number(raw.createdAt) || (typeof id === "number" ? id : now)
+  var updatedAt = raw.updatedAt ? (Number(raw.updatedAt) || createdAt) : undefined
   var dueDate = raw.dueDate ? String(raw.dueDate) : null
   var reminder = raw.reminder ? String(raw.reminder) : null
   var notified = Boolean(raw.notified)
@@ -120,6 +123,7 @@ function normalizeTask(raw) {
     profile: profile,
     done: done,
     createdAt: createdAt,
+    updatedAt: updatedAt,
     dueDate: dueDate,
     reminder: reminder,
     notified: notified
@@ -284,6 +288,7 @@ function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
     profile: profile,
     done: false,
     createdAt: now,
+    updatedAt: now,
     dueDate: null,
     reminder: reminderTime ? String(reminderTime) : null,
     notified: false
@@ -338,9 +343,11 @@ function removeTodo(store, id) {
  */
 function updateTodo(store, id, fields) {
   var s = cloneStore(store)
+  var now = Date.now()
   for (var i = 0; i < s.todos.length; i++) {
     if (String(s.todos[i].id) === String(id)) {
       var t = s.todos[i]
+      t.updatedAt = (fields.updatedAt !== undefined) ? Number(fields.updatedAt) : now
       if (fields.title !== undefined) t.title = String(fields.title).trim()
       if (fields.description !== undefined) t.description = String(fields.description)
       if (fields.profile !== undefined) {
@@ -448,6 +455,96 @@ function getFilteredTodos(store, profileFilter) {
   return store.todos.filter(function (t) {
     return t.profile === profileFilter
   })
+}
+
+/**
+ * Returns profiles sorted by:
+ * 1. Descending pending task count (profiles with most pending tasks come first)
+ * 2. Descending latest task activity timestamp (updatedAt || createdAt)
+ * 3. Alphabetical fallback
+ *
+ * If onlyActive is true, only returns profiles with count > 0, matching currentFilter, or store.activeProfile.
+ *
+ * @param {TodoStoreData|null|undefined} store
+ * @param {boolean} [onlyActive]
+ * @param {string} [currentFilter]
+ * @returns {string[]}
+ */
+function getSortedProfiles(store, onlyActive, currentFilter) {
+  /** @type {string[]} */
+  var profList = []
+  /** @type {Record<string, boolean>} */
+  var seen = {}
+
+  var sourceProfiles = (store && Array.isArray(store.profiles)) ? store.profiles : ["personal", "work"]
+  for (var i = 0; i < sourceProfiles.length; i++) {
+    var p = cleanProfileName(sourceProfiles[i])
+    if (p && !seen[p]) {
+      seen[p] = true
+      profList.push(p)
+    }
+  }
+
+  /** @type {Record<string, number>} */
+  var counts = {}
+  /** @type {Record<string, number>} */
+  var recency = {}
+
+  for (var k = 0; k < profList.length; k++) {
+    counts[profList[k]] = 0
+    recency[profList[k]] = 0
+  }
+
+  var todos = (store && Array.isArray(store.todos)) ? store.todos : []
+  for (var j = 0; j < todos.length; j++) {
+    var task = todos[j]
+    if (!task) continue
+    var prof = cleanProfileName(task.profile)
+    if (!prof) continue
+
+    if (!seen[prof]) {
+      seen[prof] = true
+      profList.push(prof)
+      counts[prof] = 0
+      recency[prof] = 0
+    }
+
+    if (!task.done) {
+      counts[prof] = (counts[prof] || 0) + 1
+    }
+
+    var taskTime = Math.max(Number(task.updatedAt) || 0, Number(task.createdAt) || 0)
+    if (taskTime > (recency[prof] || 0)) {
+      recency[prof] = taskTime
+    }
+  }
+
+  profList.sort(function (a, b) {
+    var countA = counts[a] || 0
+    var countB = counts[b] || 0
+    if (countB !== countA) {
+      return countB - countA
+    }
+    var timeA = recency[a] || 0
+    var timeB = recency[b] || 0
+    if (timeB !== timeA) {
+      return timeB - timeA
+    }
+    return a.localeCompare(b)
+  })
+
+  if (onlyActive) {
+    var activeProf = (store && store.activeProfile) ? cleanProfileName(store.activeProfile) : "personal"
+    var cleanFilter = (currentFilter && currentFilter !== "all") ? cleanProfileName(currentFilter) : ""
+    profList = profList.filter(function (name) {
+      return (counts[name] > 0) || (Boolean(cleanFilter) && name === cleanFilter) || (name === activeProf)
+    })
+    if (profList.length === 0) {
+      profList.push(activeProf || "personal")
+    }
+  }
+
+  return profList
 }
 
 /**
@@ -643,6 +740,7 @@ if (typeof module !== "undefined" && module.exports) {
     clearCompleted,
     getPendingCount,
     getFilteredTodos,
+    getSortedProfiles,
     pendingReminders,
     formatReminder,
     getProfileGlyph,

@@ -21,6 +21,7 @@ const {
   clearCompleted,
   getPendingCount,
   getFilteredTodos,
+  getSortedProfiles,
   pendingReminders,
   formatReminder,
   getProfileGlyph,
@@ -288,4 +289,94 @@ test("archiveCompleted & normalizeArchive: archives completed tasks with complet
 
   // Check getArchivedCount
   assert.equal(getArchivedCount(JSON.stringify(res2.updatedArchive)), 2);
+});
+
+test("addTodo & updateTodo: tracks updatedAt timestamp", () => {
+  let store = defaultStore();
+  store = addTodo(store, "New task", "desc", "personal", null);
+  const task = store.todos[0];
+  assert.ok(typeof task.createdAt === "number");
+  assert.ok(typeof task.updatedAt === "number");
+  assert.equal(task.updatedAt, task.createdAt);
+
+  const beforeUpdate = task.updatedAt;
+  // Explicitly update with custom updatedAt or let it advance
+  store = updateTodo(store, task.id, { title: "Updated task", updatedAt: beforeUpdate + 1000 });
+  assert.equal(store.todos[0].title, "Updated task");
+  assert.equal(store.todos[0].updatedAt, beforeUpdate + 1000);
+});
+
+test("getSortedProfiles: sorts descending by pending task count", () => {
+  let store = defaultStore();
+  // 3 tasks in work, 1 in shopping, 2 in personal
+  store = addTodo(store, "Work 1", "", "work", null);
+  store = addTodo(store, "Work 2", "", "work", null);
+  store = addTodo(store, "Work 3", "", "work", null);
+  store = addTodo(store, "Pers 1", "", "personal", null);
+  store = addTodo(store, "Pers 2", "", "personal", null);
+  store = addTodo(store, "Shop 1", "", "shopping", null);
+
+  const sorted = getSortedProfiles(store, false);
+  assert.deepEqual(sorted, ["work", "personal", "shopping"]);
+});
+
+test("getSortedProfiles: breaks pending count ties by latest task activity timestamp", () => {
+  let store = defaultStore();
+  // Both work and personal have 1 pending task, but work was updated later
+  store = addTodo(store, "Pers 1", "", "personal", null);
+  store.todos[0].createdAt = 1000;
+  store.todos[0].updatedAt = 1000;
+
+  store = addTodo(store, "Work 1", "", "work", null);
+  store.todos[0].createdAt = 2000;
+  store.todos[0].updatedAt = 5000;
+
+  const sorted = getSortedProfiles(store, false);
+  assert.deepEqual(sorted, ["work", "personal"]);
+
+  // If personal gets updated with newer timestamp, it moves to the top
+  store = updateTodo(store, store.todos[1].id, { updatedAt: 8000 });
+  const sortedAfterUpdate = getSortedProfiles(store, false);
+  assert.deepEqual(sortedAfterUpdate, ["personal", "work"]);
+});
+
+test("getSortedProfiles: alphabetical fallback when pending count and recency are equal", () => {
+  let store = defaultStore();
+  // Both have 0 tasks and 0 recency
+  store.profiles = ["zebra", "apple", "banana"];
+  store.todos = [];
+
+  const sorted = getSortedProfiles(store, false);
+  assert.deepEqual(sorted, ["apple", "banana", "zebra"]);
+});
+
+test("getSortedProfiles: onlyActive filters out empty profiles unless matching currentFilter or activeProfile", () => {
+  let store = defaultStore();
+  store.profiles = ["personal", "work", "shopping", "gaming"];
+  store.activeProfile = "personal"; // 0 tasks, but is activeProfile
+  store.todos = [];
+
+  // Add tasks only to work
+  store = addTodo(store, "Work task 1", "", "work", null);
+  store = addTodo(store, "Work task 2", "", "work", null);
+
+  // With currentFilter = "all", returns work (count > 0) and personal (activeProfile)
+  const sortedAll = getSortedProfiles(store, true, "all");
+  assert.ok(sortedAll.includes("work"));
+  assert.ok(sortedAll.includes("personal"));
+  assert.ok(!sortedAll.includes("shopping"));
+  assert.ok(!sortedAll.includes("gaming"));
+  assert.equal(sortedAll[0], "work"); // work has count 2, personal has count 0
+
+  // With currentFilter = "gaming", gaming is kept despite having 0 tasks
+  const sortedGaming = getSortedProfiles(store, true, "gaming");
+  assert.ok(sortedGaming.includes("gaming"));
+  assert.ok(sortedGaming.includes("work"));
+  assert.ok(sortedGaming.includes("personal"));
+  assert.ok(!sortedGaming.includes("shopping"));
+
+  // Fallback when completely empty store
+  const emptyStore = { version: 1, activeProfile: "custom", profiles: [], todos: [] };
+  const fallback = getSortedProfiles(emptyStore, true, "");
+  assert.deepEqual(fallback, ["custom"]);
 });

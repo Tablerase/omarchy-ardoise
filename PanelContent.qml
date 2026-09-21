@@ -14,21 +14,7 @@ Item {
   readonly property var todos: store ? (store.todos || []) : []
   readonly property int pendingCount: TodoStore.getPendingCount(store, "all")
   readonly property var profiles: store ? (store.profiles || ["personal", "work"]) : ["personal", "work"]
-  readonly property var visibleProfiles: {
-    var list = []
-    var allProfs = root.profiles || ["personal", "work"]
-    for (var i = 0; i < allProfs.length; i++) {
-      var p = allProfs[i]
-      var count = TodoStore.getPendingCount(root.store, p)
-      if (count > 0 || p === root.currentFilter) {
-        list.push(p)
-      }
-    }
-    if (list.length === 0) {
-      list.push((root.store && root.store.activeProfile) ? root.store.activeProfile : "personal")
-    }
-    return list
-  }
+  readonly property var visibleProfiles: TodoStore.getSortedProfiles(root.store, true, root.currentFilter)
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   readonly property color cardBackground: Color.popups.background
@@ -375,12 +361,15 @@ Item {
                 }
 
                 Text {
+                  id: profPillText
                   anchors.verticalCenter: parent.verticalCenter
                   text: profPill.modelData
                   color: root.currentFilter === profPill.modelData ? "white" : root.barForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
                   font.bold: root.currentFilter === profPill.modelData
+                  width: Math.min(implicitWidth, Style.space(80))
+                  elide: Text.ElideRight
                 }
 
                 Text {
@@ -658,7 +647,7 @@ Item {
                     id: profBadge
                     visible: root.currentFilter === "all" && Boolean(itemRow.modelData.profile)
                     anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: profLabel.implicitWidth + Style.space(8)
+                    implicitWidth: Math.min(Style.space(75), profLabel.implicitWidth + Style.space(8))
                     implicitHeight: Style.space(16)
                     radius: implicitHeight / 2
                     color: Color.menu.background
@@ -668,10 +657,13 @@ Item {
                     Text {
                       id: profLabel
                       anchors.centerIn: parent
+                      width: Math.min(implicitWidth, profBadge.implicitWidth - Style.space(8))
                       text: "#" + itemRow.modelData.profile
                       color: Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
+                      elide: Text.ElideRight
+                      horizontalAlignment: Text.AlignHCenter
                     }
                   }
 
@@ -989,26 +981,26 @@ Item {
                 }
 
                 // Profile selector row
-                Row {
+                Flow {
                   width: parent.width
                   spacing: Style.space(4)
 
                   Text {
-                    anchors.verticalCenter: parent.verticalCenter
                     text: "Profile:"
                     color: Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.space(9.5)
+                    topPadding: Style.space(3)
                   }
 
                   Repeater {
-                    model: root.profiles
+                    model: TodoStore.getSortedProfiles(root.store, false, "")
 
                     Rectangle {
                       id: profReassignBtn
                       required property string modelData
                       readonly property bool isSelected: itemRow.modelData.profile === modelData
-                      implicitWidth: profReassignText.implicitWidth + Style.space(8)
+                      implicitWidth: profReassignText.width + Style.space(8)
                       implicitHeight: Style.space(20)
                       radius: Style.cornerRadius
                       color: isSelected ? Color.accent : Color.menu.background
@@ -1018,11 +1010,14 @@ Item {
                       Text {
                         id: profReassignText
                         anchors.centerIn: parent
+                        width: Math.min(implicitWidth, Style.space(80))
                         text: profReassignBtn.modelData
                         color: profReassignBtn.isSelected ? "white" : root.barForeground
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(9)
                         font.bold: profReassignBtn.isSelected
+                        elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignHCenter
                       }
 
                       MouseArea {
