@@ -10,7 +10,7 @@ Item {
 
   property var bar: null
   property var barWidget: null
-  property var store: barWidget ? barWidget.store : TodoStore.defaultStore()
+  property var store: (barWidget && barWidget.store) ? barWidget.store : TodoStore.defaultStore()
   readonly property var todos: store ? (store.todos || []) : []
   readonly property int pendingCount: TodoStore.getPendingCount(store, "all")
   readonly property var profiles: store ? (store.profiles || ["personal", "work"]) : ["personal", "work"]

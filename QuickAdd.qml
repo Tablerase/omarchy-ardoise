@@ -7,6 +7,7 @@
 // =============================================================================
 
 import QtQuick
+import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -380,10 +381,9 @@ Item {
                 id: pillHover
               }
 
-              ToolTip {
+              PanelToolTip {
                 visible: pillHover.hovered && pillLabel.truncated
                 text: profilePill.modelData
-                delay: 300
               }
 
               MouseArea {
