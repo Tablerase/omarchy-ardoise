@@ -44,9 +44,10 @@ Item {
   property int actionIndex: 1 // 0: cancel, 1: add
 
   function getActiveSections() {
-    var secs = ["title", "profiles", "options"]
+    var secs = ["title", "options"]
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
+    secs.push("profiles")
     secs.push("actions")
     return secs
   }
@@ -339,6 +340,8 @@ Item {
                 root.reminderPresetIndex = 0
               }
             }
+          } else if (root.focusSection === "notes") {
+            if (descNotesArea) descNotesArea.forceActiveFocus()
           } else if (root.focusSection === "reminders") {
             if (root.reminderPresetIndex < root.reminderPresets.length) {
               root.selectedReminder = root.reminderPresets[root.reminderPresetIndex].value
@@ -347,12 +350,31 @@ Item {
             }
             root.showReminderOptions = false
             root.focusSection = "options"
+          } else if (root.focusSection === "profiles") {
+            // Profile selection confirmed with Space/Enter
           } else if (root.focusSection === "actions") {
             if (root.actionIndex === 0) root.dismiss()
             else root.submit()
           } else {
             root.submit()
           }
+          return
+        }
+
+        if (event.key === Qt.Key_I || event.key === Qt.Key_A || (event.text === "i" || event.text === "a")) {
+          event.accepted = true
+          if (root.focusSection === "notes" && root.showNote && descNotesArea) {
+            descNotesArea.forceActiveFocus()
+          } else {
+            root.focusSection = "title"
+            taskInput.forceActiveFocus()
+          }
+          return
+        }
+
+        if (event.text === "e" && root.focusSection === "notes" && root.showNote && descNotesArea) {
+          event.accepted = true
+          descNotesArea.forceActiveFocus()
           return
         }
 
@@ -410,7 +432,16 @@ Item {
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           onAccepted: root.submit()
-          Keys.onEscapePressed: root.dismiss()
+          Keys.onEscapePressed: function(event) {
+            event.accepted = true
+            if (taskInput.text.trim().length === 0) {
+              root.dismiss()
+            } else {
+              taskInput.focus = false
+              root.focusSection = "options"
+              card.forceActiveFocus()
+            }
+          }
           Keys.onTabPressed: function(event) {
             event.accepted = true
             root.advanceSection(1)
@@ -493,8 +524,137 @@ Item {
           }
         }
 
-        // Profile Selector Pills with horizontal Flickable & fade edges
-        // Profile selection (responsive wrap Flow)
+
+
+        // Option Toggles (Note & Reminder)
+        Row {
+          width: parent.width
+          spacing: Style.space(8)
+
+          Button {
+            id: noteBtn
+            iconText: "󰏫"
+            text: root.showNote ? "Hide Note" : "Add Note"
+            selected: root.showNote
+            fontSize: Style.font.caption
+            fontFamily: Style.font.family
+            hasCursor: (root.focusSection === "options") && (root.optionIndex === 0)
+            onClicked: {
+              root.showNote = !root.showNote
+              if (root.showNote) {
+                root.focusSection = "notes"
+                Qt.callLater(function() { descNotesArea.forceActiveFocus() })
+              }
+            }
+          }
+
+          Button {
+            id: reminderBtn
+            iconText: "󰥔"
+            text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
+            selected: Boolean(root.selectedReminder)
+            fontSize: Style.font.caption
+            fontFamily: Style.font.family
+            hasCursor: (root.focusSection === "options") && (root.optionIndex === 1)
+            onClicked: {
+              root.showReminderOptions = !root.showReminderOptions
+              if (root.showReminderOptions) {
+                root.focusSection = "reminders"
+                root.reminderPresetIndex = 0
+              }
+            }
+          }
+        }
+
+        // Expandable Description field (multi-line auto-expanding)
+        Column {
+          width: parent.width
+          visible: root.showNote
+          spacing: Style.space(4)
+
+          TaskNotesArea {
+            id: descNotesArea
+            width: parent.width
+            placeholderText: "Add note / description (Shift+Enter for newline)..."
+            onSubmitted: root.submit()
+            onEscapePressed: {
+              taskInput.focus = false
+              root.focusSection = "options"
+              card.forceActiveFocus()
+            }
+            onTabPressed: function(direction) {
+              root.advanceSection(direction)
+            }
+            onTextChanged: {
+              if (root.opened) {
+                root.draftDescription = text
+              }
+            }
+            Connections {
+              target: descNotesArea.textArea
+              function onTextChanged() {
+                if (root.opened) {
+                  root.draftDescription = descNotesArea.textArea.text
+                }
+              }
+            }
+            Keys.onPressed: function(event) {
+              if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
+                if (root.hasDraft) {
+                  root.clearDraft()
+                  event.accepted = true
+                }
+              }
+            }
+          }
+        }
+
+        // Expandable Reminder Presets
+        Column {
+          width: parent.width
+          visible: root.showReminderOptions
+          spacing: Style.space(6)
+
+          Row {
+            spacing: Style.space(6)
+
+            Repeater {
+              model: root.reminderPresets
+
+              Button {
+                id: presetBtn
+                required property var modelData
+                required property int index
+                text: modelData.label
+                fontSize: Style.font.caption
+                fontFamily: Style.font.family
+                selected: root.selectedReminder === modelData.value
+                hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === index)
+                onClicked: {
+                  root.selectedReminder = modelData.value
+                  root.showReminderOptions = false
+                  root.focusSection = "options"
+                }
+              }
+            }
+
+            Button {
+              visible: Boolean(root.selectedReminder)
+              iconText: "󰅖"
+              text: "Clear"
+              fontSize: Style.font.caption
+              fontFamily: Style.font.family
+              hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === root.reminderPresets.length)
+              onClicked: {
+                root.selectedReminder = ""
+                root.showReminderOptions = false
+                root.focusSection = "options"
+              }
+            }
+          }
+        }
+
+        // Profile Selector Pills with responsive wrap Flow
         Flow {
           id: profileFlow
           width: parent.width
@@ -569,133 +729,6 @@ Item {
                 onClicked: {
                   root.selectedProfile = profilePill.modelData
                 }
-              }
-            }
-          }
-        }
-
-        // Option Toggles (Note & Reminder)
-        Row {
-          width: parent.width
-          spacing: Style.space(8)
-
-          Button {
-            id: noteBtn
-            iconText: "󰏫"
-            text: root.showNote ? "Hide Note" : "Add Note"
-            selected: root.showNote
-            fontSize: Style.font.caption
-            fontFamily: Style.font.family
-            hasCursor: (root.focusSection === "options") && (root.optionIndex === 0)
-            onClicked: {
-              root.showNote = !root.showNote
-              if (root.showNote) {
-                root.focusSection = "notes"
-                Qt.callLater(function() { descNotesArea.forceActiveFocus() })
-              }
-            }
-          }
-
-          Button {
-            id: reminderBtn
-            iconText: "󰥔"
-            text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
-            selected: Boolean(root.selectedReminder)
-            fontSize: Style.font.caption
-            fontFamily: Style.font.family
-            hasCursor: (root.focusSection === "options") && (root.optionIndex === 1)
-            onClicked: {
-              root.showReminderOptions = !root.showReminderOptions
-              if (root.showReminderOptions) {
-                root.focusSection = "reminders"
-                root.reminderPresetIndex = 0
-              }
-            }
-          }
-        }
-
-        // Expandable Description field (multi-line auto-expanding)
-        Column {
-          width: parent.width
-          visible: root.showNote
-          spacing: Style.space(4)
-
-          TaskNotesArea {
-            id: descNotesArea
-            width: parent.width
-            placeholderText: "Add note / description (Shift+Enter for newline)..."
-            onSubmitted: root.submit()
-            onEscapePressed: {
-              root.focusSection = "title"
-              taskInput.forceActiveFocus()
-            }
-            onTabPressed: function(direction) {
-              root.advanceSection(direction)
-            }
-            onTextChanged: {
-              if (root.opened) {
-                root.draftDescription = text
-              }
-            }
-            Connections {
-              target: descNotesArea.textArea
-              function onTextChanged() {
-                if (root.opened) {
-                  root.draftDescription = descNotesArea.textArea.text
-                }
-              }
-            }
-            Keys.onPressed: function(event) {
-              if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
-                if (root.hasDraft) {
-                  root.clearDraft()
-                  event.accepted = true
-                }
-              }
-            }
-          }
-        }
-
-        // Expandable Reminder Presets
-        Column {
-          width: parent.width
-          visible: root.showReminderOptions
-          spacing: Style.space(6)
-
-          Row {
-            spacing: Style.space(6)
-
-            Repeater {
-              model: root.reminderPresets
-
-              Button {
-                id: presetBtn
-                required property var modelData
-                required property int index
-                text: modelData.label
-                fontSize: Style.font.caption
-                fontFamily: Style.font.family
-                selected: root.selectedReminder === modelData.value
-                hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === index)
-                onClicked: {
-                  root.selectedReminder = modelData.value
-                  root.showReminderOptions = false
-                  root.focusSection = "options"
-                }
-              }
-            }
-
-            Button {
-              visible: Boolean(root.selectedReminder)
-              iconText: "󰅖"
-              text: "Clear"
-              fontSize: Style.font.caption
-              fontFamily: Style.font.family
-              hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === root.reminderPresets.length)
-              onClicked: {
-                root.selectedReminder = ""
-                root.showReminderOptions = false
-                root.focusSection = "options"
               }
             }
           }

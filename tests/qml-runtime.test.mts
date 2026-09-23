@@ -254,6 +254,29 @@ ShellRoot {
                 return;
             }
 
+            // Test Enter vs Space separation on task list
+            panelContent.focusSection = "tasks";
+            panelContent.cursorIndex = 0;
+            if (panelContent.filteredTodos && panelContent.filteredTodos.length > 0) {
+                var testTask = panelContent.filteredTodos[0];
+                var initialDone = Boolean(testTask.done);
+                panelContent.handleReturn();
+                panelContent.handleActivate(); // simulates PanelKeyCatcher emitting activate after return
+                var taskAfterEnter = panelContent.filteredTodos[0];
+                if (Boolean(taskAfterEnter.done) !== initialDone) {
+                    console.error("[TEST FAIL] handleReturn + handleActivate toggled task completion (should be suppressed)");
+                    Qt.exit(118);
+                    return;
+                }
+                if (panelContent.expandedTaskId !== testTask.id) {
+                    console.error("[TEST FAIL] handleReturn failed to expand task");
+                    Qt.exit(119);
+                    return;
+                }
+                // Collapse back
+                panelContent.handleReturn();
+            }
+
             // Test QuickAdd advanceSection and cycleProfileSelection
             quickAdd.open("{}");
             if (quickAdd.focusSection !== "title") {
@@ -262,16 +285,22 @@ ShellRoot {
                 return;
             }
             quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "options") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to options");
+                Qt.exit(115);
+                return;
+            }
+            quickAdd.advanceSection(1);
             if (quickAdd.focusSection !== "profiles") {
                 console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to profiles");
-                Qt.exit(115);
+                Qt.exit(116);
                 return;
             }
             quickAdd.cycleProfileSelection(1);
             quickAdd.advanceSection(1);
-            if (quickAdd.focusSection !== "options") {
-                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to options");
-                Qt.exit(116);
+            if (quickAdd.focusSection !== "actions") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to actions");
+                Qt.exit(117);
                 return;
             }
             quickAdd.dismiss();

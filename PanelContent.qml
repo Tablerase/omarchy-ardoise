@@ -156,7 +156,10 @@ Item {
     }
   }
 
+  property bool _suppressActivateOnReturn: false
+
   function handleActivate() {
+    if (_suppressActivateOnReturn) return
     root.cursorActive = true
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
@@ -169,6 +172,8 @@ Item {
   }
 
   function handleReturn() {
+    _suppressActivateOnReturn = true
+    Qt.callLater(function() { _suppressActivateOnReturn = false })
     root.cursorActive = true
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
@@ -1316,11 +1321,15 @@ Item {
                   bar: root.bar
                   foreground: root.barForeground
                   accentColor: Color.accent
+                  Component.onCompleted: {
+                    if (itemRow.isExpanded) {
+                      root.descArea = descArea
+                    }
+                  }
                   onEditorActiveFocusChanged: {
                     if (editorActiveFocus) {
                       root.descArea = descArea
-                    } else if (root.descArea === descArea) {
-                      root.descArea = null
+                    } else if (root.descArea === descArea && !editorActiveFocus) {
                       if (itemRow.isExpanded && !rowHoverHandler.hovered) {
                         hoverFoldTimer.restart()
                       }

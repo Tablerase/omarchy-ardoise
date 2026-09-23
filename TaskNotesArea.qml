@@ -34,6 +34,10 @@ ScrollView {
     textArea.forceActiveFocus()
   }
 
+  function focusEditor() {
+    textArea.forceActiveFocus()
+  }
+
   function save() {
     if (root.text !== textArea.text) {
       root.text = textArea.text
