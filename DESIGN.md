@@ -88,7 +88,11 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 9. **Separator**: Bottom dividing line (`PanelSeparator`).
 10. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
-    - Right: [Cancel] button and [Add] primary button with `bordered: true` focus framing.
+    - Right: Action buttons [Cancel] and [Add]:
+      - Both buttons use `bordered: true` and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
+      - When Cancel is navigated to (`actionIndex === 0`), Cancel receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
+      - When Add is navigated to (`actionIndex === 1`), Add receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop.
+      - At neutral rest state (e.g. while typing title or notes), neither button is selected, preventing misleading highlights.
 
 #### Navigation State Flow (`focusSection`)
 ```
@@ -105,7 +109,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 
 #### Visual Hierarchy (Top to Bottom)
 1. **Header Item**:
-   - Left: Ardoise Brand Logo + Module Title + Pending Task Count badge.
+   - Left: Ardoise Brand Logo (`InboxIcon`) + Title ("Ardoise") + Pending Task Count badge.
+     - Brand logo and title form an interactive group: hovering smoothly transitions the icon and text to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser.
    - Right: Shortcuts Help Toggle button (`?`) + Detected Desktop Shortcut copy pill.
 2. **Top Filter Pills Row (`visibleProfiles`)**:
    - "All" pill + active/pending profile pills sorted by pending count and recency.
@@ -142,7 +147,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`).
-   - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Modals).
+   - Two-stage dismiss: pressing <kbd>Backspace</kbd> when `keySearchField.text` is empty dismisses the help modal and restores focus to the panel.
+   - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Modals). Uses `<slash>` instead of ambiguous `/ /` notation, and dynamically lists the active desktop keybinding (`root.detectedShortcut`).
 
 #### Navigation State Flow (`focusSection`)
 ```
@@ -180,12 +186,12 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `c` | Archive and clear completed tasks in current profile |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |
-| **Panel** | `i`, `a`, `/` | Jump focus into new task input field |
+| **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |
 | **Panel** | `x` / `Delete` | Delete highlighted task |
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
-| **Panel** | `?` | Toggle searchable keyboard shortcuts modal |
+| **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
 | **Panel (Input)** | `Escape` | Release focus back to task list (normal mode) |
 | **Quick Add** | `Escape` | If title empty: dismiss modal. If non-empty: leave insert mode to `options`. |
 | **Quick Add (Normal)**| `Escape` | Dismiss modal |

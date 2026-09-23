@@ -83,6 +83,57 @@ test("Static QML Analysis: All QQC2 and custom UI components have required impor
   }
 });
 
+test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace dismiss, and GitHub brand link", () => {
+  const quickAddContent = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+
+  // 1. QuickAdd action buttons: Add button must NOT have hardcoded 'selected: true',
+  // and both buttons must link 'selected' and 'hasCursor' to the active actionIndex.
+  const actionButtonsStart = quickAddContent.indexOf("id: actionButtons");
+  assert.ok(actionButtonsStart !== -1, "Found actionButtons row in QuickAdd.qml");
+  const actionButtonsCode = quickAddContent.slice(actionButtonsStart);
+  assert.ok(
+    !/selected:\s*true\b/.test(actionButtonsCode),
+    "QuickAdd action buttons must not have hardcoded selected: true"
+  );
+  assert.ok(
+    quickAddContent.includes('selected: (root.focusSection === "actions") && (root.actionIndex === 0)'),
+    "cancelBtn must bind selected state to actionIndex === 0"
+  );
+  assert.ok(
+    quickAddContent.includes('selected: (root.focusSection === "actions") && (root.actionIndex === 1)'),
+    "addBtn must bind selected state to actionIndex === 1"
+  );
+
+  // 2. Help search & shortcuts: Backspace on empty text dismisses modal
+  assert.ok(
+    panelContent.includes("event.key === Qt.Key_Backspace && keySearchField.text.length === 0"),
+    "keySearchField must handle Backspace when empty to dismiss help modal"
+  );
+  assert.ok(
+    !panelContent.includes('"i / a / /"'),
+    "keybindingsList must avoid ambiguous 'i / a / /' notation"
+  );
+  assert.ok(
+    panelContent.includes('"i / a / <slash>"'),
+    "keybindingsList must use unambiguous 'i / a / <slash>' key entry"
+  );
+  assert.ok(
+    panelContent.includes("root.detectedShortcut"),
+    "keybindingsList must include the detected desktop shortcut"
+  );
+
+  // 3. Panel header brand logo linking to GitHub repo
+  assert.ok(
+    panelContent.includes("https://github.com/Tablerase/omarchy-ardoise"),
+    "Panel header brand link must point to Tablerase/omarchy-ardoise"
+  );
+  assert.ok(
+    panelContent.includes("InboxIcon") && panelContent.includes("id: brandRow"),
+    "Panel header must feature InboxIcon brand logo beside the Ardoise title"
+  );
+});
+
 test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {
   // Check if quickshell is installed and accessible
   let quickshellPath = "";

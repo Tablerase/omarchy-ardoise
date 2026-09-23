@@ -789,6 +789,9 @@ Item {
               fontFamily: Style.font.family
               bordered: true
               hasCursor: (root.focusSection === "actions") && (root.actionIndex === 0)
+              selected: (root.focusSection === "actions") && (root.actionIndex === 0)
+              scale: hasCursor ? 1.05 : 1.0
+              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
               onClicked: root.dismiss()
             }
 
@@ -798,9 +801,11 @@ Item {
               text: "Add"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
-              selected: true
               bordered: true
               hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
+              selected: (root.focusSection === "actions") && (root.actionIndex === 1)
+              scale: hasCursor ? 1.05 : 1.0
+              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
               onClicked: root.submit()
             }
           }

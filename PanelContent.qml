@@ -316,11 +316,12 @@ Item {
     { key: "e", desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
     { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
-    { key: "i / a / /", desc: "Focus new task input field", category: "Input & Create" },
+    { key: "i / a / <slash>", desc: "Focus new task input field", category: "Input & Create" },
     { key: "A", desc: "Open Quick Add modal", category: "Input & Create" },
     { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
     { key: "Esc", desc: "Leave input / editor or close panel", category: "Global" },
-    { key: "?", desc: "Toggle this keybindings search & help modal", category: "Global" }
+    { key: "? / Backspace", desc: "Toggle or dismiss keybindings help modal", category: "Global" },
+    { key: root.detectedShortcut, desc: "Global shortcut: toggle Ardoise panel", category: "Global" }
   ]
 
   readonly property var filteredKeybindings: {
@@ -484,12 +485,48 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(8)
 
-        Text {
-          text: "Ardoise"
-          color: root.barForeground
-          font.family: root.bar ? root.bar.fontFamily : Style.font.family
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
+        Item {
+          anchors.verticalCenter: parent.verticalCenter
+          implicitWidth: brandRow.implicitWidth
+          implicitHeight: brandRow.implicitHeight
+
+          Row {
+            id: brandRow
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(6)
+
+            InboxIcon {
+              anchors.verticalCenter: parent.verticalCenter
+              width: Style.space(16)
+              height: width
+              color: brandMouse.containsMouse ? Color.accent : (root.barForeground || Color.foreground)
+              Behavior on color { ColorAnimation { duration: 120 } }
+            }
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Ardoise"
+              color: brandMouse.containsMouse ? Color.accent : (root.barForeground || Color.foreground)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+              Behavior on color { ColorAnimation { duration: 120 } }
+            }
+          }
+
+          MouseArea {
+            id: brandMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Qt.openUrlExternally("https://github.com/Tablerase/omarchy-ardoise")
+          }
+
+          PanelToolTip {
+            visible: brandMouse.containsMouse
+            text: "GitHub: Tablerase/omarchy-ardoise"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
         }
 
         Text {
@@ -1718,6 +1755,13 @@ Item {
           root.showKeyHelp = false
           root.releaseFocus()
         }
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_Backspace && keySearchField.text.length === 0) {
+            event.accepted = true
+            root.showKeyHelp = false
+            root.releaseFocus()
+          }
+        }
         Keys.onDownPressed: function(event) {
           event.accepted = true
           helpFlickable.focus = true
@@ -1791,7 +1835,7 @@ Item {
             } else {
               keySearchField.forceActiveFocus()
             }
-          } else if (event.key === Qt.Key_Escape || event.text === "?") {
+          } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.text === "?") {
             event.accepted = true
             root.showKeyHelp = false
             root.releaseFocus()
