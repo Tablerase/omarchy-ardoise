@@ -66,7 +66,7 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 1. **Header Row**: Inbox Icon (`InboxIcon.qml`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
 2. **Separator**: Top dividing line (`PanelSeparator`).
 3. **Title Input Field (`taskInput`)**:
-   - Autofocused on modal open.
+   - Autofocused on modal open with explicit `BorderSurface` focus border.
    - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
    - <kbd>Escape</kbd>: dismisses if empty; blurs to `options` motion mode if text is present.
 4. **Draft Notice Banner** (Conditional: `hasDraft === true`):
@@ -74,19 +74,21 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 5. **Option Toggles Row**:
    - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
    - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`.
+   - Both buttons use `bordered: true` for clear cursor focus framing.
 6. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
    - <kbd>Escape</kbd>: blurs textarea and returns focus to `options` on the card.
 7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
-   - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear".
+   - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear". Bordered focus styling.
 8. **Profile Selector Container (`profileFlow`)**:
    - Positioned at the bottom, just above the footer actions for fast writing.
-   - Flow wrapping profile pills sorted by activity/count.
+   - Section header label highlights in accent color when `profiles` section is focused.
+   - Flow wrapping profile pills sorted by activity/count. Focused pill features high-contrast border and 1.05 scale pop.
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
 9. **Separator**: Bottom dividing line (`PanelSeparator`).
 10. **Footer Actions Item**:
-    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`).
-    - Right: [Cancel] button and [Add] primary button.
+    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
+    - Right: [Cancel] button and [Add] primary button with `bordered: true` focus framing.
 
 #### Navigation State Flow (`focusSection`)
 ```
@@ -216,7 +218,7 @@ Quickshell taskbar widget placed in the status bar.
 - Standard padding: `Style.space(8)`, `Style.space(12)`, `Style.space(16)`.
 - Pill height: `Style.space(20)` (compact) to `Style.space(24)` (standard).
 - Pill max-width: Elide right at `Style.space(80)` to `Style.space(90)`.
-- Quick Add Card width: `Math.min(Style.space(480), panel.width - Style.space(32))`.
+- Quick Add Card width: `Math.min(Style.space(560), panel.width - Style.space(32))` (expanded from 480px to accommodate bottom shortcut hints without overlapping action buttons).
 - Urgency progress gradient: Maximum width capped at `35%` (approx `110px`) to prevent visual bloat.
 
 ---

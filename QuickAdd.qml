@@ -257,7 +257,7 @@ Item {
     Rectangle {
       id: card
       anchors.centerIn: parent
-      width: Math.min(Style.space(480), panel.width - Style.space(32))
+      width: Math.min(Style.space(560), panel.width - Style.space(32))
       height: contentCol.implicitHeight + Style.space(32)
       color: Color.menu.background
       border.color: Color.menu.border
@@ -431,6 +431,17 @@ Item {
           placeholderText: "What needs to be done? (e.g. #work Fix bug)"
           font.family: Style.font.family
           font.pixelSize: Style.font.body
+          color: Color.menu.text || Color.foreground
+          placeholderTextColor: Color.muted
+          leftPadding: Style.space(10)
+          rightPadding: Style.space(10)
+          topPadding: Style.space(8)
+          bottomPadding: Style.space(8)
+          background: BorderSurface {
+            color: Style.controlFill(taskInput.activeFocus, taskInput.hovered, Color.foreground, Color.accent)
+            borderSpec: Border.controlSpec(taskInput.activeFocus ? "focus" : (taskInput.hovered ? "hover-cursor" : "normal"), Color.foreground, Color.accent)
+            radius: Style.cornerRadius
+          }
           onAccepted: root.submit()
           Keys.onEscapePressed: function(event) {
             event.accepted = true
@@ -536,6 +547,7 @@ Item {
             iconText: "󰏫"
             text: root.showNote ? "Hide Note" : "Add Note"
             selected: root.showNote
+            bordered: true
             fontSize: Style.font.caption
             fontFamily: Style.font.family
             hasCursor: (root.focusSection === "options") && (root.optionIndex === 0)
@@ -553,6 +565,7 @@ Item {
             iconText: "󰥔"
             text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
             selected: Boolean(root.selectedReminder)
+            bordered: true
             fontSize: Style.font.caption
             fontFamily: Style.font.family
             hasCursor: (root.focusSection === "options") && (root.optionIndex === 1)
@@ -628,6 +641,7 @@ Item {
                 text: modelData.label
                 fontSize: Style.font.caption
                 fontFamily: Style.font.family
+                bordered: true
                 selected: root.selectedReminder === modelData.value
                 hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === index)
                 onClicked: {
@@ -644,6 +658,7 @@ Item {
               text: "Clear"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
+              bordered: true
               hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === root.reminderPresets.length)
               onClicked: {
                 root.selectedReminder = ""
@@ -667,7 +682,8 @@ Item {
             Text {
               anchors.verticalCenter: parent.verticalCenter
               text: "Profile:"
-              color: Color.muted
+              color: (root.focusSection === "profiles") ? Color.accent : Color.muted
+              font.bold: (root.focusSection === "profiles")
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -685,8 +701,13 @@ Item {
               implicitHeight: Style.space(24)
               radius: implicitHeight / 2
               color: root.selectedProfile === modelData ? Color.accent : Color.menu.selectedBackground
-              border.color: isKeyboardFocused ? Color.foreground : (root.selectedProfile === modelData ? Color.accent : Color.menu.border)
+              border.color: isKeyboardFocused ? (Color.menu.text || Color.foreground) : (root.selectedProfile === modelData ? Color.accent : Color.menu.border)
               border.width: isKeyboardFocused ? 2 : 1
+              scale: isKeyboardFocused ? 1.05 : 1.0
+
+              Behavior on scale {
+                NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
+              }
 
               Row {
                 id: pillRow
@@ -744,11 +765,14 @@ Item {
           Text {
             id: hintText
             anchors.left: parent.left
+            anchors.right: actionButtons.left
+            anchors.rightMargin: Style.space(12)
             anchors.verticalCenter: parent.verticalCenter
             text: root.hasDraft ? "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard" : "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
           }
 
           Row {
@@ -763,6 +787,7 @@ Item {
               text: "Cancel"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
+              bordered: true
               hasCursor: (root.focusSection === "actions") && (root.actionIndex === 0)
               onClicked: root.dismiss()
             }
@@ -774,6 +799,7 @@ Item {
               fontSize: Style.font.caption
               fontFamily: Style.font.family
               selected: true
+              bordered: true
               hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
               onClicked: root.submit()
             }
