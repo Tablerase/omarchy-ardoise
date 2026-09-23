@@ -17,6 +17,7 @@
 ## Code Quality & Commit Standards
 - **Validation**: Always run `npm run check` (which runs `deno check TodoStore.js`, `qmllint *.qml`, `omarchy plugin validate .`, and `tests/*.test.mts`). All checks must pass with zero errors and zero warnings.
 - **Automated Tests**: Update and add assertions to `tests/qml-runtime.test.mts` and `tests/TodoStore.test.mts` to prevent motion regressions.
+- **Live Reload**: After code changes pass checks, run `omarchy-restart-shell` to update the running environment.
 - **Commit Signing**: All local git commits must be signed using SSH: `git commit -S -m "..."`.
 - **No Remote Tags**: Do not create or push release tags (`v*`).
 - **Preview Tool Conservation**: Do not execute `./tools/render-preview.sh` during development unless specifically requested by the user.
