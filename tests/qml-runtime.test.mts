@@ -273,8 +273,35 @@ ShellRoot {
                     Qt.exit(119);
                     return;
                 }
-                // Collapse back
+                if (!panelContent.expandedViaKeyboard) {
+                    console.error("[TEST FAIL] handleReturn did not set expandedViaKeyboard to true");
+                    Qt.exit(120);
+                    return;
+                }
+                // Keyboard motion while expandedViaKeyboard should NOT collapse the expanded task
+                panelContent.handleMove(0, 1);
+                if (panelContent.expandedTaskId !== testTask.id) {
+                    console.error("[TEST FAIL] handleMove collapsed task that was expandedViaKeyboard");
+                    Qt.exit(121);
+                    return;
+                }
+                // Return cursor and collapse back
+                panelContent.cursorIndex = 0;
                 panelContent.handleReturn();
+                if (panelContent.expandedTaskId !== -1 || panelContent.expandedViaKeyboard) {
+                    console.error("[TEST FAIL] handleReturn failed to collapse task or reset expandedViaKeyboard");
+                    Qt.exit(122);
+                    return;
+                }
+                // Test mouse hover expansion simulation: expandedViaKeyboard is false
+                panelContent.expandedTaskId = testTask.id;
+                panelContent.expandedViaKeyboard = false;
+                panelContent.handleMove(0, 1);
+                if (panelContent.expandedTaskId !== -1) {
+                    console.error("[TEST FAIL] handleMove failed to collapse temporary hover expansion");
+                    Qt.exit(123);
+                    return;
+                }
             }
 
             // Test QuickAdd advanceSection and cycleProfileSelection

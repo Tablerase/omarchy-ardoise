@@ -25,6 +25,10 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
    - Unsaved Quick Add modal drafts (title, description, profile, reminder) are automatically retained in state and restored if the modal is dismissed accidentally. Drafts can be cleared via <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> or the "Clear" action.
 5. **No Layout Overflow**:
    - Profile names, tags, and titles must gracefully wrap (`Flow`) or elide (`Text.ElideRight`) to prevent pushing buttons or cards outside visible geometry.
+6. **Separation of Mouse Hover Preview vs. Keyboard Expansion**:
+   - **Keyboard Navigation (<kbd>Enter</kbd> / <kbd>e</kbd>)**: Explicit toggle. Opening an item via keyboard marks it `expandedViaKeyboard = true`, preventing mouse hover fold timers (`hoverFoldTimer`, `listFoldTimer`) from collapsing the drawer when the mouse rests elsewhere. Navigating with <kbd>j</kbd>/<kbd>k</kbd> does not auto-expand items.
+   - **Mouse Hover Preview**: Hovering over a task row for 1500ms auto-expands the drawer only after actual mouse movement has been detected (`mouseMovementDetected`). When the panel opens under a stationary mouse cursor, auto-expansion is suppressed to prevent center/random tasks from opening over keyboard selection. Leaving the row folds the preview after 350ms (unless notes editor is focused). Starting keyboard motion (<kbd>j</kbd>/<kbd>k</kbd>/<kbd>Tab</kbd>) immediately collapses temporary hover previews.
+   - **Mouse Click Expansion**: Clicking the chevron expand button on a row explicitly expands it (`expandedViaKeyboard = true`), keeping it open while interacting with notes and controls.
 
 ---
 
@@ -117,7 +121,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Task Title: Strikethrough when done, urgency glow when due/overdue.
      - Profile badge: Tag glyph `󰓹` + elided name.
      - Due date badge: Clock glyph `󰥔` + relative countdown.
-     - Expand button: Chevron `󰅂` toggling detailed drawer.
+     - Expand button: Chevron `󰅂` explicitly toggling detailed drawer (`expandedViaKeyboard = true`), keeping drawer open across mouse motion.
      - Delete button: Trash icon `󰆴`.
    - **Item Ordering Algorithm (`TodoStore.getFilteredTodos`)**:
      Tasks are strictly partitioned and sorted across 3 priority tiers:
@@ -125,6 +129,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      2. **Active Incomplete Tasks (Middle Tier)**: Incomplete tasks without reminders, sorted by recency descending (newest tasks appear first).
      3. **Completed Tasks (Bottom Tier)**: Completed tasks sink to the bottom, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
+     - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
+     - Explicit keyboard expansion (<kbd>Enter</kbd> / <kbd>e</kbd>) keeps drawer open until explicitly toggled or closed.
      - Separator.
      - `TaskNotesArea` multi-line notes editor (press <kbd>e</kbd> to focus).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear.

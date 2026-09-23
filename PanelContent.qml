@@ -21,6 +21,8 @@ Item {
 
   property string currentFilter: "all"
   property var expandedTaskId: -1
+  property bool expandedViaKeyboard: false
+  property bool mouseMovementDetected: false
   property bool addingProfile: false
   property string shortcutState: "active"
   property string detectedShortcut: "SUPER + SHIFT + T"
@@ -39,9 +41,14 @@ Item {
     if (!visible) {
       savePendingNotes()
       expandedTaskId = -1
+      expandedViaKeyboard = false
+      mouseMovementDetected = false
       cursorActive = false
       focusSection = "tasks"
       showKeyHelp = false
+    } else {
+      mouseMovementDetected = false
+      expandedViaKeyboard = false
     }
   }
 
@@ -109,6 +116,11 @@ Item {
 
   function handleMove(dx, dy) {
     root.cursorActive = true
+    root.mouseMovementDetected = false
+    if (!root.expandedViaKeyboard && root.expandedTaskId !== -1) {
+      root.savePendingNotes()
+      root.expandedTaskId = -1
+    }
     if (root.focusSection === "tasks") {
       if (dy < 0) {
         if (root.cursorIndex > 0) {
@@ -161,6 +173,7 @@ Item {
   function handleActivate() {
     if (_suppressActivateOnReturn) return
     root.cursorActive = true
+    root.mouseMovementDetected = false
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
         var task = root.filteredTodos[root.cursorIndex]
@@ -175,12 +188,19 @@ Item {
     _suppressActivateOnReturn = true
     Qt.callLater(function() { _suppressActivateOnReturn = false })
     root.cursorActive = true
+    root.mouseMovementDetected = false
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
         var task = root.filteredTodos[root.cursorIndex]
         if (task) {
           root.savePendingNotes()
-          root.expandedTaskId = (root.expandedTaskId === task.id) ? -1 : task.id
+          if (root.expandedTaskId === task.id) {
+            root.expandedTaskId = -1
+            root.expandedViaKeyboard = false
+          } else {
+            root.expandedTaskId = task.id
+            root.expandedViaKeyboard = true
+          }
         }
       }
     } else if (root.focusSection === "footer") {
@@ -189,6 +209,8 @@ Item {
   }
 
   function handleDelete() {
+    root.cursorActive = true
+    root.mouseMovementDetected = false
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
         var task = root.filteredTodos[root.cursorIndex]
@@ -203,6 +225,8 @@ Item {
   }
 
   function handleTextKey(text) {
+    root.cursorActive = true
+    root.mouseMovementDetected = false
     if (text === "?") {
       root.showKeyHelp = !root.showKeyHelp
       return
@@ -219,6 +243,7 @@ Item {
         var task = root.filteredTodos[root.cursorIndex]
         if (task) {
           root.expandedTaskId = task.id
+          root.expandedViaKeyboard = true
           Qt.callLater(function() {
             if (root.descArea && typeof root.descArea.focusEditor === "function") {
               root.descArea.focusEditor()
@@ -237,6 +262,11 @@ Item {
 
   function handleTab(direction) {
     root.cursorActive = true
+    root.mouseMovementDetected = false
+    if (!root.expandedViaKeyboard && root.expandedTaskId !== -1) {
+      root.savePendingNotes()
+      root.expandedTaskId = -1
+    }
     var sections = ["profiles", "input", "tasks", "footer"]
     var currentIdx = sections.indexOf(root.focusSection)
     if (currentIdx === -1) currentIdx = 2
@@ -959,8 +989,11 @@ Item {
       HoverHandler {
         id: listHoverHandler
         onHoveredChanged: {
-          if (!hovered && root.expandedTaskId !== -1) {
-            listFoldTimer.restart()
+          if (!hovered) {
+            root.mouseMovementDetected = false
+            if (root.expandedTaskId !== -1 && !root.expandedViaKeyboard) {
+              listFoldTimer.restart()
+            }
           } else {
             listFoldTimer.stop()
           }
@@ -972,7 +1005,7 @@ Item {
         interval: 350
         repeat: false
         onTriggered: {
-          if (root.expandedTaskId !== -1) {
+          if (root.expandedTaskId !== -1 && !root.expandedViaKeyboard) {
             if (root.descArea && root.descArea.editorActiveFocus) {
               return
             }
@@ -1067,13 +1100,14 @@ Item {
               id: rowHoverHandler
               onHoveredChanged: {
                 if (hovered) {
+                  if (!root.mouseMovementDetected) return
                   hoverFoldTimer.stop()
                   if (!itemRow.isExpanded) {
                     hoverExpandTimer.restart()
                   }
                 } else {
                   hoverExpandTimer.stop()
-                  if (itemRow.isExpanded) {
+                  if (itemRow.isExpanded && !root.expandedViaKeyboard) {
                     hoverFoldTimer.restart()
                   }
                 }
@@ -1085,9 +1119,11 @@ Item {
               interval: 1500
               repeat: false
               onTriggered: {
-                if (rowHoverHandler.hovered && !itemRow.isExpanded) {
+                if (rowHoverHandler.hovered && !itemRow.isExpanded && root.mouseMovementDetected) {
                   root.savePendingNotes()
+                  root.cursorIndex = itemRow.index
                   root.expandedTaskId = itemRow.modelData.id
+                  root.expandedViaKeyboard = false
                 }
               }
             }
@@ -1097,7 +1133,7 @@ Item {
               interval: 350
               repeat: false
               onTriggered: {
-                if (itemRow.isExpanded && !rowHoverHandler.hovered) {
+                if (itemRow.isExpanded && !rowHoverHandler.hovered && !root.expandedViaKeyboard) {
                   if (root.descArea && root.descArea.editorActiveFocus) {
                     return
                   }
@@ -1115,6 +1151,15 @@ Item {
             MouseArea {
               id: rowMouseArea
               anchors.fill: parent
+              hoverEnabled: true
+              onPositionChanged: {
+                if (!root.mouseMovementDetected) {
+                  root.mouseMovementDetected = true
+                  if (rowHoverHandler.hovered && !itemRow.isExpanded) {
+                    hoverExpandTimer.restart()
+                  }
+                }
+              }
               onClicked: {
                 hoverExpandTimer.stop()
                 hoverFoldTimer.stop()
@@ -1283,7 +1328,14 @@ Item {
                     tooltipText: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
                     onClicked: {
                       root.savePendingNotes()
-                      root.expandedTaskId = itemRow.isExpanded ? -1 : itemRow.modelData.id
+                      root.cursorIndex = itemRow.index
+                      if (itemRow.isExpanded) {
+                        root.expandedTaskId = -1
+                        root.expandedViaKeyboard = false
+                      } else {
+                        root.expandedTaskId = itemRow.modelData.id
+                        root.expandedViaKeyboard = true
+                      }
                     }
                   }
 
