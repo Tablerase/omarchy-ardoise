@@ -115,7 +115,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Add button.
 4. **Task List View (`taskListView`)**:
    - Vertically flickable column of tasks (`itemRow`).
-   - Auto-scroll centering (`ensureTaskVisible`) keeps the focused task in view.
+   - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
    - Individual task row:
      - Checkbox: Custom animated check box (`isDone`).
      - Task Title: Strikethrough when done, urgency glow when due/overdue.
@@ -130,7 +130,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      3. **Completed Tasks (Bottom Tier)**: Completed tasks sink to the bottom, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
      - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
-     - Explicit keyboard expansion (<kbd>Enter</kbd> / <kbd>e</kbd>) keeps drawer open until explicitly toggled or closed.
+     - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.
      - Separator.
      - `TaskNotesArea` multi-line notes editor (revealed when expanded via <kbd>Enter</kbd>).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear.

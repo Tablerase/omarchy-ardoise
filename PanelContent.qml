@@ -82,7 +82,7 @@ Item {
     }
   }
 
-  function ensureTaskVisible(taskIndex, center) {
+  function ensureTaskVisible(taskIndex, alignTop) {
     if (!todoListFlickable || !todoListRepeater || taskIndex < 0 || taskIndex >= todoListRepeater.count) return
     var item = todoListRepeater.itemAt(taskIndex)
     if (!item) return
@@ -92,8 +92,8 @@ Item {
     var viewBottom = todoListFlickable.contentY + todoListFlickable.height
     var maxContentY = Math.max(0, todoListFlickable.contentHeight - todoListFlickable.height)
 
-    if (center) {
-      var targetY = itemTop - (todoListFlickable.height - item.height) / 2
+    if (alignTop) {
+      var targetY = Math.max(0, itemTop - Style.space(2))
       todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, targetY))
     } else {
       if (itemTop < viewTop) {
@@ -1065,7 +1065,15 @@ Item {
             border.width: isCursorSelected ? 1.5 : (isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0)
 
             Behavior on implicitHeight {
-              NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+              NumberAnimation {
+                duration: 150
+                easing.type: Easing.OutCubic
+                onRunningChanged: {
+                  if (!running && itemRow.isExpanded) {
+                    root.ensureTaskVisible(itemRow.index, true)
+                  }
+                }
+              }
             }
 
             // Subtle horizontal gradient tint for overdue and due-today tasks confined to left edge

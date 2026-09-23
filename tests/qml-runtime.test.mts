@@ -303,6 +303,9 @@ ShellRoot {
                     Qt.exit(119);
                     return;
                 }
+                // Test ensureTaskVisible with alignTop true (auto-top alignment)
+                panelContent.ensureTaskVisible(0, true);
+                panelContent.ensureTaskVisible(0, false);
                 if (!panelContent.expandedViaKeyboard) {
                     console.error("[TEST FAIL] handleReturn did not set expandedViaKeyboard to true");
                     Qt.exit(120);
