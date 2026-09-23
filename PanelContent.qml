@@ -32,6 +32,8 @@ Item {
   property int cursorIndex: 0
   property bool cursorActive: false
   property int footerButtonIndex: 0
+  property bool showKeyHelp: false
+  property string keyHelpSearch: ""
 
   onVisibleChanged: {
     if (!visible) {
@@ -39,6 +41,18 @@ Item {
       expandedTaskId = -1
       cursorActive = false
       focusSection = "tasks"
+      showKeyHelp = false
+    }
+  }
+
+  onShowKeyHelpChanged: {
+    if (showKeyHelp) {
+      keyHelpSearch = ""
+      Qt.callLater(function() {
+        if (typeof keySearchField !== "undefined" && keySearchField) {
+          keySearchField.forceActiveFocus()
+        }
+      })
     }
   }
 
@@ -161,6 +175,14 @@ Item {
   }
 
   function handleTextKey(text) {
+    if (text === "?") {
+      root.showKeyHelp = !root.showKeyHelp
+      return
+    }
+    if (text === "A") {
+      root.openQuickAdd()
+      return
+    }
     if (text === "i" || text === "a" || text === "/") {
       root.focusSection = "input"
       Qt.callLater(function() { newTodoField.forceActiveFocus() })
@@ -198,7 +220,7 @@ Item {
     if (root.focusSection === "input") {
       Qt.callLater(function() { newTodoField.forceActiveFocus() })
     } else {
-      newTodoField.focus = false
+      root.releaseFocus()
     }
     return true
   }
@@ -213,11 +235,54 @@ Item {
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
   readonly property int filteredPendingCount: TodoStore.getPendingCount(root.store, root.currentFilter)
   readonly property var reminderPresets: TodoStore.getReminderPresets()
-  readonly property bool activeFocusBlocked: Boolean((newTodoField && newTodoField.activeFocus) || (descArea && descArea.editorActiveFocus) || addingProfile)
+  readonly property bool activeFocusBlocked: Boolean(
+    (newTodoField && newTodoField.activeFocus) ||
+    (descArea && descArea.editorActiveFocus) ||
+    addingProfile ||
+    (typeof keySearchField !== "undefined" && keySearchField && keySearchField.activeFocus)
+  )
+
+  readonly property var keybindingsList: [
+    { key: "j / ↓", desc: "Next task", category: "Navigation" },
+    { key: "k / ↑", desc: "Previous task", category: "Navigation" },
+    { key: "h / l / ← / →", desc: "Cycle profile filters or footer buttons", category: "Navigation" },
+    { key: "Tab / Shift+Tab", desc: "Switch section (profiles ↔ input ↔ tasks ↔ footer)", category: "Navigation" },
+    { key: "g / G", desc: "Jump to top / bottom of task list", category: "Navigation" },
+    { key: "Space", desc: "Toggle completed status of selected task", category: "Task Actions" },
+    { key: "Enter / Return", desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
+    { key: "x", desc: "Delete selected task", category: "Task Actions" },
+    { key: "e", desc: "Edit task notes / description", category: "Task Actions" },
+    { key: "i / a / /", desc: "Focus new task input field", category: "Input & Create" },
+    { key: "A", desc: "Open Quick Add modal", category: "Input & Create" },
+    { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
+    { key: "Esc", desc: "Leave input / editor or close panel", category: "Global" },
+    { key: "?", desc: "Toggle this keybindings search & help modal", category: "Global" }
+  ]
+
+  readonly property var filteredKeybindings: {
+    var q = root.keyHelpSearch.toLowerCase().trim()
+    if (!q) return root.keybindingsList
+    return root.keybindingsList.filter(function(item) {
+      return item.key.toLowerCase().includes(q) ||
+             item.desc.toLowerCase().includes(q) ||
+             item.category.toLowerCase().includes(q)
+    })
+  }
 
   signal closeRequested()
   signal shortcutClicked()
   signal switchPanelRequested(int direction)
+  signal returnFocusRequested()
+
+  function releaseFocus() {
+    if (newTodoField) newTodoField.focus = false
+    root.returnFocusRequested()
+    if (parent && typeof parent.forceActiveFocus === "function") {
+      parent.forceActiveFocus()
+    } else {
+      root.forceActiveFocus()
+    }
+  }
 
   function savePendingNotes() {
     if (root.descArea && typeof root.descArea.save === "function") {
@@ -364,47 +429,69 @@ Item {
         }
       }
 
-      // Compact shortcut info/copy button with bottom-right status indicator
-      PanelActionButton {
-        id: shortcutBtn
+      Row {
+        id: headerRightActions
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        size: Style.space(26)
-        iconText: "󰌌"
-        fontSize: Style.font.subtitle
-        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-        foreground: root.shortcutRegistered ? root.barForeground : Color.muted
-        tooltipText: root.shortcutRegistered
-          ? ("Shortcut active: " + root.detectedShortcut + " (click to copy & edit config)")
-          : ("Set shortcut: " + root.detectedShortcut + " (click to copy & edit config)")
-        onClicked: root.shortcutClicked()
+        spacing: Style.space(4)
 
-        Rectangle {
-          id: indicatorBadge
-          width: Style.space(10)
-          height: Style.space(10)
-          radius: width / 2
-          anchors.bottom: parent.bottom
-          anchors.right: parent.right
-          anchors.bottomMargin: Style.space(1)
-          anchors.rightMargin: Style.space(1)
-          color: root.shortcutRegistered ? Color.accent
-            : (root.shortcutState === "commented" ? "#e67e22" : Color.urgent)
-          border.color: Color.menu.background
-          border.width: 1
-
-          Text {
-            anchors.centerIn: parent
-            text: root.shortcutRegistered ? "✓" : "✕"
-            color: "white"
-            font.pixelSize: Style.space(6.5)
-            font.bold: true
+        PanelActionButton {
+          id: helpBtn
+          size: Style.space(26)
+          iconText: "󰞋"
+          fontSize: Style.font.subtitle
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: root.showKeyHelp ? Color.accent : Color.muted
+          hoverColor: Color.accent
+          tooltipText: "Shortcuts & Vim motions (?)"
+          onClicked: {
+            root.showKeyHelp = !root.showKeyHelp
+            if (!root.showKeyHelp) {
+              root.releaseFocus()
+            }
           }
+        }
 
-          MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: shortcutBtn.clicked()
+        // Compact shortcut info/copy button with bottom-right status indicator
+        PanelActionButton {
+          id: shortcutBtn
+          size: Style.space(26)
+          iconText: "󰌌"
+          fontSize: Style.font.subtitle
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: root.shortcutRegistered ? root.barForeground : Color.muted
+          tooltipText: root.shortcutRegistered
+            ? ("Shortcut active: " + root.detectedShortcut + " (click to copy & edit config)")
+            : ("Set shortcut: " + root.detectedShortcut + " (click to copy & edit config)")
+          onClicked: root.shortcutClicked()
+
+          Rectangle {
+            id: indicatorBadge
+            width: Style.space(10)
+            height: Style.space(10)
+            radius: width / 2
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            anchors.bottomMargin: Style.space(1)
+            anchors.rightMargin: Style.space(1)
+            color: root.shortcutRegistered ? Color.accent
+              : (root.shortcutState === "commented" ? "#e67e22" : Color.urgent)
+            border.color: Color.menu.background
+            border.width: 1
+
+            Text {
+              anchors.centerIn: parent
+              text: root.shortcutRegistered ? "✓" : "✕"
+              color: "white"
+              font.pixelSize: Style.space(6.5)
+              font.bold: true
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: shortcutBtn.clicked()
+            }
           }
         }
       }
@@ -477,8 +564,10 @@ Item {
             implicitHeight: Style.space(24)
             radius: implicitHeight / 2
             color: root.currentFilter === "all" ? Color.accent : Color.menu.selectedBackground
-            border.color: root.currentFilter === "all" ? Color.accent : Color.menu.border
-            border.width: 1
+            border.color: (root.cursorActive && root.focusSection === "profiles" && root.currentFilter === "all")
+              ? Color.foreground
+              : (root.currentFilter === "all" ? Color.accent : Color.menu.border)
+            border.width: (root.cursorActive && root.focusSection === "profiles" && root.currentFilter === "all") ? 2 : 1
 
             Row {
               id: allPillRow
@@ -526,8 +615,10 @@ Item {
               implicitHeight: Style.space(24)
               radius: implicitHeight / 2
               color: root.currentFilter === modelData ? Color.accent : Color.menu.selectedBackground
-              border.color: root.currentFilter === modelData ? Color.accent : Color.menu.border
-              border.width: 1
+              border.color: (root.cursorActive && root.focusSection === "profiles" && root.currentFilter === modelData)
+                ? Color.foreground
+                : (root.currentFilter === modelData ? Color.accent : Color.menu.border)
+              border.width: (root.cursorActive && root.focusSection === "profiles" && root.currentFilter === modelData) ? 2 : 1
 
               Row {
                 id: profPillRow
@@ -670,11 +761,18 @@ Item {
             root.currentFilter = p
             text = ""
             root.addingProfile = false
+            root.focusSection = "profiles"
+            root.cursorActive = true
+            root.releaseFocus()
           }
         }
-        Keys.onEscapePressed: {
+        Keys.onEscapePressed: function(event) {
+          event.accepted = true
           text = ""
           root.addingProfile = false
+          root.focusSection = "profiles"
+          root.cursorActive = true
+          root.releaseFocus()
         }
       }
 
@@ -694,6 +792,9 @@ Item {
             root.currentFilter = p
             newProfileInput.text = ""
             root.addingProfile = false
+            root.focusSection = "profiles"
+            root.cursorActive = true
+            root.releaseFocus()
           }
         }
       }
@@ -713,6 +814,12 @@ Item {
           ? "Add new task (e.g. #work Fix bug)..."
           : ("Add task to #" + (root.currentFilter.length > 15 ? (root.currentFilter.slice(0, 13) + "…") : root.currentFilter) + "...")
         font.pixelSize: Style.font.caption
+        onActiveFocusChanged: {
+          if (activeFocus) {
+            root.focusSection = "input"
+            root.cursorActive = true
+          }
+        }
         onAccepted: {
           if (text.trim() !== "") {
             var prof = (root.currentFilter !== "all") ? root.currentFilter : null
@@ -721,18 +828,43 @@ Item {
           }
         }
 
-        Keys.onEscapePressed: {
-          newTodoField.focus = false
+        Keys.onEscapePressed: function(event) {
+          event.accepted = true
           root.focusSection = "tasks"
           root.cursorActive = true
+          root.releaseFocus()
         }
 
-        Keys.onDownPressed: {
+        Keys.onDownPressed: function(event) {
           if (text.length === 0) {
-            newTodoField.focus = false
+            event.accepted = true
             root.focusSection = "tasks"
             root.cursorActive = true
+            root.releaseFocus()
           }
+        }
+
+        Keys.onUpPressed: function(event) {
+          if (text.length === 0) {
+            event.accepted = true
+            root.focusSection = "profiles"
+            root.cursorActive = true
+            root.releaseFocus()
+          }
+        }
+
+        Keys.onTabPressed: function(event) {
+          event.accepted = true
+          root.focusSection = "tasks"
+          root.cursorActive = true
+          root.releaseFocus()
+        }
+
+        Keys.onBacktabPressed: function(event) {
+          event.accepted = true
+          root.focusSection = "profiles"
+          root.cursorActive = true
+          root.releaseFocus()
         }
       }
 
@@ -851,10 +983,13 @@ Item {
               NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
             }
 
-            // Subtle horizontal gradient tint for overdue and due-today tasks
+            // Subtle horizontal gradient tint for overdue and due-today tasks confined to left edge
             Rectangle {
               id: urgencyGradient
-              anchors.fill: parent
+              anchors.left: parent.left
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              width: Math.min(parent.width * 0.35, Style.space(110))
               radius: parent.radius
               color: "transparent"
               visible: itemRow.isOverdueTask || itemRow.isDueTodayTask
@@ -863,17 +998,11 @@ Item {
                 GradientStop {
                   position: 0.0
                   color: itemRow.isOverdueTask
-                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.08)
-                    : Util.alpha(Color.accent, 0.06)
+                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.06)
+                    : Util.alpha(Color.accent, 0.05)
                 }
                 GradientStop {
-                  position: 0.35
-                  color: itemRow.isOverdueTask
-                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.015)
-                    : Util.alpha(Color.accent, 0.01)
-                }
-                GradientStop {
-                  position: 0.7
+                  position: 1.0
                   color: "transparent"
                 }
               }
@@ -1164,6 +1293,12 @@ Item {
                       }
                     }
                   }
+                  onEscapePressed: {
+                    root.savePendingNotes()
+                    root.focusSection = "tasks"
+                    root.cursorActive = true
+                    root.releaseFocus()
+                  }
                   Component.onDestruction: {
                     if (root.descArea === descArea) {
                       root.descArea = null
@@ -1383,6 +1518,168 @@ Item {
         hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 3)
         tooltipText: "Open Quick Add modal (" + root.detectedShortcut + ")"
         onClicked: root.openQuickAdd()
+      }
+    }
+  }
+
+  // Keybindings & Vim motions search / cheat-sheet overlay
+  Rectangle {
+    id: keyHelpOverlay
+    anchors.fill: parent
+    visible: root.showKeyHelp
+    z: 999
+    color: Util.alpha(Color.popups.background, 0.96)
+    radius: Style.cornerRadius
+
+    MouseArea {
+      anchors.fill: parent
+      // Block mouse clicks from propagating through overlay
+    }
+
+    Column {
+      anchors.fill: parent
+      anchors.margins: Style.space(12)
+      spacing: Style.space(8)
+
+      // Modal header
+      Item {
+        width: parent.width
+        implicitHeight: Math.max(helpTitle.implicitHeight, closeHelpBtn.implicitHeight)
+
+        Text {
+          id: helpTitle
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          text: "󰞋 Keyboard & Vim Shortcuts"
+          color: root.barForeground
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+        }
+
+        PanelActionButton {
+          id: closeHelpBtn
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          size: Style.space(24)
+          iconText: "󰅖"
+          fontSize: Style.font.caption
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: Color.muted
+          hoverColor: root.bar ? root.bar.urgent : Color.urgent
+          tooltipText: "Close (Esc)"
+          onClicked: {
+            root.showKeyHelp = false
+            root.releaseFocus()
+          }
+        }
+      }
+
+      // Search input to filter shortcuts
+      TextField {
+        id: keySearchField
+        width: parent.width
+        placeholderText: "Search shortcuts (e.g. vim, add, esc, tab)..."
+        font.pixelSize: Style.font.caption
+        text: root.keyHelpSearch
+        onTextChanged: root.keyHelpSearch = text
+        Keys.onEscapePressed: function(event) {
+          event.accepted = true
+          root.showKeyHelp = false
+          root.releaseFocus()
+        }
+      }
+
+      PanelSeparator { width: parent.width }
+
+      // Filtered list of shortcuts
+      Flickable {
+        id: helpFlickable
+        width: parent.width
+        height: Math.max(Style.space(120), parent.height - y - Style.space(26))
+        contentWidth: width
+        contentHeight: helpListCol.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        ScrollBar.vertical: ScrollBar {
+          policy: helpListCol.implicitHeight > helpFlickable.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+        }
+
+        Column {
+          id: helpListCol
+          width: parent.width
+          spacing: Style.space(5)
+
+          Repeater {
+            model: root.filteredKeybindings
+
+            Rectangle {
+              id: keyHelpRow
+              required property var modelData
+              width: parent.width
+              implicitHeight: Style.space(26)
+              radius: Style.cornerRadius
+              color: Color.menu.selectedBackground
+              border.color: Color.menu.border
+              border.width: 1
+
+              Row {
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(6)
+
+                Rectangle {
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: keyLabel.implicitWidth + Style.space(8)
+                  implicitHeight: Style.space(18)
+                  radius: Style.space(4)
+                  color: Util.alpha(Color.accent, 0.15)
+                  border.color: Color.accent
+                  border.width: 1
+
+                  Text {
+                    id: keyLabel
+                    anchors.centerIn: parent
+                    text: keyHelpRow.modelData.key
+                    color: Color.accent
+                    font.family: "monospace"
+                    font.pixelSize: Style.space(9)
+                    font.bold: true
+                  }
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: keyHelpRow.modelData.desc
+                  color: root.barForeground
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                text: keyHelpRow.modelData.category
+                color: Color.muted
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.space(8.5)
+              }
+            }
+          }
+        }
+      }
+
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        text: "Press Esc or ? to close"
+        color: Color.muted
+        font.family: root.bar ? root.bar.fontFamily : Style.font.family
+        font.pixelSize: Style.space(9)
       }
     }
   }

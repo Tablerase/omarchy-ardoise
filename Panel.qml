@@ -135,6 +135,7 @@ Panel {
         shortcutState: root.shortcutState
         detectedShortcut: root.detectedShortcut
         shortcutRegistered: root.shortcutRegistered
+        onReturnFocusRequested: keyCatcher.forceActiveFocus()
         onCloseRequested: root.close()
         onShortcutClicked: {
           copyAndOpenProc.running = true

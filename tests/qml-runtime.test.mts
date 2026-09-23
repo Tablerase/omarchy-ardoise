@@ -206,6 +206,35 @@ ShellRoot {
                 return;
             }
 
+            // Test Help Overlay toggle via '?' key
+            panelContent.handleTextKey("?");
+            if (!panelContent.showKeyHelp) {
+                console.error("[TEST FAIL] handleTextKey('?') failed to open showKeyHelp");
+                Qt.exit(109);
+                return;
+            }
+            panelContent.handleTextKey("?");
+            if (panelContent.showKeyHelp) {
+                console.error("[TEST FAIL] handleTextKey('?') failed to close showKeyHelp");
+                Qt.exit(110);
+                return;
+            }
+
+            // Test Quick Add trigger via 'A' key
+            var closeRequestedReceived = false;
+            panelContent.closeRequested.connect(function() {
+                closeRequestedReceived = true;
+            });
+            panelContent.handleTextKey("A");
+            if (!closeRequestedReceived) {
+                console.error("[TEST FAIL] handleTextKey('A') failed to trigger openQuickAdd / closeRequested");
+                Qt.exit(111);
+                return;
+            }
+
+            // Test releaseFocus method
+            panelContent.releaseFocus();
+
             console.log("[TEST] All components loaded, opened, and toggled successfully!");
             Qt.exit(0);
         }
