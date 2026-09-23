@@ -258,16 +258,45 @@ omarchy bar move tablerase.ardoise center 0
 
 ### 4. Verify Code Quality & Run Tests
 
+#### A. Fast Local Development (No Docker Required)
+
+Run tests and linters directly on your machine without spinning up containers:
+
 ```bash
-# Run the complete test and verification pipeline
+# Complete local verification suite
 npm run check
 
-# Or run individual checks:
-npm test            # Run unit tests via native Node runner (fast, zero dependencies)
-npm run test:deno   # Run unit tests via Deno test runner
-npm run typecheck   # Typecheck TodoStore.js via TypeScript
-npm run lint:qml    # Lint all QML files
-npm run validate:plugin # Validate Omarchy plugin manifest & structure
+# Or run individual targets:
+npm test            # 33 automated tests (TodoStore logic + QML static analysis & runtime lifecycle)
+npm run test:deno   # Run test suite via Deno test runner
+npm run typecheck   # Static typecheck TodoStore.js via TypeScript
+npm run lint:qml    # Lint all QML files with qmllint
+npm run validate:plugin # Validate Omarchy Quattro plugin manifest & schema
+```
+
+#### B. Test GitHub Actions Locally (`gh act`)
+
+To test the exact GitHub Actions CI runner locally before pushing, use [`act`](https://github.com/nektos/act) via the official GitHub CLI extension:
+
+1. **Install the extension once:**
+   ```bash
+   gh extension install nektos/gh-act
+   ```
+
+2. **Run the CI test workflow locally:**
+   ```bash
+   npm run test:ci
+   # Or directly:
+   gh act -j test -P ubuntu-latest=node:20-bookworm-slim
+   ```
+   > **Note on Security:** We configure `node:20-bookworm-slim` (official Docker Hub image from the Node.js Foundation) as the host bootstrap runner. The test steps execute inside the official `archlinux:latest` container as defined in `.github/workflows/ci.yml`.
+
+#### C. Clean Containerized Run via Docker (Zero extra tools)
+
+If you prefer testing the pristine Arch Linux CI environment directly without installing `act`:
+
+```bash
+npm run test:docker
 ```
 
 ### 5. Restart Shell (After Modifying Service)

@@ -9,7 +9,9 @@
     "typecheck": "deno check TodoStore.js",
     "lint:qml": "qmllint *.qml",
     "validate:plugin": "omarchy plugin validate .",
-    "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test"
+    "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test",
+    "test:ci": "gh act -j test -P ubuntu-latest=node:20-bookworm-slim",
+    "test:docker": "docker run --rm -v \"$PWD:/work\" -w /work archlinux:latest bash -c 'echo \"/usr/lib/qt6/bin\" >> \"$GITHUB_PATH\" && export PATH=\"/usr/lib/qt6/bin:$PATH\" && pacman -Sy --noconfirm git quickshell qt6-declarative deno jq && qmllint *.qml && deno check TodoStore.js && deno test --no-check --allow-read tests/ && jq -e . manifest.json'"
   },
   "author": "tablerase",
   "license": "MIT"

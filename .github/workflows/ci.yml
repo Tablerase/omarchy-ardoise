@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-    env:
-      PATH: /usr/lib/qt6/bin:${{ env.PATH }}
-
     steps:
+      - name: Configure Qt6 PATH
+        run: echo "/usr/lib/qt6/bin" >> "$GITHUB_PATH"
+
       - name: Install Dependencies
         run: pacman -Sy --noconfirm git quickshell qt6-declarative deno jq
 
