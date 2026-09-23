@@ -332,6 +332,7 @@ function toggleTodo(store, id) {
   for (var i = 0; i < s.todos.length; i++) {
     if (String(s.todos[i].id) === String(id)) {
       s.todos[i].done = !s.todos[i].done
+      s.todos[i].updatedAt = Date.now()
       // If unmarked as done and reminder is in the future, allow notification again
       if (!s.todos[i].done && s.todos[i].reminder) {
         var remTime = new Date(s.todos[i].reminder || "").getTime()
@@ -492,17 +493,78 @@ function getPendingCount(store, profileFilter) {
 }
 
 /**
- * Filters tasks according to the active profile selection.
+ * Comparator function to sort tasks according to:
+ * 1. Due/reminder time (incomplete tasks with reminder/dueDate, sorted by earliest due first)
+ * 2. Active incomplete tasks (without reminder/dueDate, sorted by recency descending)
+ * 3. Last completed tasks (completed tasks sorted by completion recency descending)
+ *
+ * @param {Task} a
+ * @param {Task} b
+ * @returns {number}
+ */
+function compareTasks(a, b) {
+  // 1. Completion separation: incomplete tasks come before completed tasks
+  var aDone = Boolean(a && a.done)
+  var bDone = Boolean(b && b.done)
+  if (!aDone && bDone) return -1
+  if (aDone && !bDone) return 1
+
+  // 2. Both completed: sort by last completed first (most recent updatedAt/createdAt descending)
+  if (aDone && bDone) {
+    var aCompTime = Math.max(Number(a.updatedAt) || 0, Number(a.createdAt) || 0)
+    var bCompTime = Math.max(Number(b.updatedAt) || 0, Number(b.createdAt) || 0)
+    if (bCompTime !== aCompTime) return bCompTime - aCompTime
+    return String(a.title || "").localeCompare(String(b.title || ""))
+  }
+
+  // 3. Both incomplete: check due/reminder time
+  var aRem = a ? (a.reminder || a.dueDate || "") : ""
+  var bRem = b ? (b.reminder || b.dueDate || "") : ""
+  var aRemTime = aRem ? new Date(aRem).getTime() : NaN
+  var bRemTime = bRem ? new Date(bRem).getTime() : NaN
+  var aHasValidRem = !isNaN(aRemTime) && aRemTime > 0
+  var bHasValidRem = !isNaN(bRemTime) && bRemTime > 0
+
+  // 3a. Tasks with due/reminder come before tasks without
+  if (aHasValidRem && !bHasValidRem) return -1
+  if (!aHasValidRem && bHasValidRem) return 1
+
+  // 3b. Both have due/reminder: earliest due/reminder time first
+  if (aHasValidRem && bHasValidRem) {
+    if (aRemTime !== bRemTime) return aRemTime - bRemTime
+    var aActiveTime = Math.max(Number(a.updatedAt) || 0, Number(a.createdAt) || 0)
+    var bActiveTime = Math.max(Number(b.updatedAt) || 0, Number(b.createdAt) || 0)
+    if (bActiveTime !== aActiveTime) return bActiveTime - aActiveTime
+    return String(a.title || "").localeCompare(String(b.title || ""))
+  }
+
+  // 3c. Both active (no reminder): most recently updated/created first
+  var aTime = Math.max(Number(a.updatedAt) || 0, Number(a.createdAt) || 0)
+  var bTime = Math.max(Number(b.updatedAt) || 0, Number(b.createdAt) || 0)
+  if (bTime !== aTime) return bTime - aTime
+  return String(a.title || "").localeCompare(String(b.title || ""))
+}
+
+/**
+ * Filters tasks according to the active profile selection and sorts them:
+ * 1. By due/reminder time ascending (earliest due first)
+ * 2. Active incomplete tasks (newest first)
+ * 3. Last completed tasks (most recently completed first)
+ *
  * @param {TodoStoreData} store
  * @param {string} [profileFilter]
  * @returns {Task[]}
  */
 function getFilteredTodos(store, profileFilter) {
   if (!store || !Array.isArray(store.todos)) return []
-  if (!profileFilter || profileFilter === "all") return store.todos
-  return store.todos.filter(function (t) {
-    return t.profile === profileFilter
-  })
+  var list = store.todos
+  if (profileFilter && profileFilter !== "all") {
+    var cleanFilter = cleanProfileName(profileFilter)
+    list = list.filter(function (t) {
+      return cleanProfileName(t.profile) === cleanFilter
+    })
+  }
+  return list.slice().sort(compareTasks)
 }
 
 /**
@@ -934,6 +996,7 @@ if (typeof module !== "undefined" && module.exports) {
     clearCompleted,
     getPendingCount,
     getFilteredTodos,
+    compareTasks,
     getSortedProfiles,
     isOverdue,
     pendingReminders,

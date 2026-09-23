@@ -119,6 +119,11 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Due date badge: Clock glyph `󰥔` + relative countdown.
      - Expand button: Chevron `󰅂` toggling detailed drawer.
      - Delete button: Trash icon `󰆴`.
+   - **Item Ordering Algorithm (`TodoStore.getFilteredTodos`)**:
+     Tasks are strictly partitioned and sorted across 3 priority tiers:
+     1. **Due / Reminder Tasks (Top Tier)**: Incomplete tasks with scheduled reminders or due dates, sorted chronologically ascending (earliest due and most overdue appear at the very top).
+     2. **Active Incomplete Tasks (Middle Tier)**: Incomplete tasks without reminders, sorted by recency descending (newest tasks appear first).
+     3. **Completed Tasks (Bottom Tier)**: Completed tasks sink to the bottom, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
      - Separator.
      - `TaskNotesArea` multi-line notes editor (press <kbd>e</kbd> to focus).

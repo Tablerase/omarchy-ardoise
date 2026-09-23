@@ -21,6 +21,7 @@ const {
   clearCompleted,
   getPendingCount,
   getFilteredTodos,
+  compareTasks,
   getSortedProfiles,
   isOverdue,
   pendingReminders,
@@ -552,6 +553,97 @@ test("capitalizeTitle: capitalizes first letter and handles symbols/whitespace c
   assert.equal(capitalizeTitle("#hashtag first"), "#hashtag first");
   assert.equal(capitalizeTitle("123 numbers"), "123 numbers");
   assert.equal(capitalizeTitle("npm run check"), "Npm run check");
+});
+
+test("getFilteredTodos: orders tasks by due/reminder time first, then active, then last completed", () => {
+  let store = defaultStore();
+
+  const now = Date.now();
+  const pastTime = new Date(now - 3600000).toISOString(); // 1h overdue
+  const futureTime1 = new Date(now + 3600000).toISOString(); // due in 1h
+  const futureTime2 = new Date(now + 7200000).toISOString(); // due in 2h
+
+  // 1. Incomplete task with future reminder 2
+  store = addTodo(store, "Future Task 2", "", "work", futureTime2);
+  // 2. Incomplete task with future reminder 1
+  store = addTodo(store, "Future Task 1", "", "work", futureTime1);
+  // 3. Incomplete task with overdue reminder
+  store = addTodo(store, "Overdue Task", "", "work", pastTime);
+  // 4. Incomplete task without reminder (older)
+  store = addTodo(store, "Older Active Task", "", "work", null);
+  const tOlder = store.todos.find(t => t.title === "Older Active Task")!;
+  tOlder.createdAt = 1000;
+  tOlder.updatedAt = 1000;
+
+  // 5. Incomplete task without reminder (newer)
+  store = addTodo(store, "Newer Active Task", "", "work", null);
+  const tNewer = store.todos.find(t => t.title === "Newer Active Task")!;
+  tNewer.createdAt = 2000;
+  tNewer.updatedAt = 2000;
+
+  // 6. Completed task (older completed)
+  store = addTodo(store, "First Completed Task", "", "work", null);
+  const tDone1 = store.todos.find(t => t.title === "First Completed Task")!;
+  tDone1.done = true;
+  tDone1.createdAt = 1000;
+  tDone1.updatedAt = 3000;
+
+  // 7. Completed task (last completed)
+  store = addTodo(store, "Last Completed Task", "", "work", null);
+  const tDone2 = store.todos.find(t => t.title === "Last Completed Task")!;
+  tDone2.done = true;
+  tDone2.createdAt = 1000;
+  tDone2.updatedAt = 4000;
+
+  const sorted = getFilteredTodos(store, "work");
+  const titles = sorted.map(t => t.title);
+
+  // Expected sequence:
+  // 1. Overdue Task (earliest reminder)
+  // 2. Future Task 1 (earlier than Future 2)
+  // 3. Future Task 2
+  // 4. Newer Active Task (recency 2000 > 1000)
+  // 5. Older Active Task
+  // 6. Last Completed Task (last completed: recency 4000 > 3000)
+  // 7. First Completed Task
+  assert.deepEqual(titles, [
+    "Overdue Task",
+    "Future Task 1",
+    "Future Task 2",
+    "Newer Active Task",
+    "Older Active Task",
+    "Last Completed Task",
+    "First Completed Task"
+  ]);
+});
+
+test("compareTasks: correctly compares task priority according to due, active, and completed rules", () => {
+  const tDueSoon = { id: 1, title: "Soon", done: false, reminder: "2026-09-23T14:00:00Z", createdAt: 100, description: "", profile: "work" };
+  const tDueLater = { id: 2, title: "Later", done: false, reminder: "2026-09-23T18:00:00Z", createdAt: 200, description: "", profile: "work" };
+  const tActiveNew = { id: 3, title: "Active New", done: false, reminder: null, createdAt: 500, updatedAt: 500, description: "", profile: "work" };
+  const tActiveOld = { id: 4, title: "Active Old", done: false, reminder: null, createdAt: 100, updatedAt: 100, description: "", profile: "work" };
+  const tDoneRecent = { id: 5, title: "Done Recent", done: true, reminder: null, createdAt: 100, updatedAt: 800, description: "", profile: "work" };
+  const tDoneOlder = { id: 6, title: "Done Older", done: true, reminder: null, createdAt: 100, updatedAt: 300, description: "", profile: "work" };
+
+  // Due tasks come before active tasks
+  assert.ok(compareTasks(tDueSoon, tActiveNew) < 0);
+  assert.ok(compareTasks(tActiveNew, tDueSoon) > 0);
+
+  // Earliest due task comes first
+  assert.ok(compareTasks(tDueSoon, tDueLater) < 0);
+  assert.ok(compareTasks(tDueLater, tDueSoon) > 0);
+
+  // Active tasks: newest comes first
+  assert.ok(compareTasks(tActiveNew, tActiveOld) < 0);
+  assert.ok(compareTasks(tActiveOld, tActiveNew) > 0);
+
+  // Active tasks come before completed tasks
+  assert.ok(compareTasks(tActiveOld, tDoneRecent) < 0);
+  assert.ok(compareTasks(tDoneRecent, tActiveOld) > 0);
+
+  // Completed tasks: last completed comes first
+  assert.ok(compareTasks(tDoneRecent, tDoneOlder) < 0);
+  assert.ok(compareTasks(tDoneOlder, tDoneRecent) > 0);
 });
 
 
