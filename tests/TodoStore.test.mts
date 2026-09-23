@@ -9,8 +9,10 @@ const {
   defaultStore,
   cleanProfileName,
   normalizeTask,
+  normalizeLocation,
   normalize,
   parseTitleAndProfile,
+  parseTaskInput,
   cloneStore,
   addTodo,
   toggleTodo,
@@ -644,6 +646,132 @@ test("compareTasks: correctly compares task priority according to due, active, a
   // Completed tasks: last completed comes first
   assert.ok(compareTasks(tDoneRecent, tDoneOlder) < 0);
   assert.ok(compareTasks(tDoneOlder, tDoneRecent) > 0);
+});
+
+test("parseTaskInput: parses leading #project/repo, #tags, and preserves title", () => {
+  // Project with repo and multiple tags
+  const res1 = parseTaskInput("#omarchy/ardoise #ui #drawer Fix viewport jump on expand", "personal");
+  assert.equal(res1.profile, "omarchy");
+  assert.equal(res1.repo, "ardoise");
+  assert.deepEqual(res1.tags, ["ui", "drawer"]);
+  assert.equal(res1.title, "Fix viewport jump on expand");
+
+  // Project without repo, with tags and embedded # in title
+  const res2 = parseTaskInput("#omarchy #ui #panel Fix collision with issue #42 in C#", "personal");
+  assert.equal(res2.profile, "omarchy");
+  assert.equal(res2.repo, null);
+  assert.deepEqual(res2.tags, ["ui", "panel"]);
+  assert.equal(res2.title, "Fix collision with issue #42 in C#");
+
+  // Space after hashtag (# work)
+  const res3 = parseTaskInput("# work Clean room", "personal");
+  assert.equal(res3.profile, "work");
+  assert.equal(res3.repo, null);
+  assert.deepEqual(res3.tags, []);
+  assert.equal(res3.title, "Clean room");
+
+  // Fallback embedded hashtag
+  const res4 = parseTaskInput("Buy milk #shopping", "personal");
+  assert.equal(res4.profile, "shopping");
+  assert.equal(res4.repo, null);
+  assert.deepEqual(res4.tags, []);
+  assert.equal(res4.title, "Buy milk");
+
+  // Plain task without hashtags
+  const res5 = parseTaskInput("Simple standalone task", "work");
+  assert.equal(res5.profile, "work");
+  assert.equal(res5.repo, null);
+  assert.deepEqual(res5.tags, []);
+  assert.equal(res5.title, "Simple standalone task");
+});
+
+test("normalizeLocation: normalizes string, object, and path formats", () => {
+  // String shorthand
+  assert.deepEqual(normalizeLocation("~/Work/omarchy-ardoise"), {
+    repo: null,
+    subpath: null,
+    localPath: "~/Work/omarchy-ardoise"
+  });
+
+  // Structured object
+  assert.deepEqual(normalizeLocation({
+    repo: "Tablerase/omarchy-ardoise",
+    subpath: "ui/",
+    localPath: "~/Work/ardoise"
+  }), {
+    repo: "Tablerase/omarchy-ardoise",
+    subpath: "ui/",
+    localPath: "~/Work/ardoise"
+  });
+
+  // Path alias in object
+  assert.deepEqual(normalizeLocation({ path: "/var/log" }), {
+    repo: null,
+    subpath: null,
+    localPath: "/var/log"
+  });
+
+  // Empty or invalid
+  assert.equal(normalizeLocation(null), null);
+  assert.equal(normalizeLocation(""), null);
+  assert.equal(normalizeLocation({}), null);
+});
+
+test("addTodo & updateTodo: stores repo, tags, and location, and supports tag/repo filtering", () => {
+  let store = defaultStore();
+
+  // Add task with #omarchy/ardoise #ui and explicit location
+  store = addTodo(
+    store,
+    "#omarchy/ardoise #ui #panel Auto-scroll top",
+    "Detailed notes",
+    "personal",
+    null,
+    { subpath: "ui/", localPath: "~/Work/ardoise" }
+  );
+
+  assert.equal(store.todos.length, 1);
+  const task = store.todos[0];
+  assert.equal(task.profile, "omarchy");
+  assert.equal(task.repo, "ardoise");
+  assert.deepEqual(task.tags, ["ui", "panel"]);
+  assert.deepEqual(task.location, {
+    repo: "ardoise",
+    subpath: "ui/",
+    localPath: "~/Work/ardoise"
+  });
+
+  // Add second task in different repo under same project
+  store = addTodo(
+    store,
+    "#omarchy/shell #ipc Add window hook",
+    "",
+    "personal"
+  );
+  assert.equal(store.todos.length, 2);
+
+  // Filter by tag
+  const uiTasks = getFilteredTodos(store, "all", "ui");
+  assert.equal(uiTasks.length, 1);
+  assert.equal(uiTasks[0].title, "Auto-scroll top");
+
+  // Filter by repo
+  const shellTasks = getFilteredTodos(store, "omarchy", undefined, "shell");
+  assert.equal(shellTasks.length, 1);
+  assert.equal(shellTasks[0].title, "Add window hook");
+
+  // Update task tags and location
+  store = updateTodo(store, task.id, {
+    tags: ["ui", "v2"],
+    location: "~/Custom/Path"
+  });
+  const updatedTask = store.todos.find((t: any) => t.id === task.id);
+  assert.deepEqual(updatedTask?.tags, ["ui", "v2"]);
+  assert.deepEqual(updatedTask?.location, {
+    repo: null,
+    subpath: null,
+    localPath: "~/Custom/Path"
+  });
 });
 
 

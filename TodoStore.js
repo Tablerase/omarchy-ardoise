@@ -9,11 +9,21 @@
 // =============================================================================
 
 /**
+ * @typedef {Object} TaskLocation
+ * @property {string|null} [repo] - Git repository identifier (e.g. "Tablerase/omarchy-ardoise")
+ * @property {string|null} [subpath] - Relative subpath in repo (e.g. "ui/", "server/")
+ * @property {string|null} [localPath] - Local filesystem path (e.g. "~/Work/omarchy-ardoise")
+ */
+
+/**
  * @typedef {Object} Task
  * @property {number|string} id - Unique identifier (timestamp or string)
  * @property {string} title - Task title/content
  * @property {string} description - Detailed notes or description
- * @property {string} profile - Profile/category name (e.g. "personal", "work")
+ * @property {string} profile - Profile/category or project name (e.g. "personal", "omarchy")
+ * @property {string|null} [repo] - Specific repository or component within project (e.g. "ardoise")
+ * @property {string[]} [tags] - Subsystem tags/labels (e.g. ["ui", "panel"])
+ * @property {TaskLocation|null} [location] - Location information
  * @property {boolean} done - Whether the task is completed
  * @property {number} createdAt - Creation epoch timestamp (ms)
  * @property {number} [updatedAt] - Last updated epoch timestamp (ms)
@@ -28,6 +38,9 @@
  * @property {string} title - Task title
  * @property {string} description - Task description
  * @property {string} profile - Profile name
+ * @property {string|null} [repo] - Specific repository or component within project
+ * @property {string[]} [tags] - Subsystem tags/labels
+ * @property {TaskLocation|null} [location] - Location information
  * @property {number} createdAt - Creation epoch timestamp (ms)
  * @property {number} completedAt - Completion/archive epoch timestamp (ms)
  */
@@ -51,11 +64,22 @@
  * @property {string} [title]
  * @property {string} [description]
  * @property {string} [profile]
+ * @property {string|null} [repo]
+ * @property {string[]} [tags]
+ * @property {TaskLocation|string|null} [location]
  * @property {boolean} [done]
  * @property {number} [updatedAt]
  * @property {string|null} [reminder]
  * @property {string|null} [dueDate]
  * @property {boolean} [notified]
+ */
+
+/**
+ * @typedef {Object} ParsedTaskInput
+ * @property {string} title
+ * @property {string} profile
+ * @property {string|null} repo
+ * @property {string[]} tags
  */
 
 /**
@@ -121,6 +145,36 @@ function capitalizeTitle(title) {
 }
 
 /**
+ * Normalizes location input (string, object, or null) into a structured TaskLocation object or null.
+ * @param {any} raw
+ * @returns {TaskLocation|null}
+ */
+function normalizeLocation(raw) {
+  if (!raw) return null
+  if (typeof raw === "string") {
+    var str = raw.trim()
+    if (!str) return null
+    return {
+      repo: null,
+      subpath: null,
+      localPath: str
+    }
+  }
+  if (typeof raw === "object") {
+    var repo = raw.repo ? String(raw.repo).trim() : null
+    var subpath = raw.subpath ? String(raw.subpath).trim() : null
+    var localPath = raw.localPath ? String(raw.localPath).trim() : (raw.path ? String(raw.path).trim() : null)
+    if (!repo && !subpath && !localPath) return null
+    return {
+      repo: repo,
+      subpath: subpath,
+      localPath: localPath
+    }
+  }
+  return null
+}
+
+/**
  * Normalizes an arbitrary raw task object into a clean Schema v1 Task.
  * @param {any} raw
  * @returns {Task|null}
@@ -132,6 +186,18 @@ function normalizeTask(raw) {
   var title = capitalizeTitle(String(raw.title || raw.text || "").trim())
   var description = String(raw.description || "")
   var profile = cleanProfileName(raw.profile)
+  var repo = raw.repo ? String(raw.repo).trim() : null
+  /** @type {string[]} */
+  var tags = []
+  if (Array.isArray(raw.tags)) {
+    for (var ti = 0; ti < raw.tags.length; ti++) {
+      var cleanTag = cleanProfileName(raw.tags[ti])
+      if (cleanTag && tags.indexOf(cleanTag) === -1) {
+        tags.push(cleanTag)
+      }
+    }
+  }
+  var location = normalizeLocation(raw.location)
   var done = Boolean(raw.done)
   var createdAt = Number(raw.createdAt) || (typeof id === "number" ? id : now)
   var updatedAt = raw.updatedAt ? (Number(raw.updatedAt) || createdAt) : undefined
@@ -144,6 +210,9 @@ function normalizeTask(raw) {
     title: title,
     description: description,
     profile: profile,
+    repo: repo,
+    tags: tags,
+    location: location,
     done: done,
     createdAt: createdAt,
     updatedAt: updatedAt,
@@ -240,24 +309,133 @@ function normalize(raw) {
 }
 
 /**
- * Parses input text for #hashtag profile syntax (e.g. "#work Fix bug" or "Deploy code #project1").
+ * Parses user input for leading #project/repo and following #tags syntax.
+ *
+ * Rules:
+ * 1. Normalize spaces after hashtag prefix (e.g. "# work" -> "#work").
+ * 2. Only scan leading hashtag tokens until the first non-hashtag word.
+ * 3. First hashtag token:
+ *    - #project/repo -> profile: "project", repo: "repo"
+ *    - #project -> profile: "project", repo: null
+ * 4. Subsequent leading hashtag tokens:
+ *    - #tag1 #tag2 -> tags: ["tag1", "tag2"]
+ * 5. Remainder after leading hashtags:
+ *    - Everything following is preserved as the title (even if it contains #42 or C#).
+ * 6. Fallback for inputs without leading hashtags:
+ *    - If no leading hashtags, but contains a hashtag (e.g. "Buy milk #shopping"),
+ *      extracts the profile as fallback for backward compatibility.
+ *
  * @param {string} input
  * @param {string} [defaultProfile]
- * @returns {{ title: string, profile: string }}
+ * @returns {ParsedTaskInput}
  */
-function parseTitleAndProfile(input, defaultProfile) {
-  var text = String(input || "").trim()
-  var profile = defaultProfile ? cleanProfileName(defaultProfile) : "personal"
+function parseTaskInput(input, defaultProfile) {
+  var raw = String(input || "").trim()
+  var defProf = defaultProfile ? cleanProfileName(defaultProfile) : "personal"
+  if (!raw) {
+    return { title: "", profile: defProf, repo: null, tags: [] }
+  }
 
-  var match = text.match(/#\s*([a-zA-Z0-9_-]+)/)
-  if (match) {
-    profile = cleanProfileName(match[1])
-    text = text.replace(/#\s*[a-zA-Z0-9_-]+/g, "").replace(/\s+/g, " ").trim()
+  // Normalize "# name" to "#name" for leading and embedded hashtags
+  var normalized = raw.replace(/#\s+([a-zA-Z0-9_\-\.\/]+)/g, "#$1")
+
+  // Check if input begins with hashtag(s)
+  if (normalized.startsWith("#")) {
+    var tokens = normalized.split(/\s+/)
+    var hashtagTokens = []
+    var titleTokens = []
+    var scanningHashtags = true
+
+    for (var i = 0; i < tokens.length; i++) {
+      var tok = tokens[i]
+      if (scanningHashtags) {
+        if (tok.startsWith("#")) {
+          hashtagTokens.push(tok)
+        } else if (tok === "") {
+          // Extra whitespace token
+        } else {
+          scanningHashtags = false
+          titleTokens.push(tok)
+        }
+      } else {
+        titleTokens.push(tok)
+      }
+    }
+
+    var profile = defProf
+    var repo = null
+    /** @type {string[]} */
+    var tags = []
+
+    if (hashtagTokens.length > 0) {
+      var first = hashtagTokens[0].replace(/^#+/, "")
+      if (first.indexOf("/") !== -1) {
+        var parts = first.split("/")
+        profile = cleanProfileName(parts[0])
+        repo = cleanProfileName(parts.slice(1).join("-"))
+      } else {
+        profile = cleanProfileName(first)
+      }
+
+      for (var j = 1; j < hashtagTokens.length; j++) {
+        var cleanTag = cleanProfileName(hashtagTokens[j])
+        if (cleanTag && tags.indexOf(cleanTag) === -1) {
+          tags.push(cleanTag)
+        }
+      }
+    }
+
+    return {
+      title: titleTokens.join(" ").trim(),
+      profile: profile,
+      repo: repo,
+      tags: tags
+    }
+  }
+
+  // Fallback: No leading hashtags. Check for embedded hashtag (e.g. "Buy milk #shopping")
+  var embedded = normalized.match(/#([a-zA-Z0-9_\-\.\/]+)/)
+  if (embedded) {
+    var embeddedStr = embedded[1]
+    var embProfile = defProf
+    var embRepo = null
+    if (embeddedStr.indexOf("/") !== -1) {
+      var embParts = embeddedStr.split("/")
+      embProfile = cleanProfileName(embParts[0])
+      embRepo = cleanProfileName(embParts.slice(1).join("-"))
+    } else {
+      embProfile = cleanProfileName(embeddedStr)
+    }
+    var cleanTitle = normalized.replace(/#[a-zA-Z0-9_\-\.\/]+/g, "").replace(/\s+/g, " ").trim()
+    return {
+      title: cleanTitle,
+      profile: embProfile,
+      repo: embRepo,
+      tags: []
+    }
   }
 
   return {
-    title: text,
-    profile: profile
+    title: normalized,
+    profile: defProf,
+    repo: null,
+    tags: []
+  }
+}
+
+/**
+ * Legacy compatibility wrapper for parseTaskInput.
+ * @param {string} input
+ * @param {string} [defaultProfile]
+ * @returns {{ title: string, profile: string, repo: string|null, tags: string[] }}
+ */
+function parseTitleAndProfile(input, defaultProfile) {
+  var res = parseTaskInput(input, defaultProfile)
+  return {
+    title: res.title,
+    profile: res.profile,
+    repo: res.repo,
+    tags: res.tags
   }
 }
 
@@ -277,13 +455,17 @@ function cloneStore(store) {
  * @param {string} [description]
  * @param {string} [explicitProfile]
  * @param {string|null} [reminderTime]
+ * @param {TaskLocation|string|null} [location]
+ * @param {string[]} [explicitTags]
  * @returns {TodoStoreData}
  */
-function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
+function addTodo(store, rawTitle, description, explicitProfile, reminderTime, location, explicitTags) {
   var s = cloneStore(store)
-  var parsed = parseTitleAndProfile(rawTitle, explicitProfile || s.activeProfile)
+  var parsed = parseTaskInput(rawTitle, explicitProfile || s.activeProfile)
   var title = capitalizeTitle(parsed.title)
-  var profile = (explicitProfile && !rawTitle.match(/#\s*([a-zA-Z0-9_-]+)/))
+
+  var hasLeadingHashtag = String(rawTitle || "").trim().startsWith("#")
+  var profile = (explicitProfile && !hasLeadingHashtag && !rawTitle.match(/#\s*([a-zA-Z0-9_-]+)/))
     ? cleanProfileName(explicitProfile)
     : parsed.profile
 
@@ -303,12 +485,32 @@ function addTodo(store, rawTitle, description, explicitProfile, reminderTime) {
     }
   }
 
+  // Combine and deduplicate tags
+  /** @type {string[]} */
+  var tagList = []
+  var rawTags = (Array.isArray(explicitTags) ? explicitTags : []).concat(parsed.tags || [])
+  for (var ti = 0; ti < rawTags.length; ti++) {
+    var tg = cleanProfileName(rawTags[ti])
+    if (tg && tagList.indexOf(tg) === -1) {
+      tagList.push(tg)
+    }
+  }
+
+  var normLocation = normalizeLocation(location)
+  var repo = parsed.repo || (normLocation && normLocation.repo ? normLocation.repo : null)
+  if (repo && normLocation && !normLocation.repo) {
+    normLocation.repo = repo
+  }
+
   /** @type {Task} */
   var newTask = {
     id: taskId,
     title: title,
     description: String(description || ""),
     profile: profile,
+    repo: repo,
+    tags: tagList,
+    location: normLocation,
     done: false,
     createdAt: now,
     updatedAt: now,
@@ -378,6 +580,15 @@ function updateTodo(store, id, fields) {
         var p = cleanProfileName(fields.profile)
         t.profile = p
         if (s.profiles.indexOf(p) === -1) s.profiles.push(p)
+      }
+      if (fields.repo !== undefined) t.repo = fields.repo ? String(fields.repo).trim() : null
+      if (fields.tags !== undefined) {
+        t.tags = Array.isArray(fields.tags)
+          ? fields.tags.map(function (tg) { return cleanProfileName(tg) }).filter(Boolean)
+          : []
+      }
+      if (fields.location !== undefined) {
+        t.location = normalizeLocation(fields.location)
       }
       if (fields.done !== undefined) t.done = Boolean(fields.done)
       if (fields.reminder !== undefined) {
@@ -553,15 +764,30 @@ function compareTasks(a, b) {
  *
  * @param {TodoStoreData} store
  * @param {string} [profileFilter]
+ * @param {string} [tagFilter]
+ * @param {string} [repoFilter]
  * @returns {Task[]}
  */
-function getFilteredTodos(store, profileFilter) {
+function getFilteredTodos(store, profileFilter, tagFilter, repoFilter) {
   if (!store || !Array.isArray(store.todos)) return []
   var list = store.todos
   if (profileFilter && profileFilter !== "all") {
     var cleanFilter = cleanProfileName(profileFilter)
     list = list.filter(function (t) {
       return cleanProfileName(t.profile) === cleanFilter
+    })
+  }
+  if (tagFilter && tagFilter !== "all") {
+    var cleanTag = cleanProfileName(tagFilter)
+    list = list.filter(function (t) {
+      return Array.isArray(t.tags) && t.tags.indexOf(cleanTag) !== -1
+    })
+  }
+  if (repoFilter && repoFilter !== "all") {
+    var cleanRepo = cleanProfileName(repoFilter)
+    list = list.filter(function (t) {
+      return (t.repo && cleanProfileName(t.repo) === cleanRepo) ||
+             (t.location && t.location.repo && cleanProfileName(t.location.repo) === cleanRepo)
     })
   }
   return list.slice().sort(compareTasks)
@@ -892,12 +1118,38 @@ function normalizeArchive(raw) {
   if (!data || typeof data !== "object") {
     return { version: 1, archived: [] }
   }
-  if (Array.isArray(data)) {
-    return { version: 1, archived: data }
+  var rawList = Array.isArray(data) ? data : (Array.isArray(data.archived) ? data.archived : [])
+  /** @type {ArchivedTask[]} */
+  var archived = []
+  var now = Date.now()
+  for (var i = 0; i < rawList.length; i++) {
+    var item = rawList[i]
+    if (!item || typeof item !== "object") continue
+    /** @type {string[]} */
+    var itemTags = []
+    if (Array.isArray(item.tags)) {
+      for (var iti = 0; iti < item.tags.length; iti++) {
+        var cleanItemTag = cleanProfileName(item.tags[iti])
+        if (cleanItemTag && itemTags.indexOf(cleanItemTag) === -1) {
+          itemTags.push(cleanItemTag)
+        }
+      }
+    }
+    archived.push({
+      id: item.id !== undefined && item.id !== null ? item.id : now,
+      title: capitalizeTitle(String(item.title || item.text || "").trim()),
+      description: String(item.description || ""),
+      profile: cleanProfileName(item.profile),
+      repo: item.repo ? String(item.repo).trim() : null,
+      tags: itemTags,
+      location: normalizeLocation(item.location),
+      createdAt: Number(item.createdAt) || now,
+      completedAt: Number(item.completedAt) || now
+    })
   }
   return {
     version: Number(data.version) || 1,
-    archived: Array.isArray(data.archived) ? data.archived : []
+    archived: archived
   }
 }
 
@@ -927,6 +1179,9 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
         title: task.title,
         description: task.description || "",
         profile: task.profile || "personal",
+        repo: task.repo || null,
+        tags: Array.isArray(task.tags) ? task.tags : [],
+        location: task.location || null,
         createdAt: task.createdAt || (typeof task.id === "number" ? task.id : now),
         completedAt: now
       })
@@ -984,8 +1239,10 @@ if (typeof module !== "undefined" && module.exports) {
     defaultStore,
     cleanProfileName,
     normalizeTask,
+    normalizeLocation,
     normalize,
     parseTitleAndProfile,
+    parseTaskInput,
     cloneStore,
     addTodo,
     toggleTodo,

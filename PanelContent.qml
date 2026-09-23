@@ -1281,7 +1281,7 @@ Item {
                       id: profLabel
                       anchors.centerIn: parent
                       width: Math.min(implicitWidth, profBadge.implicitWidth - Style.space(8))
-                      text: "#" + itemRow.modelData.profile
+                      text: "#" + itemRow.modelData.profile + (itemRow.modelData.repo ? ("/" + itemRow.modelData.repo) : "")
                       color: Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
@@ -1295,7 +1295,43 @@ Item {
 
                     PanelToolTip {
                       visible: profBadgeHover.hovered && profLabel.truncated
-                      text: "#" + itemRow.modelData.profile
+                      text: "#" + itemRow.modelData.profile + (itemRow.modelData.repo ? ("/" + itemRow.modelData.repo) : "")
+                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                    }
+                  }
+
+                  // Repo badge when filtered by profile
+                  Rectangle {
+                    id: repoBadge
+                    visible: root.currentFilter !== "all" && Boolean(itemRow.modelData.repo)
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitWidth: Math.min(Style.space(75), repoLabel.implicitWidth + Style.space(8))
+                    implicitHeight: Style.space(16)
+                    radius: implicitHeight / 2
+                    color: Util.alpha(Color.accent, 0.12)
+                    border.color: Util.alpha(Color.accent, 0.35)
+                    border.width: 1
+
+                    Text {
+                      id: repoLabel
+                      anchors.centerIn: parent
+                      width: Math.min(implicitWidth, repoBadge.implicitWidth - Style.space(8))
+                      text: "󰊤 " + itemRow.modelData.repo
+                      color: Color.accent
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(8.5)
+                      font.bold: true
+                      elide: Text.ElideRight
+                      horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    HoverHandler {
+                      id: repoBadgeHover
+                    }
+
+                    PanelToolTip {
+                      visible: repoBadgeHover.hovered && repoLabel.truncated
+                      text: "Repo: " + (itemRow.modelData.repo || "")
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     }
                   }
@@ -1304,7 +1340,7 @@ Item {
                   Text {
                     id: titleLabel
                     anchors.verticalCenter: parent.verticalCenter
-                    width: Math.max(Style.space(40), titleRow.width - checkboxIcon.implicitWidth - (profBadge.visible ? profBadge.implicitWidth + titleRow.spacing : 0) - titleRow.spacing)
+                    width: Math.max(Style.space(40), titleRow.width - checkboxIcon.implicitWidth - (profBadge.visible ? profBadge.implicitWidth + titleRow.spacing : 0) - (repoBadge.visible ? repoBadge.implicitWidth + titleRow.spacing : 0) - titleRow.spacing)
                     text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                     color: itemRow.isDone ? Color.muted : root.barForeground
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -1601,6 +1637,121 @@ Item {
                         text: profReassignBtn.modelData
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       }
+                    }
+                  }
+                }
+
+                // Location & Codebase Context Row (if task has location, repo, or tags)
+                Item {
+                  width: parent.width
+                  implicitHeight: Math.max(locRow.implicitHeight, openLocBtn.implicitHeight)
+                  visible: Boolean(itemRow.modelData.location || itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0))
+
+                  Row {
+                    id: locRow
+                    anchors.left: parent.left
+                    anchors.right: openLocBtn.visible ? openLocBtn.left : parent.right
+                    anchors.rightMargin: openLocBtn.visible ? Style.space(6) : 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(6)
+
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "󰉋 Target:"
+                      color: Color.muted
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(9.5)
+                    }
+
+                    Rectangle {
+                      anchors.verticalCenter: parent.verticalCenter
+                      implicitWidth: locContentRow.implicitWidth + Style.space(10)
+                      implicitHeight: Style.space(20)
+                      radius: Style.cornerRadius
+                      color: Util.alpha(Color.accent, 0.12)
+                      border.color: Util.alpha(Color.accent, 0.35)
+                      border.width: 1
+
+                      Row {
+                        id: locContentRow
+                        anchors.centerIn: parent
+                        spacing: Style.space(4)
+
+                        Text {
+                          anchors.verticalCenter: parent.verticalCenter
+                          text: (itemRow.modelData.location && itemRow.modelData.location.repo) ? "󰊤" : "󰉋"
+                          color: Color.accent
+                          font.family: Style.font.family
+                          font.pixelSize: Style.space(9.5)
+                        }
+
+                        Text {
+                          anchors.verticalCenter: parent.verticalCenter
+                          text: {
+                            var loc = itemRow.modelData.location
+                            if (loc) {
+                              if (loc.repo) {
+                                var str = loc.repo
+                                if (loc.subpath) str += "/" + loc.subpath
+                                return str
+                              }
+                              return loc.localPath || ""
+                            }
+                            return itemRow.modelData.repo || ""
+                          }
+                          color: Color.accent
+                          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                          font.pixelSize: Style.space(9)
+                          font.bold: true
+                          elide: Text.ElideMiddle
+                          maximumLineCount: 1
+                        }
+                      }
+                    }
+
+                    // Display tag chips if any
+                    Repeater {
+                      model: itemRow.modelData.tags || []
+                      Rectangle {
+                        required property string modelData
+                        anchors.verticalCenter: parent.verticalCenter
+                        implicitWidth: tagLabel.implicitWidth + Style.space(8)
+                        implicitHeight: Style.space(18)
+                        radius: Style.cornerRadius
+                        color: Color.menu.background
+                        border.color: Color.menu.border
+                        border.width: 1
+
+                        Text {
+                          id: tagLabel
+                          anchors.centerIn: parent
+                          text: "#" + modelData
+                          color: Color.muted
+                          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                          font.pixelSize: Style.space(8.5)
+                        }
+                      }
+                    }
+                  }
+
+                  // Open Codebase Button
+                  Button {
+                    id: openLocBtn
+                    visible: Boolean(itemRow.modelData.location && itemRow.modelData.location.localPath)
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    iconText: "󰏫"
+                    text: "Codebase"
+                    fontSize: Style.space(9)
+                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                    bordered: true
+                    tooltipText: "Open codebase directory in editor"
+                    onClicked: {
+                      root.savePendingNotes()
+                      root.closeRequested()
+                      var locPath = itemRow.modelData.location.localPath
+                      if (locPath.startsWith("~")) locPath = Quickshell.env("HOME") + locPath.slice(1)
+                      if (root.bar) root.bar.run("omarchy-launch-editor \"" + locPath + "\"")
                     }
                   }
                 }

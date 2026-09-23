@@ -132,6 +132,24 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("InboxIcon") && panelContent.includes("id: brandRow"),
     "Panel header must feature InboxIcon brand logo beside the Ardoise title"
   );
+
+  // 4. Codebase & Multi-Repo Context
+  assert.ok(
+    quickAddContent.includes("id: detectContextProc"),
+    "QuickAdd must feature detectContextProc for Hyprland CWD auto-detection"
+  );
+  assert.ok(
+    quickAddContent.includes("TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem, loc)"),
+    "QuickAdd submit must pass location context to TodoStore.addTodo"
+  );
+  assert.ok(
+    panelContent.includes("id: repoBadge"),
+    "PanelContent must display repoBadge for multi-repo task identification"
+  );
+  assert.ok(
+    panelContent.includes("id: openLocBtn") && panelContent.includes("Codebase"),
+    "PanelContent must display openLocBtn to launch editor directly in target codebase"
+  );
 });
 
 test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {

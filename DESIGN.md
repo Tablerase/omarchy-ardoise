@@ -29,6 +29,11 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
    - **Keyboard Navigation (<kbd>Enter</kbd> / <kbd>e</kbd>)**: Explicit toggle. Opening an item via keyboard marks it `expandedViaKeyboard = true`, preventing mouse hover fold timers (`hoverFoldTimer`, `listFoldTimer`) from collapsing the drawer when the mouse rests elsewhere. Navigating with <kbd>j</kbd>/<kbd>k</kbd> does not auto-expand items.
    - **Mouse Hover Preview**: Hovering over a task row for 1500ms auto-expands the drawer only after actual mouse movement has been detected (`mouseMovementDetected`). When the panel opens under a stationary mouse cursor, auto-expansion is suppressed to prevent center/random tasks from opening over keyboard selection. Leaving the row folds the preview after 350ms (unless notes editor is focused). Starting keyboard motion (<kbd>j</kbd>/<kbd>k</kbd>/<kbd>Tab</kbd>) immediately collapses temporary hover previews.
    - **Mouse Click Expansion**: Clicking the chevron expand button on a row explicitly expands it (`expandedViaKeyboard = true`), keeping it open while interacting with notes and controls.
+7. **Multi-Repo & Codebase Context Integrity**:
+   - Tasks support prefix-only multi-repo hashtag syntax: `#project/repo #tag1 #tag2 Title`.
+   - Projects represent high-level conceptual umbrellas (e.g. `#omarchy`), while repositories represent physical codebases (e.g. `ardoise`, `shell`).
+   - Quick Add automatically queries the active Hyprland window, resolves the terminal/editor working directory, Git root, and Git remote identifier, and attaches location context without manual user input.
+   - Tasks store cross-device safe Git remote identities (`location.repo`) alongside normalized local directory paths (`location.localPath`).
 
 ---
 
@@ -71,22 +76,26 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
    - <kbd>Escape</kbd>: dismisses if empty; blurs to `options` motion mode if text is present.
 4. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
-5. **Option Toggles Row**:
+5. **Auto-Detected Codebase Context Chip** (Conditional: `detectedContext && attachLocation`):
+   - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath (e.g. `Tablerase/omarchy-ardoise` or `~/Work/...`) + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
+   - Automatically detected from active Hyprland terminal/editor process tree on modal open.
+   - Attached to the created task on submit unless explicitly dismissed via `󰅖`.
+6. **Option Toggles Row**:
    - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
    - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`.
    - Both buttons use `bordered: true` for clear cursor focus framing.
-6. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
+7. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
    - <kbd>Escape</kbd>: blurs textarea and returns focus to `options` on the card.
-7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
+8. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
    - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear". Bordered focus styling.
-8. **Profile Selector Container (`profileFlow`)**:
+9. **Profile Selector Container (`profileFlow`)**:
    - Positioned at the bottom, just above the footer actions for fast writing.
    - Section header label highlights in accent color when `profiles` section is focused.
    - Flow wrapping profile pills sorted by activity/count. Focused pill features high-contrast border and 1.05 scale pop.
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-9. **Separator**: Bottom dividing line (`PanelSeparator`).
-10. **Footer Actions Item**:
+10. **Separator**: Bottom dividing line (`PanelSeparator`).
+11. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
     - Right: Action buttons [Cancel] and [Add]:
       - Both buttons use `bordered: true` and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
@@ -126,7 +135,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Individual task row:
      - Checkbox: Custom animated check box (`isDone`).
      - Task Title: Strikethrough when done, urgency glow when due/overdue.
-     - Profile badge: Tag glyph `󰓹` + elided name.
+     - Profile badge: Tag glyph `󰓹` + elided name (`#profile` or `#project/repo`).
+     - Repository badge (`repoBadge`): When filtered to a profile, displays git repository glyph `󰊤` + repo name for multi-repo task differentiation.
      - Due date badge: Clock glyph `󰥔` + relative countdown.
      - Expand button: Chevron `󰅂` explicitly toggling detailed drawer (`expandedViaKeyboard = true`), keeping drawer open across mouse motion.
      - Delete button: Trash icon `󰆴`.
@@ -142,6 +152,9 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - `TaskNotesArea` multi-line notes editor (revealed when expanded via <kbd>Enter</kbd>).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear.
      - Profile reassign flow pills.
+     - **Location & Codebase Context Row (`locRow`)**:
+       - Displays `󰉋 Target:` with repository identifier (`󰊤 repo/subpath`) or directory path (`󰉋 localPath`), along with subsystem `#tag` chips.
+       - Includes a **[Codebase]** action button that launches `omarchy-launch-editor` directly in the target repository directory.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
    - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].

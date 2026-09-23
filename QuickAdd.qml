@@ -34,6 +34,8 @@ Item {
   property string draftDescription: ""
   property string draftProfile: ""
   property string draftReminder: ""
+  property var detectedContext: null
+  property bool attachLocation: true
   readonly property bool hasDraft: draftTitle.trim().length > 0 || draftDescription.trim().length > 0
 
   readonly property var reminderPresets: TodoStore.getReminderPresets()
@@ -95,6 +97,8 @@ Item {
     draftDescription = ""
     draftProfile = ""
     draftReminder = ""
+    detectedContext = null
+    attachLocation = false
     taskInput.text = ""
     if (descNotesArea) {
       descNotesArea.text = ""
@@ -117,6 +121,7 @@ Item {
     root.focusSection = "title"
     root.optionIndex = 0
     root.actionIndex = 1
+    detectContextProc.running = true
     if (root.hasDraft) {
       taskInput.text = root.draftTitle
       if (root.draftDescription) {
@@ -208,12 +213,40 @@ Item {
 
     var desc = (showNote && descNotesArea) ? descNotesArea.text.trim() : ""
     var rem = selectedReminder || null
+    var loc = (root.attachLocation && root.detectedContext) ? root.detectedContext : null
 
-    var newStore = TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem)
+    var newStore = TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem, loc)
     root.store = newStore
     todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")
     root.clearDraft()
     root.dismiss()
+  }
+
+  Process {
+    id: detectContextProc
+    command: [
+      "bash",
+      "-c",
+      "win_pid=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty'); [ -z \"$win_pid\" ] && { echo 'null'; exit 0; }; target_pid=\"$win_pid\"; children=$(pgrep -P \"$win_pid\" 2>/dev/null); while [ -n \"$children\" ]; do for c in $children; do if [ -d \"/proc/$c\" ]; then target_pid=\"$c\"; fi; done; children=$(pgrep -P \"$target_pid\" 2>/dev/null); done; dir=$(readlink \"/proc/$target_pid/cwd\" 2>/dev/null); if [ -z \"$dir\" ] || [ ! -d \"$dir\" ] || [ \"$dir\" = \"$HOME\" ]; then echo 'null'; exit 0; fi; repo_root=\"\"; remote=\"\"; subpath=\"\"; repo_name=\"\"; if cd \"$dir\" 2>/dev/null; then repo_root=$(git rev-parse --show-toplevel 2>/dev/null); if [ -n \"$repo_root\" ]; then remote=$(git config --get remote.origin.url 2>/dev/null | sed -E 's/^(https?:\\/\\/|git@)(github\\.com[:\\/])?//' | sed -E 's/\\.git$//'); repo_name=$(basename \"$repo_root\"); if [ \"$dir\" != \"$repo_root\" ]; then subpath=\"${dir#$repo_root/}\"; fi; fi; fi; rel_dir=\"$dir\"; if [[ \"$dir\" == \"$HOME\"* ]]; then rel_dir=\"~${dir#$HOME}\"; fi; jq -n --arg lp \"$rel_dir\" --arg repo \"$remote\" --arg subpath \"$subpath\" --arg repoName \"$repo_name\" '{localPath: $lp, repo: (if $repo == \"\" then null else $repo end), subpath: (if $subpath == \"\" then null else $subpath end), repoName: (if $repoName == \"\" then null else $repoName end)}'"
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var res = JSON.parse(text)
+          if (res && (res.repo || res.localPath)) {
+            root.detectedContext = res
+            root.attachLocation = true
+          } else {
+            root.detectedContext = null
+            root.attachLocation = false
+          }
+        } catch (_e) {
+          root.detectedContext = null
+          root.attachLocation = false
+        }
+      }
+    }
   }
 
   FileView {
@@ -535,7 +568,79 @@ Item {
           }
         }
 
+        // Auto-detected codebase context pill
+        Row {
+          visible: Boolean(root.detectedContext && root.attachLocation)
+          spacing: Style.space(6)
+          height: visible ? Style.space(22) : 0
 
+          Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            implicitWidth: ctxRow.implicitWidth + Style.space(14)
+            implicitHeight: Style.space(20)
+            radius: Style.cornerRadius
+            color: Util.alpha(Color.accent, 0.12)
+            border.color: Util.alpha(Color.accent, 0.35)
+            border.width: 1
+
+            Row {
+              id: ctxRow
+              anchors.centerIn: parent
+              spacing: Style.space(6)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.detectedContext && root.detectedContext.repo ? "󰊤" : "󰉋"
+                color: Color.accent
+                font.family: Style.font.family
+                font.pixelSize: Style.space(10)
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: {
+                  if (!root.detectedContext) return ""
+                  if (root.detectedContext.repo) {
+                    var txt = root.detectedContext.repo
+                    if (root.detectedContext.subpath) txt += "/" + root.detectedContext.subpath
+                    return txt
+                  }
+                  return root.detectedContext.localPath || ""
+                }
+                color: Color.accent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                elide: Text.ElideMiddle
+                maximumLineCount: 1
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰅖"
+                color: detachMouse.containsMouse ? Color.urgent : Color.muted
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+
+                MouseArea {
+                  id: detachMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.attachLocation = false
+                }
+              }
+            }
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "(auto-detected)"
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.space(8.5)
+          }
+        }
 
         // Option Toggles (Note & Reminder)
         Row {
