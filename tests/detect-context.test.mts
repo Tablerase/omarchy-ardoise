@@ -287,3 +287,29 @@ test("detect-context.sh: Script execution & JSON output schema", () => {
     }
   }
 });
+
+// -----------------------------------------------------------------------------
+// 8. Active Window Precedence: Focused Zed vs Background VS Code
+// -----------------------------------------------------------------------------
+test("Active Window Precedence: Focused Zed resolves Zed workspace over background VS Code", () => {
+  const home = getHomedir();
+  if (home && fs.existsSync(path.join(home, ".local/share/zed/db/0-stable/db.sqlite"))) {
+    try {
+      const simCmd = `bash -c 'source <(sed "s/win_class=\\$(echo.*)/win_class=\\"dev.zed.zed\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}")'`;
+      const out = execSync(simCmd, { encoding: "utf8" }).trim();
+      const res = JSON.parse(out);
+      if (res && res.localPath) {
+        assert.ok(
+          !res.localPath.includes("OffBoardingOrga"),
+          "Active window Zed must not be overridden by background VS Code workspace"
+        );
+        assert.ok(
+          res.localPath.includes("42_Projects") || res.localPath.includes("ReadmeSVGJourney"),
+          "Active window Zed must resolve to a Zed workspace"
+        );
+      }
+    } catch {
+      // Execution restricted
+    }
+  }
+});

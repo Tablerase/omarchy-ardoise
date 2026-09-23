@@ -237,7 +237,24 @@ detect_terminal() {
 }
 
 # -----------------------------------------------------------------------------
-# Priority 0: Default Editor in Omarchy (~/.local/state/omarchy/defaults/editor)
+# -----------------------------------------------------------------------------
+# Active Window Direct Resolution
+# If the user is currently focused on an editor or terminal, that active
+# window ALWAYS takes precedence over background/unfocused applications.
+# -----------------------------------------------------------------------------
+if [[ "$win_class" =~ (code|codium|cursor) ]]; then
+  dir=$(detect_vscode)
+elif [[ "$win_class" =~ (zed|dev\.zed\.zed) ]]; then
+  dir=$(detect_zed)
+elif [ "$is_terminal_win" = true ]; then
+  dir=$(detect_herdr)
+  [ -z "$dir" ] && dir=$(detect_tmux)
+  [ -z "$dir" ] && dir=$(detect_nvim)
+  [ -z "$dir" ] && dir=$(detect_terminal)
+fi
+
+# -----------------------------------------------------------------------------
+# Background Resolution (User is in Browser, Desktop, or non-editor application)
 # -----------------------------------------------------------------------------
 default_editor_raw=""
 if [ -f "$HOME/.local/state/omarchy/defaults/editor" ]; then
@@ -247,80 +264,59 @@ elif [ -n "$EDITOR" ]; then
 fi
 default_editor=$(basename "${default_editor_raw:-}" | tr '[:upper:]' '[:lower:]')
 
-case "$default_editor" in
-  code*|codium*|cursor*)
-    if [[ "$win_class" =~ (code|codium|cursor) ]] || is_vscode_running; then
-      dir=$(detect_vscode)
-    fi
-    ;;
-  zed*)
-    if [[ "$win_class" =~ (zed|dev\.zed\.zed) ]] || is_zed_running; then
-      dir=$(detect_zed)
-    fi
-    ;;
-  nvim*|vim*|helix*|hx*|nano*|micro*)
-    if [ "$is_terminal_win" = true ]; then
+# Priority 0: Default Editor in Omarchy (~/.local/state/omarchy/defaults/editor)
+if [ -z "$dir" ]; then
+  case "$default_editor" in
+    code*|codium*|cursor*)
+      if is_vscode_running; then
+        dir=$(detect_vscode)
+      fi
+      ;;
+    zed*)
+      if is_zed_running; then
+        dir=$(detect_zed)
+      fi
+      ;;
+    nvim*|vim*|helix*|hx*|nano*|micro*)
       dir=$(detect_herdr)
       [ -z "$dir" ] && dir=$(detect_tmux)
       [ -z "$dir" ] && dir=$(detect_nvim)
       [ -z "$dir" ] && dir=$(detect_terminal)
-    fi
-    ;;
-esac
-
-# -----------------------------------------------------------------------------
-# Priority 1: VS Code / Cursor / VSCodium (Active window or running non-terminal)
-# -----------------------------------------------------------------------------
-if [ -z "$dir" ]; then
-  if [[ "$win_class" =~ (code|codium|cursor) ]]; then
-    dir=$(detect_vscode)
-  elif [ "$is_terminal_win" = false ] && is_vscode_running; then
-    dir=$(detect_vscode)
-  fi
+      ;;
+  esac
 fi
 
-# -----------------------------------------------------------------------------
-# Priority 2: Zed Editor (Active window or running non-terminal)
-# -----------------------------------------------------------------------------
-if [ -z "$dir" ]; then
-  if [[ "$win_class" =~ (zed|dev\.zed\.zed) ]]; then
-    dir=$(detect_zed)
-  elif [ "$is_terminal_win" = false ] && is_zed_running; then
-    dir=$(detect_zed)
-  fi
+# Priority 1: VS Code / Cursor / VSCodium (Running in background)
+if [ -z "$dir" ] && is_vscode_running; then
+  dir=$(detect_vscode)
 fi
 
-# -----------------------------------------------------------------------------
+# Priority 2: Zed Editor (Running in background)
+if [ -z "$dir" ] && is_zed_running; then
+  dir=$(detect_zed)
+fi
+
 # Priority 3: Herdr (hedr) Workspace Manager
-# -----------------------------------------------------------------------------
 if [ -z "$dir" ]; then
   dir=$(detect_herdr)
 fi
 
-# -----------------------------------------------------------------------------
 # Priority 4: Tmux
-# -----------------------------------------------------------------------------
 if [ -z "$dir" ]; then
   dir=$(detect_tmux)
 fi
 
-# -----------------------------------------------------------------------------
 # Priority 5: Neovim (Active instance by TTY interaction)
-# -----------------------------------------------------------------------------
 if [ -z "$dir" ]; then
   dir=$(detect_nvim)
 fi
 
-# -----------------------------------------------------------------------------
 # Priority 6: Terminal Foreground Process
-# -----------------------------------------------------------------------------
 if [ -z "$dir" ]; then
   dir=$(detect_terminal)
 fi
 
-# -----------------------------------------------------------------------------
 # Priority 7: Fallback to Recent VS Code or Zed Workspace
-# -----------------------------------------------------------------------------
 if [ -z "$dir" ]; then
   dir=$(detect_vscode)
 fi
