@@ -241,6 +241,7 @@ detect_terminal() {
 # Active Window Direct Resolution
 # If the user is currently focused on an editor or terminal, that active
 # window ALWAYS takes precedence over background/unfocused applications.
+# If focused on a non-dev app (discord, browser, obsidian), do not auto-detect.
 # -----------------------------------------------------------------------------
 if [[ "$win_class" =~ (code|codium|cursor) ]]; then
   dir=$(detect_vscode)
@@ -251,6 +252,11 @@ elif [ "$is_terminal_win" = true ]; then
   [ -z "$dir" ] && dir=$(detect_tmux)
   [ -z "$dir" ] && dir=$(detect_nvim)
   [ -z "$dir" ] && dir=$(detect_terminal)
+elif [ -n "$win_class" ]; then
+  # The focused window is another application (e.g. Discord, Browser, Obsidian)
+  # Do not attach an unrelated background project to avoid issues.
+  echo "null"
+  exit 0
 fi
 
 # -----------------------------------------------------------------------------

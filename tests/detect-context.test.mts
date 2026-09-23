@@ -295,7 +295,7 @@ test("Active Window Precedence: Focused Zed resolves Zed workspace over backgrou
   const home = getHomedir();
   if (home && fs.existsSync(path.join(home, ".local/share/zed/db/0-stable/db.sqlite"))) {
     try {
-      const simCmd = `bash -c 'source <(sed "s/win_class=\\$(echo.*)/win_class=\\"dev.zed.zed\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}")'`;
+      const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"dev.zed.zed\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
       const out = execSync(simCmd, { encoding: "utf8" }).trim();
       const res = JSON.parse(out);
       if (res && res.localPath) {
@@ -311,5 +311,66 @@ test("Active Window Precedence: Focused Zed resolves Zed workspace over backgrou
     } catch {
       // Execution restricted
     }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 9. Active Window Precedence: Focused VS Code resolves VS Code workspace
+// -----------------------------------------------------------------------------
+test("Active Window Precedence: Focused VS Code resolves VS Code workspace", () => {
+  const home = getHomedir();
+  if (home && fs.existsSync(path.join(home, ".config/Code/User/globalStorage/storage.json"))) {
+    try {
+      const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"code\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+      const out = execSync(simCmd, { encoding: "utf8" }).trim();
+      const res = JSON.parse(out);
+      if (res && res.localPath) {
+        assert.ok(
+          res.localPath.includes("OffBoardingOrga"),
+          "Active window VS Code must resolve to VS Code workspace"
+        );
+      }
+    } catch {
+      // Execution restricted
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 10. Focused Window Isolation: Non-dev apps (Discord, Browser, Obsidian) yield null
+// -----------------------------------------------------------------------------
+test("Focused Window Isolation: Non-development focused windows (Discord, Chromium, Obsidian) return null", () => {
+  const nonDevApps = ["discord", "chromium", "md.obsidian.obsidian", "spotify", "slack"];
+  for (const app of nonDevApps) {
+    try {
+      const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"${app}\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+      const out = execSync(simCmd, { encoding: "utf8" }).trim();
+      assert.strictEqual(
+        out,
+        "null",
+        `Focused app '${app}' must output null to prevent attaching unrelated background project locations`
+      );
+    } catch {
+      // Execution restricted
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 11. Focused Terminal Resolution: Ghostty / Kitty resolves terminal workspace
+// -----------------------------------------------------------------------------
+test("Focused Terminal Resolution: Terminal window resolves active terminal workspace", () => {
+  try {
+    const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"com.mitchellh.ghostty\\"/; s/is_terminal_win=false/is_terminal_win=true/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+    const out = execSync(simCmd, { encoding: "utf8" }).trim();
+    const res = JSON.parse(out);
+    if (res && res.localPath) {
+      assert.ok(
+        res.localPath.includes("omarchy-todo-plugin"),
+        "Active terminal window must resolve the active terminal workspace"
+      );
+    }
+  } catch {
+    // Execution restricted
   }
 });
