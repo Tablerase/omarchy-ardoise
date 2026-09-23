@@ -150,6 +150,20 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("id: openLocBtn") && panelContent.includes("Codebase"),
     "PanelContent must display openLocBtn to launch editor directly in target codebase"
   );
+  assert.ok(
+    quickAddContent.includes('if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")'),
+    "QuickAdd must include location in getActiveSections when location is detected and attached"
+  );
+  assert.ok(
+    quickAddContent.includes('if (root.focusSection === "location")') &&
+      quickAddContent.includes("root.attachLocation = false"),
+    "QuickAdd must allow detaching location via x/Del/Backspace/Enter key navigation"
+  );
+  assert.ok(
+    quickAddContent.includes("id: locationPill") &&
+      quickAddContent.includes('(root.focusSection === "location")'),
+    "QuickAdd location pill must display focus styling when active"
+  );
 
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
   const detectScript = path.join(repoDir, "tools", "detect-context.sh");

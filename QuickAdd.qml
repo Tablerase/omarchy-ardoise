@@ -46,7 +46,9 @@ Item {
   property int actionIndex: 1 // 0: cancel, 1: add
 
   function getActiveSections() {
-    var secs = ["title", "options"]
+    var secs = ["title"]
+    if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
+    secs.push("options")
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
     secs.push("profiles")
@@ -378,8 +380,22 @@ Item {
           return
         }
 
+        if (root.focusSection === "location") {
+          if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace || event.text === "x" || event.text === "X" || event.key === Qt.Key_X) {
+            event.accepted = true
+            root.attachLocation = false
+            root.advanceSection(1)
+            return
+          }
+        }
+
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
           event.accepted = true
+          if (root.focusSection === "location") {
+            root.attachLocation = false
+            root.advanceSection(1)
+            return
+          }
           if (root.focusSection === "options") {
             if (root.optionIndex === 0) {
               root.showNote = !root.showNote
@@ -596,13 +612,25 @@ Item {
           height: visible ? Style.space(22) : 0
 
           Rectangle {
+            id: locationPill
             anchors.verticalCenter: parent.verticalCenter
             implicitWidth: ctxRow.implicitWidth + Style.space(14)
             implicitHeight: Style.space(20)
             radius: Style.cornerRadius
-            color: Util.alpha(Color.accent, 0.12)
-            border.color: Util.alpha(Color.accent, 0.35)
-            border.width: 1
+            color: (root.focusSection === "location") ? Util.alpha(Color.accent, 0.24) : Util.alpha(Color.accent, 0.12)
+            border.color: (root.focusSection === "location") ? Color.accent : Util.alpha(Color.accent, 0.35)
+            border.width: (root.focusSection === "location") ? 2 : 1
+            scale: (root.focusSection === "location") ? 1.04 : 1.0
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.focusSection = "location"
+                root.applySectionFocus()
+              }
+            }
 
             Row {
               id: ctxRow
@@ -639,7 +667,7 @@ Item {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "󰅖"
-                color: detachMouse.containsMouse ? Color.urgent : Color.muted
+                color: (detachMouse.containsMouse || root.focusSection === "location") ? Color.urgent : Color.muted
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
 
@@ -648,7 +676,10 @@ Item {
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
-                  onClicked: root.attachLocation = false
+                  onClicked: {
+                    root.attachLocation = false
+                    if (root.focusSection === "location") root.advanceSection(1)
+                  }
                 }
               }
             }
@@ -656,10 +687,11 @@ Item {
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "(auto-detected)"
-            color: Color.muted
+            text: (root.focusSection === "location") ? "(press x or Del to remove)" : "(auto-detected)"
+            color: (root.focusSection === "location") ? Color.accent : Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.space(8.5)
+            font.bold: root.focusSection === "location"
           }
         }
 
@@ -894,7 +926,11 @@ Item {
             anchors.right: actionButtons.left
             anchors.rightMargin: Style.space(12)
             anchors.verticalCenter: parent.verticalCenter
-            text: root.hasDraft ? "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard" : "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
+            text: {
+              if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
+              if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
+              return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
+            }
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
