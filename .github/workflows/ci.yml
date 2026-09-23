@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+    env:
+      PATH: /usr/lib/qt6/bin:${{ env.PATH }}
 
     steps:
       - name: Install Dependencies
