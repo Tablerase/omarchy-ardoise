@@ -235,6 +235,36 @@ ShellRoot {
             // Test releaseFocus method
             panelContent.releaseFocus();
 
+            // Test footer shortcut hotkeys: 'c', 'd', 'e'
+            var closeRequestedCount = 0;
+            panelContent.closeRequested.connect(function() {
+                closeRequestedCount++;
+            });
+            panelContent.focusSection = "footer";
+            panelContent.handleTextKey("e");
+            if (closeRequestedCount < 1) {
+                console.error("[TEST FAIL] handleTextKey('e') failed to trigger openEditor / closeRequested");
+                Qt.exit(124);
+                return;
+            }
+            panelContent.focusSection = "tasks";
+            panelContent.cursorIndex = 0;
+            var countBeforeTaskE = closeRequestedCount;
+            panelContent.handleTextKey("e");
+            if (closeRequestedCount <= countBeforeTaskE) {
+                console.error("[TEST FAIL] handleTextKey('e') in tasks section failed to trigger openEditor / closeRequested");
+                Qt.exit(126);
+                return;
+            }
+            var countBeforeD = closeRequestedCount;
+            panelContent.handleTextKey("d");
+            if (closeRequestedCount <= countBeforeD) {
+                console.error("[TEST FAIL] handleTextKey('d') failed to trigger openArchive / closeRequested");
+                Qt.exit(125);
+                return;
+            }
+            panelContent.handleTextKey("c");
+
             // Test moving UP at task 0 transitions focus into input field
             panelContent.focusSection = "tasks";
             panelContent.cursorIndex = 0;

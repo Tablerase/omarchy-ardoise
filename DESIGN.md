@@ -132,12 +132,12 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
      - Explicit keyboard expansion (<kbd>Enter</kbd> / <kbd>e</kbd>) keeps drawer open until explicitly toggled or closed.
      - Separator.
-     - `TaskNotesArea` multi-line notes editor (press <kbd>e</kbd> to focus).
+     - `TaskNotesArea` multi-line notes editor (revealed when expanded via <kbd>Enter</kbd>).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear.
      - Profile reassign flow pills.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
-   - Action buttons: [Clean Done] [Archive Completed] [Export JSON] [Help (?)].
+   - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`).
    - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Modals).
@@ -175,7 +175,9 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `Tab` / `Shift+Tab` | Advance / reverse major sections (`profiles` ↔ `input` ↔ `tasks` ↔ `footer`) |
 | **Panel** | `Space` | Toggle task completion (`done`) |
 | **Panel** | `Enter` / `Return` | Expand / collapse task details (drawer) |
-| **Panel** | `e` | Expand task and auto-focus inline notes editor |
+| **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
+| **Panel** | `c` | Archive and clear completed tasks in current profile |
+| **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |
 | **Panel** | `i`, `a`, `/` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |
 | **Panel** | `x` / `Delete` | Delete highlighted task |

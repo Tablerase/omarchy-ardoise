@@ -235,22 +235,26 @@ Item {
       root.openQuickAdd()
       return
     }
+    if (text === "c") {
+      root.clearCompleted(root.currentFilter)
+      return
+    }
+    if (text === "d") {
+      root.openArchive()
+      return
+    }
+    if (text === "e") {
+      var currentTaskId = null
+      if (root.focusSection === "tasks" && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var t = root.filteredTodos[root.cursorIndex]
+        if (t) currentTaskId = t.id
+      }
+      root.openEditor(currentTaskId)
+      return
+    }
     if (text === "i" || text === "a" || text === "/") {
       root.focusSection = "input"
       Qt.callLater(function() { newTodoField.forceActiveFocus() })
-    } else if (text === "e" && root.focusSection === "tasks") {
-      if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
-        var task = root.filteredTodos[root.cursorIndex]
-        if (task) {
-          root.expandedTaskId = task.id
-          root.expandedViaKeyboard = true
-          Qt.callLater(function() {
-            if (root.descArea && typeof root.descArea.focusEditor === "function") {
-              root.descArea.focusEditor()
-            }
-          })
-        }
-      }
     } else if (text === "g" && root.focusSection === "tasks") {
       root.cursorIndex = 0
       root.ensureTaskVisible(0, false)
@@ -309,7 +313,9 @@ Item {
     { key: "Space", desc: "Toggle completed status of selected task", category: "Task Actions" },
     { key: "Enter / Return", desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
     { key: "x", desc: "Delete selected task", category: "Task Actions" },
-    { key: "e", desc: "Edit task notes / description", category: "Task Actions" },
+    { key: "e", desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
+    { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
+    { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
     { key: "i / a / /", desc: "Focus new task input field", category: "Input & Create" },
     { key: "A", desc: "Open Quick Add modal", category: "Input & Create" },
     { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
@@ -409,10 +415,18 @@ Item {
     root.closeRequested()
   }
 
-  function openEditor() {
+  function openEditor(taskId) {
     savePendingNotes()
     var p = barWidget ? barWidget.todoFilePath : Quickshell.env("HOME") + "/.config/omarchy/todos.json"
-    if (bar) bar.run("omarchy-launch-editor " + p)
+    if (bar) {
+      if (taskId) {
+        var escapedPath = p.replace(/'/g, "'\\''")
+        var cmd = "bash -c 'file=\"$1\"; tid=\"$2\"; line=$(grep -n \"\\\"id\\\": $tid\" \"$file\" 2>/dev/null | head -n1 | cut -d: -f1); ed_file=\"$HOME/.local/state/omarchy/defaults/editor\"; ed=\"\"; [ -f \"$ed_file\" ] && read -r ed < \"$ed_file\"; [ -z \"$ed\" ] && ed=\"nvim\"; if [ -n \"$line\" ]; then case \"${ed##*/}\" in hx|helix) exec omarchy-launch-editor \"$file:$line\" ;; code|codium|cursor) exec omarchy-launch-editor -g \"$file:$line\" ;; *) exec omarchy-launch-editor \"+$line\" \"$file\" ;; esac; else exec omarchy-launch-editor \"$file\"; fi' -- '" + escapedPath + "' '" + taskId + "'"
+        bar.run(cmd)
+      } else {
+        bar.run("omarchy-launch-editor " + p)
+      }
+    }
     root.closeRequested()
   }
 
@@ -1581,7 +1595,7 @@ Item {
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
-          tooltipText: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
+          tooltipText: (root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)) + " (c)"
           onClicked: root.clearCompleted(root.currentFilter)
         }
 
@@ -1591,7 +1605,7 @@ Item {
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 1)
-          tooltipText: "Open todos-archive.json in editor"
+          tooltipText: "Open todos-archive.json in editor (d)"
           onClicked: root.openArchive()
         }
 
@@ -1601,7 +1615,7 @@ Item {
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 2)
-          tooltipText: "Open todos.json in editor"
+          tooltipText: "Open todos.json in editor (e)"
           onClicked: root.openEditor()
         }
       }
@@ -1615,7 +1629,7 @@ Item {
         fontSize: Style.font.caption
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 3)
-        tooltipText: "Open Quick Add modal (" + root.detectedShortcut + ")"
+        tooltipText: "Open Quick Add modal (A / " + root.detectedShortcut + ")"
         onClicked: root.openQuickAdd()
       }
     }
