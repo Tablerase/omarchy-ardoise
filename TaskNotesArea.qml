@@ -28,6 +28,7 @@ ScrollView {
   signal saved(string newText)
   signal submitted()
   signal escapePressed()
+  signal tabPressed(int direction)
 
   function forceActiveFocus() {
     textArea.forceActiveFocus()
@@ -135,6 +136,18 @@ ScrollView {
       root.save()
       root.escapePressed()
       focus = false
+    }
+
+    Keys.onTabPressed: function(event) {
+      event.accepted = true
+      root.save()
+      root.tabPressed(1)
+    }
+
+    Keys.onBacktabPressed: function(event) {
+      event.accepted = true
+      root.save()
+      root.tabPressed(-1)
     }
 
     onActiveFocusChanged: {

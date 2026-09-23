@@ -38,6 +38,57 @@ Item {
 
   readonly property var reminderPresets: TodoStore.getReminderPresets()
 
+  property string focusSection: "title" // "title", "profiles", "options", "notes", "reminders", "actions"
+  property int optionIndex: 0 // 0: note, 1: reminder
+  property int reminderPresetIndex: 0
+  property int actionIndex: 1 // 0: cancel, 1: add
+
+  function getActiveSections() {
+    var secs = ["title", "profiles", "options"]
+    if (root.showNote) secs.push("notes")
+    if (root.showReminderOptions) secs.push("reminders")
+    secs.push("actions")
+    return secs
+  }
+
+  function advanceSection(dir) {
+    var secs = getActiveSections()
+    var idx = secs.indexOf(focusSection)
+    if (idx === -1) idx = 0
+    var nextIdx = (idx + dir + secs.length) % secs.length
+    focusSection = secs[nextIdx]
+    applySectionFocus()
+  }
+
+  function applySectionFocus() {
+    if (focusSection === "title") {
+      Qt.callLater(function() { taskInput.forceActiveFocus() })
+    } else if (focusSection === "notes") {
+      Qt.callLater(function() {
+        if (descNotesArea) descNotesArea.forceActiveFocus()
+      })
+    } else {
+      taskInput.focus = false
+      if (descNotesArea) descNotesArea.focus = false
+      card.forceActiveFocus()
+    }
+  }
+
+  function cycleProfileSelection(step) {
+    var profs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+    if (!profs || profs.length === 0) return
+    var curIdx = profs.indexOf(root.selectedProfile)
+    if (curIdx === -1) curIdx = 0
+    var nextIdx = (curIdx + step + profs.length) % profs.length
+    root.selectedProfile = profs[nextIdx]
+  }
+
+  function cycleReminderPreset(step) {
+    var count = root.reminderPresets.length + (root.selectedReminder ? 1 : 0)
+    if (count <= 0) return
+    reminderPresetIndex = (reminderPresetIndex + step + count) % count
+  }
+
   function clearDraft() {
     draftTitle = ""
     draftDescription = ""
@@ -52,6 +103,9 @@ Item {
     showReminderOptions = false
     selectedReminder = ""
     selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
+    focusSection = "title"
+    optionIndex = 0
+    actionIndex = 1
     Qt.callLater(function() {
       taskInput.forceActiveFocus()
     })
@@ -59,6 +113,9 @@ Item {
 
   function open(payloadJson) {
     root.opened = true
+    root.focusSection = "title"
+    root.optionIndex = 0
+    root.actionIndex = 1
     if (root.hasDraft) {
       taskInput.text = root.draftTitle
       if (root.draftDescription) {
@@ -205,6 +262,109 @@ Item {
       border.color: Color.menu.border
       border.width: 1
       radius: Style.cornerRadius
+      focus: true
+
+      Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Escape) {
+          event.accepted = true
+          root.dismiss()
+          return
+        }
+
+        if (event.key === Qt.Key_Tab) {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+
+        if (event.key === Qt.Key_Backtab) {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+
+        if (event.key === Qt.Key_Down || event.text === "j") {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+
+        if (event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+
+        if (event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          if (root.focusSection === "profiles") {
+            root.cycleProfileSelection(-1)
+          } else if (root.focusSection === "options") {
+            root.optionIndex = 0
+          } else if (root.focusSection === "reminders") {
+            root.cycleReminderPreset(-1)
+          } else if (root.focusSection === "actions") {
+            root.actionIndex = 0
+          }
+          return
+        }
+
+        if (event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          if (root.focusSection === "profiles") {
+            root.cycleProfileSelection(1)
+          } else if (root.focusSection === "options") {
+            root.optionIndex = 1
+          } else if (root.focusSection === "reminders") {
+            root.cycleReminderPreset(1)
+          } else if (root.focusSection === "actions") {
+            root.actionIndex = 1
+          }
+          return
+        }
+
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          if (root.focusSection === "options") {
+            if (root.optionIndex === 0) {
+              root.showNote = !root.showNote
+              if (root.showNote) {
+                root.focusSection = "notes"
+                Qt.callLater(function() { if (descNotesArea) descNotesArea.forceActiveFocus() })
+              }
+            } else {
+              root.showReminderOptions = !root.showReminderOptions
+              if (root.showReminderOptions) {
+                root.focusSection = "reminders"
+                root.reminderPresetIndex = 0
+              }
+            }
+          } else if (root.focusSection === "reminders") {
+            if (root.reminderPresetIndex < root.reminderPresets.length) {
+              root.selectedReminder = root.reminderPresets[root.reminderPresetIndex].value
+            } else {
+              root.selectedReminder = ""
+            }
+            root.showReminderOptions = false
+            root.focusSection = "options"
+          } else if (root.focusSection === "actions") {
+            if (root.actionIndex === 0) root.dismiss()
+            else root.submit()
+          } else {
+            root.submit()
+          }
+          return
+        }
+
+        // Typing any letter automatically directs to task title!
+        if (event.text && event.text.length === 1 && !event.modifiers) {
+          event.accepted = true
+          root.focusSection = "title"
+          taskInput.forceActiveFocus()
+          taskInput.text += event.text
+          taskInput.cursorPosition = taskInput.text.length
+        }
+      }
 
       MouseArea {
         anchors.fill: parent
@@ -251,6 +411,22 @@ Item {
           font.pixelSize: Style.font.body
           onAccepted: root.submit()
           Keys.onEscapePressed: root.dismiss()
+          Keys.onTabPressed: function(event) {
+            event.accepted = true
+            root.advanceSection(1)
+          }
+          Keys.onBacktabPressed: function(event) {
+            event.accepted = true
+            root.advanceSection(-1)
+          }
+          Keys.onDownPressed: function(event) {
+            event.accepted = true
+            root.advanceSection(1)
+          }
+          Keys.onUpPressed: function(event) {
+            event.accepted = true
+            root.advanceSection(-1)
+          }
           Keys.onPressed: function(event) {
             if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
               if (root.hasDraft) {
@@ -344,12 +520,13 @@ Item {
             Rectangle {
               id: profilePill
               required property string modelData
+              readonly property bool isKeyboardFocused: (root.focusSection === "profiles") && (root.selectedProfile === modelData)
               implicitWidth: pillRow.implicitWidth + Style.space(12)
               implicitHeight: Style.space(24)
               radius: implicitHeight / 2
               color: root.selectedProfile === modelData ? Color.accent : Color.menu.selectedBackground
-              border.color: root.selectedProfile === modelData ? Color.accent : Color.menu.border
-              border.width: 1
+              border.color: isKeyboardFocused ? Color.foreground : (root.selectedProfile === modelData ? Color.accent : Color.menu.border)
+              border.width: isKeyboardFocused ? 2 : 1
 
               Row {
                 id: pillRow
@@ -403,27 +580,36 @@ Item {
           spacing: Style.space(8)
 
           Button {
+            id: noteBtn
             iconText: "󰏫"
             text: root.showNote ? "Hide Note" : "Add Note"
             selected: root.showNote
             fontSize: Style.font.caption
             fontFamily: Style.font.family
+            hasCursor: (root.focusSection === "options") && (root.optionIndex === 0)
             onClicked: {
               root.showNote = !root.showNote
               if (root.showNote) {
+                root.focusSection = "notes"
                 Qt.callLater(function() { descNotesArea.forceActiveFocus() })
               }
             }
           }
 
           Button {
+            id: reminderBtn
             iconText: "󰥔"
             text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
             selected: Boolean(root.selectedReminder)
             fontSize: Style.font.caption
             fontFamily: Style.font.family
+            hasCursor: (root.focusSection === "options") && (root.optionIndex === 1)
             onClicked: {
               root.showReminderOptions = !root.showReminderOptions
+              if (root.showReminderOptions) {
+                root.focusSection = "reminders"
+                root.reminderPresetIndex = 0
+              }
             }
           }
         }
@@ -439,7 +625,13 @@ Item {
             width: parent.width
             placeholderText: "Add note / description (Shift+Enter for newline)..."
             onSubmitted: root.submit()
-            onEscapePressed: root.dismiss()
+            onEscapePressed: {
+              root.focusSection = "title"
+              taskInput.forceActiveFocus()
+            }
+            onTabPressed: function(direction) {
+              root.advanceSection(direction)
+            }
             onTextChanged: {
               if (root.opened) {
                 root.draftDescription = text
@@ -479,13 +671,16 @@ Item {
               Button {
                 id: presetBtn
                 required property var modelData
+                required property int index
                 text: modelData.label
                 fontSize: Style.font.caption
                 fontFamily: Style.font.family
                 selected: root.selectedReminder === modelData.value
+                hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === index)
                 onClicked: {
                   root.selectedReminder = modelData.value
                   root.showReminderOptions = false
+                  root.focusSection = "options"
                 }
               }
             }
@@ -496,9 +691,11 @@ Item {
               text: "Clear"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
+              hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === root.reminderPresets.length)
               onClicked: {
                 root.selectedReminder = ""
                 root.showReminderOptions = false
+                root.focusSection = "options"
               }
             }
           }
@@ -515,7 +712,7 @@ Item {
             id: hintText
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: root.hasDraft ? "󰌑 Enter  •  Esc Dismiss  •  Ctrl+⌫ Discard" : "󰌑 Enter  •  Esc Cancel"
+            text: root.hasDraft ? "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard" : "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
             color: Color.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -528,19 +725,23 @@ Item {
             spacing: Style.space(8)
 
             Button {
+              id: cancelBtn
               iconText: "󰅖"
               text: "Cancel"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
+              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 0)
               onClicked: root.dismiss()
             }
 
             Button {
+              id: addBtn
               iconText: "󰐕"
               text: "Add"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
               selected: true
+              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
               onClicked: root.submit()
             }
           }

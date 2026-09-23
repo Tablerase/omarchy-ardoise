@@ -110,9 +110,24 @@ Item {
   function handleMove(dx, dy) {
     root.cursorActive = true
     if (root.focusSection === "tasks") {
-      if (dy !== 0 && root.filteredTodos.length > 0) {
-        root.cursorIndex = Math.max(0, Math.min(root.filteredTodos.length - 1, root.cursorIndex + dy))
-        root.ensureTaskVisible(root.cursorIndex, false)
+      if (dy < 0) {
+        if (root.cursorIndex > 0) {
+          root.cursorIndex--
+          root.ensureTaskVisible(root.cursorIndex, false)
+        } else {
+          // At top of task list: move UP into task input field!
+          root.focusSection = "input"
+          Qt.callLater(function() { newTodoField.forceActiveFocus() })
+        }
+      } else if (dy > 0) {
+        if (root.filteredTodos.length > 0 && root.cursorIndex < root.filteredTodos.length - 1) {
+          root.cursorIndex++
+          root.ensureTaskVisible(root.cursorIndex, false)
+        } else {
+          // At bottom of task list or empty: move DOWN into footer buttons!
+          root.focusSection = "footer"
+          root.footerButtonIndex = 0
+        }
       } else if (dx !== 0) {
         cycleProfileFilter(dx)
       }
@@ -120,15 +135,23 @@ Item {
       if (dx !== 0) {
         cycleProfileFilter(dx)
       } else if (dy > 0) {
-        root.focusSection = "tasks"
-        root.ensureTaskVisible(root.cursorIndex, false)
+        // From profiles moving DOWN: move into task input field!
+        root.focusSection = "input"
+        Qt.callLater(function() { newTodoField.forceActiveFocus() })
       }
     } else if (root.focusSection === "footer") {
       if (dx !== 0) {
         root.footerButtonIndex = Math.max(0, Math.min(3, root.footerButtonIndex + dx))
       } else if (dy < 0) {
-        root.focusSection = "tasks"
-        root.ensureTaskVisible(root.cursorIndex, false)
+        // From footer moving UP: return to bottom of task list if tasks exist, else input!
+        if (root.filteredTodos.length > 0) {
+          root.focusSection = "tasks"
+          root.cursorIndex = root.filteredTodos.length - 1
+          root.ensureTaskVisible(root.cursorIndex, false)
+        } else {
+          root.focusSection = "input"
+          Qt.callLater(function() { newTodoField.forceActiveFocus() })
+        }
       }
     }
   }
@@ -836,26 +859,36 @@ Item {
         }
 
         Keys.onDownPressed: function(event) {
-          if (text.length === 0) {
-            event.accepted = true
+          event.accepted = true
+          if (root.filteredTodos.length > 0) {
             root.focusSection = "tasks"
-            root.cursorActive = true
-            root.releaseFocus()
+            root.cursorIndex = 0
+            root.ensureTaskVisible(0, false)
+          } else {
+            root.focusSection = "footer"
+            root.footerButtonIndex = 0
           }
+          root.cursorActive = true
+          root.releaseFocus()
         }
 
         Keys.onUpPressed: function(event) {
-          if (text.length === 0) {
-            event.accepted = true
-            root.focusSection = "profiles"
-            root.cursorActive = true
-            root.releaseFocus()
-          }
+          event.accepted = true
+          root.focusSection = "profiles"
+          root.cursorActive = true
+          root.releaseFocus()
         }
 
         Keys.onTabPressed: function(event) {
           event.accepted = true
-          root.focusSection = "tasks"
+          if (root.filteredTodos.length > 0) {
+            root.focusSection = "tasks"
+            root.cursorIndex = 0
+            root.ensureTaskVisible(0, false)
+          } else {
+            root.focusSection = "footer"
+            root.footerButtonIndex = 0
+          }
           root.cursorActive = true
           root.releaseFocus()
         }
@@ -1299,6 +1332,11 @@ Item {
                     root.cursorActive = true
                     root.releaseFocus()
                   }
+                  onTabPressed: function(direction) {
+                    root.savePendingNotes()
+                    root.releaseFocus()
+                    root.handleTab(direction)
+                  }
                   Component.onDestruction: {
                     if (root.descArea === descArea) {
                       root.descArea = null
@@ -1572,6 +1610,15 @@ Item {
             root.showKeyHelp = false
             root.releaseFocus()
           }
+          Keys.onEscapePressed: {
+            root.showKeyHelp = false
+            root.releaseFocus()
+          }
+          Keys.onTabPressed: keySearchField.forceActiveFocus()
+          Keys.onBacktabPressed: {
+            helpFlickable.focus = true
+            helpFlickable.forceActiveFocus()
+          }
         }
       }
 
@@ -1588,6 +1635,20 @@ Item {
           root.showKeyHelp = false
           root.releaseFocus()
         }
+        Keys.onDownPressed: function(event) {
+          event.accepted = true
+          helpFlickable.focus = true
+          helpFlickable.forceActiveFocus()
+        }
+        Keys.onTabPressed: function(event) {
+          event.accepted = true
+          helpFlickable.focus = true
+          helpFlickable.forceActiveFocus()
+        }
+        Keys.onBacktabPressed: function(event) {
+          event.accepted = true
+          closeHelpBtn.forceActiveFocus()
+        }
       }
 
       PanelSeparator { width: parent.width }
@@ -1601,6 +1662,68 @@ Item {
         contentHeight: helpListCol.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        focus: true
+
+        property int selectedIndex: 0
+
+        function ensureItemVisible() {
+          var itemY = selectedIndex * Style.space(31)
+          if (itemY < contentY) {
+            contentY = itemY
+          } else if (itemY + Style.space(31) > contentY + height) {
+            contentY = Math.max(0, itemY + Style.space(31) - height)
+          }
+        }
+
+        Keys.onUpPressed: function(event) {
+          event.accepted = true
+          if (selectedIndex > 0) {
+            selectedIndex--
+            ensureItemVisible()
+          } else {
+            keySearchField.forceActiveFocus()
+          }
+        }
+
+        Keys.onDownPressed: function(event) {
+          event.accepted = true
+          if (selectedIndex < root.filteredKeybindings.length - 1) {
+            selectedIndex++
+            ensureItemVisible()
+          }
+        }
+
+        Keys.onPressed: function(event) {
+          if (event.text === "j") {
+            event.accepted = true
+            if (selectedIndex < root.filteredKeybindings.length - 1) {
+              selectedIndex++
+              ensureItemVisible()
+            }
+          } else if (event.text === "k") {
+            event.accepted = true
+            if (selectedIndex > 0) {
+              selectedIndex--
+              ensureItemVisible()
+            } else {
+              keySearchField.forceActiveFocus()
+            }
+          } else if (event.key === Qt.Key_Escape || event.text === "?") {
+            event.accepted = true
+            root.showKeyHelp = false
+            root.releaseFocus()
+          } else if (event.key === Qt.Key_Backtab) {
+            event.accepted = true
+            keySearchField.forceActiveFocus()
+          } else if (event.key === Qt.Key_Tab) {
+            event.accepted = true
+            closeHelpBtn.forceActiveFocus()
+          } else if (event.text && event.text.length === 1 && event.text !== "j" && event.text !== "k") {
+            keySearchField.forceActiveFocus()
+            keySearchField.text += event.text
+            event.accepted = true
+          }
+        }
 
         ScrollBar.vertical: ScrollBar {
           policy: helpListCol.implicitHeight > helpFlickable.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
@@ -1617,12 +1740,14 @@ Item {
             Rectangle {
               id: keyHelpRow
               required property var modelData
+              required property int index
+              readonly property bool isSelected: helpFlickable.activeFocus && (helpFlickable.selectedIndex === index)
               width: parent.width
               implicitHeight: Style.space(26)
               radius: Style.cornerRadius
-              color: Color.menu.selectedBackground
-              border.color: Color.menu.border
-              border.width: 1
+              color: isSelected ? Util.alpha(Color.accent, 0.14) : Color.menu.selectedBackground
+              border.color: isSelected ? Color.accent : Color.menu.border
+              border.width: isSelected ? 1.5 : 1
 
               Row {
                 anchors.left: parent.left

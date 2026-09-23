@@ -235,6 +235,47 @@ ShellRoot {
             // Test releaseFocus method
             panelContent.releaseFocus();
 
+            // Test moving UP at task 0 transitions focus into input field
+            panelContent.focusSection = "tasks";
+            panelContent.cursorIndex = 0;
+            panelContent.handleMove(0, -1);
+            if (panelContent.focusSection !== "input") {
+                console.error("[TEST FAIL] handleMove(0, -1) at task 0 failed to transition to input");
+                Qt.exit(112);
+                return;
+            }
+
+            // Test moving DOWN from profiles transitions focus into input field
+            panelContent.focusSection = "profiles";
+            panelContent.handleMove(0, 1);
+            if (panelContent.focusSection !== "input") {
+                console.error("[TEST FAIL] handleMove(0, 1) from profiles failed to transition to input");
+                Qt.exit(113);
+                return;
+            }
+
+            // Test QuickAdd advanceSection and cycleProfileSelection
+            quickAdd.open("{}");
+            if (quickAdd.focusSection !== "title") {
+                console.error("[TEST FAIL] quickAdd.open() did not reset focusSection to title");
+                Qt.exit(114);
+                return;
+            }
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "profiles") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to profiles");
+                Qt.exit(115);
+                return;
+            }
+            quickAdd.cycleProfileSelection(1);
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "options") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to options");
+                Qt.exit(116);
+                return;
+            }
+            quickAdd.dismiss();
+
             console.log("[TEST] All components loaded, opened, and toggled successfully!");
             Qt.exit(0);
         }
