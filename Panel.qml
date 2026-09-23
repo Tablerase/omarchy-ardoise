@@ -106,7 +106,26 @@ Panel {
       anchors.fill: parent
       blocked: panelContent.activeFocusBlocked
       onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onTabRequested: function(direction) {
+        if (!panelContent.handleTab(direction)) {
+          root.switchPanel(direction)
+        }
+      }
+      onMoveRequested: function(dx, dy) {
+        panelContent.handleMove(dx, dy)
+      }
+      onActivateRequested: {
+        panelContent.handleActivate()
+      }
+      onReturnRequested: {
+        panelContent.handleReturn()
+      }
+      onDeleteRequested: {
+        panelContent.handleDelete()
+      }
+      onTextKey: function(t) {
+        panelContent.handleTextKey(t)
+      }
 
       PanelContent {
         id: panelContent

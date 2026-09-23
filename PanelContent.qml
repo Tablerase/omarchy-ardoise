@@ -28,11 +28,186 @@ Item {
   property string moduleName: "tablerase.ardoise"
   property var descArea: null
 
+  property string focusSection: "tasks"
+  property int cursorIndex: 0
+  property bool cursorActive: false
+  property int footerButtonIndex: 0
+
   onVisibleChanged: {
     if (!visible) {
       savePendingNotes()
       expandedTaskId = -1
+      cursorActive = false
+      focusSection = "tasks"
     }
+  }
+
+  onExpandedTaskIdChanged: {
+    if (expandedTaskId !== -1) {
+      Qt.callLater(function() {
+        for (var i = 0; i < root.filteredTodos.length; i++) {
+          if (root.filteredTodos[i].id === root.expandedTaskId) {
+            root.ensureTaskVisible(i, true)
+            break
+          }
+        }
+      })
+    }
+  }
+
+  onFilteredTodosChanged: {
+    if (cursorIndex >= filteredTodos.length) {
+      cursorIndex = Math.max(0, filteredTodos.length - 1)
+    }
+  }
+
+  function ensureTaskVisible(taskIndex, center) {
+    if (!todoListFlickable || !todoListRepeater || taskIndex < 0 || taskIndex >= todoListRepeater.count) return
+    var item = todoListRepeater.itemAt(taskIndex)
+    if (!item) return
+    var itemTop = item.y
+    var itemBottom = item.y + item.height
+    var viewTop = todoListFlickable.contentY
+    var viewBottom = todoListFlickable.contentY + todoListFlickable.height
+    var maxContentY = Math.max(0, todoListFlickable.contentHeight - todoListFlickable.height)
+
+    if (center) {
+      var targetY = itemTop - (todoListFlickable.height - item.height) / 2
+      todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, targetY))
+    } else {
+      if (itemTop < viewTop) {
+        todoListFlickable.contentY = Math.max(0, itemTop - Style.space(6))
+      } else if (itemBottom > viewBottom) {
+        todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, itemBottom - todoListFlickable.height + Style.space(6)))
+      }
+    }
+  }
+
+  function cycleProfileFilter(step) {
+    var list = ["all"].concat(root.visibleProfiles)
+    var currentIdx = list.indexOf(root.currentFilter)
+    if (currentIdx === -1) currentIdx = 0
+    var nextIdx = (currentIdx + step + list.length) % list.length
+    root.currentFilter = list[nextIdx]
+    root.cursorIndex = 0
+    Qt.callLater(function() { root.ensureProfileVisible(root.currentFilter) })
+  }
+
+  function handleMove(dx, dy) {
+    root.cursorActive = true
+    if (root.focusSection === "tasks") {
+      if (dy !== 0 && root.filteredTodos.length > 0) {
+        root.cursorIndex = Math.max(0, Math.min(root.filteredTodos.length - 1, root.cursorIndex + dy))
+        root.ensureTaskVisible(root.cursorIndex, false)
+      } else if (dx !== 0) {
+        cycleProfileFilter(dx)
+      }
+    } else if (root.focusSection === "profiles") {
+      if (dx !== 0) {
+        cycleProfileFilter(dx)
+      } else if (dy > 0) {
+        root.focusSection = "tasks"
+        root.ensureTaskVisible(root.cursorIndex, false)
+      }
+    } else if (root.focusSection === "footer") {
+      if (dx !== 0) {
+        root.footerButtonIndex = Math.max(0, Math.min(3, root.footerButtonIndex + dx))
+      } else if (dy < 0) {
+        root.focusSection = "tasks"
+        root.ensureTaskVisible(root.cursorIndex, false)
+      }
+    }
+  }
+
+  function handleActivate() {
+    root.cursorActive = true
+    if (root.focusSection === "tasks") {
+      if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var task = root.filteredTodos[root.cursorIndex]
+        if (task) root.toggleTodo(task.id)
+      }
+    } else if (root.focusSection === "footer") {
+      triggerFooterButton(root.footerButtonIndex)
+    }
+  }
+
+  function handleReturn() {
+    root.cursorActive = true
+    if (root.focusSection === "tasks") {
+      if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var task = root.filteredTodos[root.cursorIndex]
+        if (task) {
+          root.savePendingNotes()
+          root.expandedTaskId = (root.expandedTaskId === task.id) ? -1 : task.id
+        }
+      }
+    } else if (root.focusSection === "footer") {
+      triggerFooterButton(root.footerButtonIndex)
+    }
+  }
+
+  function handleDelete() {
+    if (root.focusSection === "tasks") {
+      if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var task = root.filteredTodos[root.cursorIndex]
+        if (task) {
+          root.removeTodo(task.id)
+          if (root.cursorIndex >= root.filteredTodos.length) {
+            root.cursorIndex = Math.max(0, root.filteredTodos.length - 1)
+          }
+        }
+      }
+    }
+  }
+
+  function handleTextKey(text) {
+    if (text === "i" || text === "a" || text === "/") {
+      root.focusSection = "input"
+      Qt.callLater(function() { newTodoField.forceActiveFocus() })
+    } else if (text === "e" && root.focusSection === "tasks") {
+      if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var task = root.filteredTodos[root.cursorIndex]
+        if (task) {
+          root.expandedTaskId = task.id
+          Qt.callLater(function() {
+            if (root.descArea && typeof root.descArea.focusEditor === "function") {
+              root.descArea.focusEditor()
+            }
+          })
+        }
+      }
+    } else if (text === "g" && root.focusSection === "tasks") {
+      root.cursorIndex = 0
+      root.ensureTaskVisible(0, false)
+    } else if (text === "G" && root.focusSection === "tasks") {
+      root.cursorIndex = Math.max(0, root.filteredTodos.length - 1)
+      root.ensureTaskVisible(root.cursorIndex, false)
+    }
+  }
+
+  function handleTab(direction) {
+    root.cursorActive = true
+    var sections = ["profiles", "input", "tasks", "footer"]
+    var currentIdx = sections.indexOf(root.focusSection)
+    if (currentIdx === -1) currentIdx = 2
+    var nextIdx = currentIdx + direction
+    if (nextIdx < 0 || nextIdx >= sections.length) {
+      return false
+    }
+    root.focusSection = sections[nextIdx]
+    if (root.focusSection === "input") {
+      Qt.callLater(function() { newTodoField.forceActiveFocus() })
+    } else {
+      newTodoField.focus = false
+    }
+    return true
+  }
+
+  function triggerFooterButton(idx) {
+    if (idx === 0) root.clearCompleted(root.currentFilter)
+    else if (idx === 1) root.openArchive()
+    else if (idx === 2) root.openEditor()
+    else if (idx === 3) root.openQuickAdd()
   }
 
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
@@ -545,6 +720,20 @@ Item {
             text = ""
           }
         }
+
+        Keys.onEscapePressed: {
+          newTodoField.focus = false
+          root.focusSection = "tasks"
+          root.cursorActive = true
+        }
+
+        Keys.onDownPressed: {
+          if (text.length === 0) {
+            newTodoField.focus = false
+            root.focusSection = "tasks"
+            root.cursorActive = true
+          }
+        }
       }
 
       PanelActionButton {
@@ -593,6 +782,10 @@ Item {
       clip: true
       boundsBehavior: Flickable.StopAtBounds
 
+      Behavior on contentY {
+        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+      }
+
       HoverHandler {
         id: listHoverHandler
         onHoveredChanged: {
@@ -625,6 +818,7 @@ Item {
         spacing: Style.space(4)
 
         Repeater {
+          id: todoListRepeater
           model: root.filteredTodos
 
           Rectangle {
@@ -632,6 +826,7 @@ Item {
             required property var modelData
             required property int index
 
+            readonly property bool isCursorSelected: root.cursorActive && (root.focusSection === "tasks") && (index === root.cursorIndex)
             readonly property bool isExpanded: root.expandedTaskId === modelData.id
             readonly property bool isDone: Boolean(modelData.done)
             readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(modelData)
@@ -640,13 +835,17 @@ Item {
             width: parent.width
             implicitHeight: isExpanded ? expandedContent.implicitHeight + Style.space(14) : Style.space(40)
             radius: Style.cornerRadius
-            color: isExpanded
-              ? Color.menu.selectedBackground
-              : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent")
-            border.color: isExpanded
-              ? Color.menu.border
-              : (isOverdueTask ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.35) : (isDueTodayTask ? Util.alpha(Color.accent, 0.35) : "transparent"))
-            border.width: isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0
+            color: isCursorSelected
+              ? Util.alpha(Color.accent, 0.12)
+              : (isExpanded
+                ? Color.menu.selectedBackground
+                : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent"))
+            border.color: isCursorSelected
+              ? Color.accent
+              : (isExpanded
+                ? Color.menu.border
+                : (isOverdueTask ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.35) : (isDueTodayTask ? Util.alpha(Color.accent, 0.35) : "transparent")))
+            border.width: isCursorSelected ? 1.5 : (isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0)
 
             Behavior on implicitHeight {
               NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
@@ -664,17 +863,17 @@ Item {
                 GradientStop {
                   position: 0.0
                   color: itemRow.isOverdueTask
-                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.15)
-                    : Util.alpha(Color.accent, 0.12)
+                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.08)
+                    : Util.alpha(Color.accent, 0.06)
                 }
                 GradientStop {
-                  position: 0.4
+                  position: 0.35
                   color: itemRow.isOverdueTask
-                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.03)
-                    : Util.alpha(Color.accent, 0.02)
+                    ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.015)
+                    : Util.alpha(Color.accent, 0.01)
                 }
                 GradientStop {
-                  position: 1.0
+                  position: 0.7
                   color: "transparent"
                 }
               }
@@ -716,7 +915,7 @@ Item {
 
             Timer {
               id: hoverExpandTimer
-              interval: 800
+              interval: 1500
               repeat: false
               onTriggered: {
                 if (rowHoverHandler.hovered && !itemRow.isExpanded) {
@@ -752,6 +951,9 @@ Item {
               onClicked: {
                 hoverExpandTimer.stop()
                 hoverFoldTimer.stop()
+                root.cursorIndex = itemRow.index
+                root.focusSection = "tasks"
+                root.cursorActive = true
                 root.toggleTodo(itemRow.modelData.id)
               }
             }
@@ -1144,6 +1346,7 @@ Item {
           text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
           tooltipText: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
           onClicked: root.clearCompleted(root.currentFilter)
         }
@@ -1153,6 +1356,7 @@ Item {
           text: footerContainer.wrapNeeded ? "" : "Archive"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 1)
           tooltipText: "Open todos-archive.json in editor"
           onClicked: root.openArchive()
         }
@@ -1162,6 +1366,7 @@ Item {
           text: footerContainer.wrapNeeded ? "" : "Edit"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 2)
           tooltipText: "Open todos.json in editor"
           onClicked: root.openEditor()
         }
@@ -1175,6 +1380,7 @@ Item {
         text: footerContainer.wrapNeeded ? "" : "Quick Add"
         fontSize: Style.font.caption
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 3)
         tooltipText: "Open Quick Add modal (" + root.detectedShortcut + ")"
         onClicked: root.openQuickAdd()
       }

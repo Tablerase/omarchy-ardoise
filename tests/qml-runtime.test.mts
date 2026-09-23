@@ -183,6 +183,29 @@ ShellRoot {
                 return;
             }
 
+            console.log("[TEST] Testing PanelContent Vim motions & navigation...");
+            panelContent.focusSection = "tasks";
+            panelContent.handleMove(0, 1);
+            if (panelContent.cursorIndex < 0) {
+                console.error("[TEST FAIL] handleMove failed to update cursorIndex");
+                Qt.exit(106);
+                return;
+            }
+            panelContent.handleReturn();
+            panelContent.handleActivate();
+            panelContent.handleTab(1);
+            if (panelContent.focusSection !== "footer") {
+                console.error("[TEST FAIL] handleTab failed to switch section to footer");
+                Qt.exit(107);
+                return;
+            }
+            panelContent.handleTab(-1);
+            if (panelContent.focusSection !== "tasks") {
+                console.error("[TEST FAIL] handleTab failed to switch section back to tasks");
+                Qt.exit(108);
+                return;
+            }
+
             console.log("[TEST] All components loaded, opened, and toggled successfully!");
             Qt.exit(0);
         }
