@@ -150,6 +150,33 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("id: openLocBtn") && panelContent.includes("Codebase"),
     "PanelContent must display openLocBtn to launch editor directly in target codebase"
   );
+
+  // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
+  const detectScript = path.join(repoDir, "tools", "detect-context.sh");
+  assert.ok(fs.existsSync(detectScript), "tools/detect-context.sh must exist");
+  const detectScriptSource = fs.readFileSync(detectScript, "utf8");
+  assert.ok(
+    detectScriptSource.includes("get_vscode_dir") && detectScriptSource.includes("storage.json"),
+    "detect-context.sh must inspect VS Code/Cursor/VSCodium storage.json"
+  );
+  assert.ok(
+    detectScriptSource.includes("Priority 0: Default Editor in Omarchy") &&
+      detectScriptSource.indexOf("Priority 0: Default Editor") < detectScriptSource.indexOf("Priority 1: VS Code"),
+    "Omarchy default editor (Priority 0) must precede Priority 1 (VS Code)"
+  );
+  try {
+    const detectOutput = execSync(`"${detectScript}"`, { encoding: "utf8" }).trim();
+    assert.doesNotThrow(() => {
+      const parsed = JSON.parse(detectOutput);
+      assert.ok(parsed === null || typeof parsed === "object", "Output must be null or JSON object");
+    }, "detect-context.sh output must be valid JSON");
+  } catch (e: any) {
+    if (e?.name === "NotCapable" || String(e).includes("Requires env access")) {
+      // Deno test without --allow-env
+    } else {
+      throw e;
+    }
+  }
 });
 
 test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {

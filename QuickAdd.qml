@@ -227,7 +227,9 @@ Item {
     command: [
       "bash",
       "-c",
-      "win_pid=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid // empty'); [ -z \"$win_pid\" ] && { echo 'null'; exit 0; }; target_pid=\"$win_pid\"; children=$(pgrep -P \"$win_pid\" 2>/dev/null); while [ -n \"$children\" ]; do for c in $children; do if [ -d \"/proc/$c\" ]; then target_pid=\"$c\"; fi; done; children=$(pgrep -P \"$target_pid\" 2>/dev/null); done; dir=$(readlink \"/proc/$target_pid/cwd\" 2>/dev/null); if [ -z \"$dir\" ] || [ ! -d \"$dir\" ] || [ \"$dir\" = \"$HOME\" ]; then echo 'null'; exit 0; fi; repo_root=\"\"; remote=\"\"; subpath=\"\"; repo_name=\"\"; if cd \"$dir\" 2>/dev/null; then repo_root=$(git rev-parse --show-toplevel 2>/dev/null); if [ -n \"$repo_root\" ]; then remote=$(git config --get remote.origin.url 2>/dev/null | sed -E 's/^(https?:\\/\\/|git@)(github\\.com[:\\/])?//' | sed -E 's/\\.git$//'); repo_name=$(basename \"$repo_root\"); if [ \"$dir\" != \"$repo_root\" ]; then subpath=\"${dir#$repo_root/}\"; fi; fi; fi; rel_dir=\"$dir\"; if [[ \"$dir\" == \"$HOME\"* ]]; then rel_dir=\"~${dir#$HOME}\"; fi; jq -n --arg lp \"$rel_dir\" --arg repo \"$remote\" --arg subpath \"$subpath\" --arg repoName \"$repo_name\" '{localPath: $lp, repo: (if $repo == \"\" then null else $repo end), subpath: (if $subpath == \"\" then null else $subpath end), repoName: (if $repoName == \"\" then null else $repoName end)}'"
+      "SCRIPT=\"$1\"; if [ -x \"$SCRIPT\" ]; then exec \"$SCRIPT\"; elif [ -x \"$HOME/.local/share/omarchy/plugins/tablerase.ardoise/tools/detect-context.sh\" ]; then exec \"$HOME/.local/share/omarchy/plugins/tablerase.ardoise/tools/detect-context.sh\"; elif [ -x \"./tools/detect-context.sh\" ]; then exec \"./tools/detect-context.sh\"; else echo 'null'; fi",
+      "--",
+      Qt.resolvedUrl("tools/detect-context.sh").toString().replace(/^file:\/\//, "")
     ]
     stdout: StdioCollector {
       waitForEnd: true
@@ -237,6 +239,25 @@ Item {
           if (res && (res.repo || res.localPath)) {
             root.detectedContext = res
             root.attachLocation = true
+            // If the user hasn't explicitly customized profile in draft, auto-match known profile
+            if (!root.hasDraft && root.store && Array.isArray(root.store.profiles)) {
+              var candidates = []
+              if (res.repo) {
+                var parts = res.repo.split("/")
+                candidates.push(TodoStore.cleanProfileName(parts[parts.length - 1]))
+                candidates.push(TodoStore.cleanProfileName(parts[0]))
+              }
+              if (res.repoName) {
+                candidates.push(TodoStore.cleanProfileName(res.repoName))
+              }
+              for (var i = 0; i < candidates.length; i++) {
+                var c = candidates[i]
+                if (c && root.store.profiles.indexOf(c) !== -1) {
+                  root.selectedProfile = c
+                  break
+                }
+              }
+            }
           } else {
             root.detectedContext = null
             root.attachLocation = false
