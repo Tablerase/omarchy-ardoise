@@ -327,8 +327,11 @@ omarchy-restart-shell
 ├── tools/                # Development & asset generation tools
 │   ├── preview.qml       # Offscreen QML render definition
 │   └── render-preview.sh # Automated Quickshell headless capture script
-├── tests/                # Unit test suite
-│   └── TodoStore.test.mts # 16 automated tests covering CRUD, profiles, reminders, and archives
+├── tests/                # Unit & runtime test suite
+│   ├── TodoStore.test.mts # Data store, schema normalization, and profile sorting tests
+│   └── qml-runtime.test.mts # Headless Quickshell lifecycle, motion regressions, & shell IPC tests
+├── DESIGN.md             # UI & interaction design specification (layout hierarchy, motions, tokens)
+├── AGENTS.md             # AI model & developer guidelines and maintenance contract
 └── README.md             # Documentation and API reference
 ```
 
