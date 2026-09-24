@@ -272,9 +272,15 @@ function handleMove(root, dx, dy, TodoStore) {
       }
     } else if (dy > 0) {
       if (root.filteredTodos.length > 0 && root.cursorIndex < root.filteredTodos.length - 1) {
-        root.cursorIndex++;
-        root.expandedSubSection = "header";
-        if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+        var nextIdx = root.cursorIndex + 1;
+        if (root.completedFoldOpen === false && root.filteredTodos[nextIdx].done && (!root.pendingCompletionIds || root.pendingCompletionIds.indexOf(root.filteredTodos[nextIdx].id) === -1)) {
+          root.focusSection = "footer";
+          root.footerButtonIndex = 0;
+        } else {
+          root.cursorIndex++;
+          root.expandedSubSection = "header";
+          if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+        }
       } else {
         root.focusSection = "footer";
         root.footerButtonIndex = 0;
@@ -309,9 +315,20 @@ function handleMove(root, dx, dy, TodoStore) {
     } else if (dy < 0) {
       if (root.filteredTodos.length > 0) {
         root.focusSection = "tasks";
-        root.cursorIndex = root.filteredTodos.length - 1;
-        root.expandedSubSection = "header";
-        if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+        var targetIdx = root.filteredTodos.length - 1;
+        if (root.completedFoldOpen === false) {
+          while (targetIdx >= 0 && root.filteredTodos[targetIdx].done && (!root.pendingCompletionIds || root.pendingCompletionIds.indexOf(root.filteredTodos[targetIdx].id) === -1)) {
+            targetIdx--;
+          }
+        }
+        if (targetIdx >= 0) {
+          root.cursorIndex = targetIdx;
+          root.expandedSubSection = "header";
+          if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+        } else {
+          root.focusSection = "input";
+          if (typeof root.releaseFocus === "function") root.releaseFocus();
+        }
       } else {
         root.focusSection = "input";
         if (typeof root.releaseFocus === "function") root.releaseFocus();
@@ -445,8 +462,16 @@ function handleTextKey(root, text, TodoStore) {
     if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(0, false);
   } else if (text === "G" && root.focusSection === "tasks") {
     if (root.filteredTodos && root.filteredTodos.length > 0) {
-      root.cursorIndex = root.filteredTodos.length - 1;
-      if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+      var lastIdx = root.filteredTodos.length - 1;
+      if (root.completedFoldOpen === false) {
+        while (lastIdx >= 0 && root.filteredTodos[lastIdx].done && (!root.pendingCompletionIds || root.pendingCompletionIds.indexOf(root.filteredTodos[lastIdx].id) === -1)) {
+          lastIdx--;
+        }
+      }
+      if (lastIdx >= 0) {
+        root.cursorIndex = lastIdx;
+        if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
+      }
     }
   }
 }

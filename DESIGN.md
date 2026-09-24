@@ -162,11 +162,26 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - **Repo Name Display Formatting**:
        - In item badges, repository strings strip any owner/organization prefix (e.g. `Tablerase/omarchy-ardoise` displays cleanly as `omarchy-ardoise`) to save space and reduce cognitive clutter, while strictly preserving the full remote repository and local path in data and hover tooltips.
        - Target codebase context chip remains strictly located within the expanded drawer to avoid crowding the collapsed task list.
-   - **Item Ordering Algorithm (`TodoStore.getFilteredTodos`)**:
-     Tasks are strictly partitioned and sorted across 3 priority tiers:
-     1. **Due / Reminder Tasks (Top Tier)**: Incomplete tasks with scheduled reminders or due dates, sorted chronologically ascending (earliest due and most overdue appear at the very top).
-     2. **Active Incomplete Tasks (Middle Tier)**: Incomplete tasks without reminders, sorted by recency descending (newest tasks appear first).
-     3. **Completed Tasks (Bottom Tier)**: Completed tasks sink to the bottom, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
+   - **Item Ordering Algorithm & Satisfying Task Completion Flow**:
+     - **Micro-Animation & Dwell Time (Satisfying Completion)**:
+       - Toggling an active task via <kbd>Space</kbd> or click triggers an immediate, rewarding micro-interaction:
+         - Checkbox (`Ui.TaskCheck`): Plays a bouncy pop scale animation (`1.0 -> 1.25 -> 1.0` with `Easing.OutBack`), checkmark spring scales in from `0.2` to `1.0`, and background/border smoothly transition to accent colors.
+         - Animated Strikethrough (`strikeLine`): Rather than abruptly flashing on, a custom strikethrough line sweeps smoothly from **left to right** across the task title text (`0 -> Math.min(contentWidth, width)` in 260ms with `Easing.OutCubic`). Undoing within the grace period smoothly retracts the line from right to left.
+         - Task Title & Background: Title dims to `0.55` opacity with an animated transition, and row background gains a subtle accent completion tint (`alpha(Color.accent, 0.08)`).
+         - **Grace Period & Downward Slide Transition**:
+           - 0ms–350ms: The item stays stationary in its active list position (`pendingCompletionIds`), giving immediate confirmation without disorienting movement.
+           - 350ms–600ms: The task begins smoothly **sliding down** (`y` translates +24px) while gently fading, and its container height collapses to 0 over 250ms, allowing active tasks below to glide smoothly upward into its place.
+           - 600ms: `flushPendingCompletions()` commits `done: true` to the store. The task arrives in the dedicated completed fold, sliding in from above (`-16px -> 0px` with `Easing.OutBack`) with a subtle settling bounce.
+       - **Instant In-Place Undo**: Pressing <kbd>Space</kbd> or clicking the checkbox again during the initial dwell window instantly reverts the task to active state without moving or reordering.
+       - **Commit & Flush**: When the 600ms timer fires (or immediately when switching filter tags, closing the panel, or archiving completed tasks), `flushPendingCompletions()` commits `done: true` to the store.
+     - **Dedicated Completed Fold (`── 󰅃 Completed (N) ──`)**:
+       - Completed tasks reside at the bottom of the list under a dedicated fold divider with a centered interactive pill: `── 󰅃 Completed (N) ──`.
+       - Clicking the fold pill toggles `completedFoldOpen` (chevron flips between `󰅃` and `󰅀`).
+       - When collapsed (`completedFoldOpen === false`), completed task rows smoothly collapse to zero height, leaving only the fold header visible. Keyboard navigation (<kbd>j</kbd>/<kbd>k</kbd>/<kbd>G</kbd>) automatically respects fold collapse, skipping hidden completed tasks and transitioning directly into the footer bar.
+     - **Item Partitioning**:
+       1. **Due / Reminder Tasks (Top Tier)**: Incomplete tasks with scheduled reminders or due dates, sorted chronologically ascending (earliest due and most overdue appear at the very top).
+       2. **Active Incomplete Tasks (Middle Tier)**: Incomplete tasks without reminders, sorted by recency descending (newest tasks appear first).
+       3. **Completed Tasks (Bottom Tier / Fold)**: Completed tasks sink into the completed fold, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
      - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
      - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.

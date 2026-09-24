@@ -97,6 +97,7 @@ Item {
 
   onVisibleChanged: {
     if (!visible) {
+      flushPendingCompletions()
       savePendingNotes()
       expandedTaskId = -1
       expandedViaKeyboard = false
@@ -231,7 +232,55 @@ Item {
   }
 
   readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
-  readonly property int filteredPendingCount: TodoStore.getPendingCount(root.store, root.currentFilter)
+  property var pendingCompletionIds: []
+  property var slidingOutTaskIds: []
+  property var justCompletedTaskIds: []
+  property bool completedFoldOpen: true
+
+  readonly property int filteredPendingCount: {
+    var raw = TodoStore.getPendingCount(root.store, root.currentFilter)
+    return Math.max(0, raw - root.pendingCompletionIds.length)
+  }
+
+  readonly property int completedCount: {
+    var cnt = root.pendingCompletionIds.length
+    if (root.filteredTodos) {
+      for (var i = 0; i < root.filteredTodos.length; i++) {
+        if (root.filteredTodos[i].done && root.pendingCompletionIds.indexOf(root.filteredTodos[i].id) === -1) {
+          cnt++
+        }
+      }
+    }
+    return cnt
+  }
+
+  Timer {
+    id: slideStartTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      if (root.pendingCompletionIds && root.pendingCompletionIds.length > 0) {
+        root.slidingOutTaskIds = root.pendingCompletionIds.slice()
+      }
+    }
+  }
+
+  Timer {
+    id: completionGraceTimer
+    interval: 600
+    repeat: false
+    onTriggered: root.flushPendingCompletions()
+  }
+
+  Timer {
+    id: justCompletedClearTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      root.justCompletedTaskIds = []
+    }
+  }
+
   readonly property var reminderPresets: TodoStore.getReminderPresets()
   readonly property bool activeFocusBlocked: Boolean(
     (newTodoField && newTodoField.activeFocus) ||
@@ -273,12 +322,70 @@ Item {
     }
   }
 
-  function toggleTodo(id) {
+  function applyToggleTodo(id) {
     savePendingNotes()
+    if (root.expandedTaskId === id) {
+      root.expandedTaskId = -1
+    }
     if (barWidget) {
       barWidget.toggleTodo(id)
     } else {
       root.store = TodoStore.toggleTodo(root.store, id)
+    }
+  }
+
+  function flushPendingCompletions() {
+    if (slideStartTimer.running) slideStartTimer.stop()
+    if (completionGraceTimer.running) completionGraceTimer.stop()
+    if (!root.pendingCompletionIds || root.pendingCompletionIds.length === 0) {
+      root.slidingOutTaskIds = []
+      return
+    }
+    var ids = root.pendingCompletionIds.slice()
+    root.pendingCompletionIds = []
+    root.slidingOutTaskIds = []
+    root.justCompletedTaskIds = ids.slice()
+    justCompletedClearTimer.restart()
+    for (var i = 0; i < ids.length; i++) {
+      root.applyToggleTodo(ids[i])
+    }
+  }
+
+  function toggleTodo(id) {
+    savePendingNotes()
+    var isPending = root.pendingCompletionIds.indexOf(id) !== -1
+    if (isPending) {
+      var arr = root.pendingCompletionIds.slice()
+      var idx = arr.indexOf(id)
+      if (idx !== -1) arr.splice(idx, 1)
+      root.pendingCompletionIds = arr
+      var sArr = root.slidingOutTaskIds.slice()
+      var sIdx = sArr.indexOf(id)
+      if (sIdx !== -1) sArr.splice(sIdx, 1)
+      root.slidingOutTaskIds = sArr
+      if (root.pendingCompletionIds.length === 0) {
+        slideStartTimer.stop()
+        completionGraceTimer.stop()
+      }
+      return
+    }
+
+    var task = null
+    for (var i = 0; i < root.filteredTodos.length; i++) {
+      if (root.filteredTodos[i].id === id) {
+        task = root.filteredTodos[i]
+        break
+      }
+    }
+
+    if (task && task.done) {
+      root.applyToggleTodo(id)
+    } else {
+      var newArr = root.pendingCompletionIds.slice()
+      newArr.push(id)
+      root.pendingCompletionIds = newArr
+      slideStartTimer.restart()
+      completionGraceTimer.restart()
     }
   }
 
@@ -300,6 +407,7 @@ Item {
   }
 
   function clearCompleted(profile) {
+    flushPendingCompletions()
     savePendingNotes()
     if (barWidget) {
       barWidget.clearCompleted(profile)
@@ -365,6 +473,7 @@ Item {
   }
 
   onCurrentFilterChanged: {
+    flushPendingCompletions()
     savePendingNotes()
     Qt.callLater(function() { root.ensureProfileVisible(root.currentFilter) })
   }
@@ -993,6 +1102,13 @@ Item {
             required property var modelData
             required property int index
 
+            readonly property bool isPendingCompletion: root.pendingCompletionIds.indexOf(delegateRoot.modelData.id) !== -1
+            readonly property bool isSlidingOut: root.slidingOutTaskIds.indexOf(delegateRoot.modelData.id) !== -1
+            readonly property bool isJustCompleted: root.justCompletedTaskIds.indexOf(delegateRoot.modelData.id) !== -1
+            readonly property bool isDone: Boolean(delegateRoot.modelData.done || isPendingCompletion)
+            readonly property bool isFirstCompleted: delegateRoot.modelData.done && !isPendingCompletion && (delegateRoot.index === 0 || !root.filteredTodos[delegateRoot.index - 1].done)
+            readonly property bool isHiddenByFold: delegateRoot.modelData.done && !isPendingCompletion && !root.completedFoldOpen
+
             readonly property alias descAreaInstance: itemRow.descAreaInstance
             function ensureReassignProfileVisible(idx) {
               if (itemRow && itemRow.ensureReassignProfileVisible) {
@@ -1001,13 +1117,112 @@ Item {
             }
 
             width: parent.width
-            implicitHeight: itemRow.implicitHeight + (rowSep.visible ? (rowSep.implicitHeight + Style.space(4)) : 0)
+            visible: (!isHiddenByFold || isFirstCompleted) && (implicitHeight > 0)
+            clip: isSlidingOut
+            implicitHeight: {
+              if (isSlidingOut) return 0
+              var h = 0
+              if (isFirstCompleted) h += completedHeader.implicitHeight + (isHiddenByFold ? 0 : Style.space(4))
+              if (!isHiddenByFold) h += itemRow.implicitHeight + (rowSep.visible ? (rowSep.implicitHeight + Style.space(4)) : 0)
+              return h
+            }
             height: implicitHeight
+
+            Behavior on implicitHeight {
+              NumberAnimation { duration: 250; easing.type: Easing.InOutQuad }
+            }
+
+            // Completed fold section header (rendered directly above the first completed task)
+            Item {
+              id: completedHeader
+              visible: delegateRoot.isFirstCompleted
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: parent.right
+              implicitHeight: visible ? Style.space(26) : 0
+              height: implicitHeight
+
+              // Left divider line
+              Rectangle {
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(10)
+                anchors.right: foldPill.left
+                anchors.rightMargin: Style.space(8)
+                anchors.verticalCenter: parent.verticalCenter
+                height: 1
+                color: Color.menu.border
+                opacity: 0.6
+              }
+
+              // Centered fold toggle button / pill
+              Rectangle {
+                id: foldPill
+                anchors.centerIn: parent
+                implicitWidth: foldRow.implicitWidth + Style.space(12)
+                implicitHeight: Style.space(18)
+                radius: height / 2
+                color: foldHover.hovered ? Color.menu.selectedBackground : "transparent"
+                border.color: foldHover.hovered ? Color.menu.border : "transparent"
+                border.width: 1
+
+                Row {
+                  id: foldRow
+                  anchors.centerIn: parent
+                  spacing: Style.space(4)
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.completedFoldOpen ? "󰅃" : "󰅀"
+                    color: foldHover.hovered ? Color.accent : Color.muted
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Completed (" + root.completedCount + ")"
+                    color: foldHover.hovered ? (root.barForeground || Color.foreground) : Color.muted
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.space(9)
+                    font.bold: true
+                  }
+                }
+
+                HoverHandler {
+                  id: foldHover
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.completedFoldOpen = !root.completedFoldOpen
+                  }
+                }
+              }
+
+              // Right divider line
+              Rectangle {
+                anchors.left: foldPill.right
+                anchors.leftMargin: Style.space(8)
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                height: 1
+                color: Color.menu.border
+                opacity: 0.6
+              }
+            }
 
             Rectangle {
               id: itemRow
               property var modelData: delegateRoot.modelData
               property int index: delegateRoot.index
+              anchors.top: delegateRoot.isFirstCompleted ? completedHeader.bottom : parent.top
+              anchors.topMargin: delegateRoot.isFirstCompleted ? Style.space(4) : 0
+              anchors.left: parent.left
+              anchors.right: parent.right
+              visible: !delegateRoot.isHiddenByFold
 
               readonly property alias descAreaInstance: descArea
               readonly property bool hasNotes: Boolean(itemRow.modelData.description && itemRow.modelData.description.trim().length > 0)
@@ -1015,7 +1230,7 @@ Item {
               readonly property bool isCursorSelected: root.cursorActive && (root.focusSection === "tasks") && (delegateRoot.index === root.cursorIndex)
               readonly property bool isHeaderFocused: isCursorSelected && (!isExpanded || root.expandedSubSection === "header")
               readonly property bool isExpanded: root.expandedTaskId === itemRow.modelData.id
-              readonly property bool isDone: Boolean(itemRow.modelData.done)
+              readonly property bool isDone: delegateRoot.isDone
               readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(itemRow.modelData)
               readonly property bool isDueTodayTask: !isDone && !isOverdueTask && Boolean(itemRow.modelData.reminder) && (new Date(itemRow.modelData.reminder).toDateString() === new Date().toDateString())
 
@@ -1026,20 +1241,60 @@ Item {
               }
 
               width: parent.width
-              implicitHeight: isExpanded
+              implicitHeight: delegateRoot.isHiddenByFold ? 0 : (isExpanded
                 ? (expandedContent.implicitHeight + Style.space(16))
-                : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0))
+                : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0)))
               height: implicitHeight
               radius: Style.cornerRadius
               color: isHeaderFocused
                 ? Util.alpha(Color.accent, 0.12)
-                : (isExpanded
-                  ? Color.menu.selectedBackground
-                  : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent"))
+                : (delegateRoot.isPendingCompletion
+                  ? Util.alpha(Color.accent, 0.08)
+                  : (isExpanded
+                    ? Color.menu.selectedBackground
+                    : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent")))
               border.color: isHeaderFocused
                 ? Color.accent
                 : (isExpanded ? Color.menu.border : "transparent")
               border.width: isHeaderFocused ? 1.5 : (isExpanded ? 1 : 0)
+
+              opacity: delegateRoot.isSlidingOut ? 0.0 : 1.0
+
+              Behavior on opacity {
+                NumberAnimation { duration: 220 }
+              }
+
+              transform: Translate {
+                id: rowSlideTranslate
+                y: delegateRoot.isSlidingOut ? Style.space(24) : 0
+
+                Behavior on y {
+                  NumberAnimation { duration: 250; easing.type: Easing.InCubic }
+                }
+              }
+
+              Component.onCompleted: {
+                if (delegateRoot.isJustCompleted) {
+                  justCompletedAnim.restart()
+                }
+              }
+
+              Connections {
+                target: delegateRoot
+                function onIsJustCompletedChanged() {
+                  if (delegateRoot.isJustCompleted) {
+                    justCompletedAnim.restart()
+                  }
+                }
+              }
+
+              SequentialAnimation {
+                id: justCompletedAnim
+                PropertyAction { target: rowSlideTranslate; property: "y"; value: -Style.space(16) }
+                NumberAnimation { target: rowSlideTranslate; property: "y"; to: 0; duration: 260; easing.type: Easing.OutBack }
+              }
+
+              Behavior on color { ColorAnimation { duration: 150 } }
 
               Behavior on implicitHeight {
                 NumberAnimation {
@@ -1245,11 +1500,19 @@ Item {
                       verticalAlignment: Text.AlignVCenter
                       text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                       color: itemRow.isDone ? Color.muted : root.barForeground
+                      opacity: itemRow.isDone ? 0.55 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                      font.strikeout: itemRow.isDone
                       font.pixelSize: Style.font.caption
                       font.bold: itemRow.isHeaderFocused
                       elide: Text.ElideRight
+
+                      Behavior on opacity {
+                        NumberAnimation { duration: 180 }
+                      }
+
+                      Behavior on color {
+                        ColorAnimation { duration: 180 }
+                      }
 
                       HoverHandler {
                         id: titleHover
@@ -1259,6 +1522,26 @@ Item {
                         visible: titleHover.hovered && titleLabel.truncated
                         text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
+                    }
+
+                    // Strikethrough line that sweeps from left to right on completion
+                    Rectangle {
+                      id: strikeLine
+                      anchors.left: titleLabel.left
+                      anchors.verticalCenter: titleLabel.verticalCenter
+                      height: Style.space(1.5)
+                      radius: height / 2
+                      color: itemRow.isDone ? Color.muted : "transparent"
+                      visible: opacity > 0.01
+                      opacity: itemRow.isDone ? 0.8 : 0.0
+                      width: itemRow.isDone ? Math.min(titleLabel.contentWidth, titleLabel.width) : 0
+
+                      Behavior on width {
+                        NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                      }
+                      Behavior on opacity {
+                        NumberAnimation { duration: 160 }
                       }
                     }
                   }
@@ -1610,7 +1893,13 @@ Item {
               anchors.rightMargin: Style.space(10)
               strength: 0.08
               foreground: root.barForeground || Color.foreground
-              visible: delegateRoot.index < root.filteredTodos.length - 1
+              visible: !delegateRoot.isHiddenByFold &&
+                       !delegateRoot.isSlidingOut &&
+                       (delegateRoot.index < root.filteredTodos.length - 1) &&
+                       !(!delegateRoot.modelData.done &&
+                         root.filteredTodos[delegateRoot.index + 1] &&
+                         root.filteredTodos[delegateRoot.index + 1].done &&
+                         root.pendingCompletionIds.indexOf(root.filteredTodos[delegateRoot.index + 1].id) === -1)
             }
           }
         }

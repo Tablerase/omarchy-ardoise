@@ -216,6 +216,41 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "profReassignFlickable must support ensureVisible auto-scrolling on profile navigation"
   );
 
+  // 4b. Task Completion Satisfaction & Dedicated Completed Fold
+  const taskCheckContent = fs.readFileSync(path.join(repoDir, "ui", "TaskCheck.qml"), "utf8");
+  assert.ok(
+    taskCheckContent.includes("id: popAnimation") &&
+      taskCheckContent.includes("SequentialAnimation") &&
+      taskCheckContent.includes("Easing.OutBack"),
+    "TaskCheck must feature bouncy pop scale animation on completion toggle"
+  );
+  assert.ok(
+    panelContent.includes("id: strikeLine") &&
+      panelContent.includes("Behavior on width") &&
+      panelContent.includes("Math.min(titleLabel.contentWidth, titleLabel.width)"),
+    "PanelContent must feature left-to-right animated strikethrough line across title"
+  );
+  assert.ok(
+    panelContent.includes("pendingCompletionIds") &&
+      panelContent.includes("completionGraceTimer") &&
+      panelContent.includes("slideStartTimer") &&
+      panelContent.includes("slidingOutTaskIds") &&
+      panelContent.includes("flushPendingCompletions"),
+    "PanelContent must implement 600ms grace period, slideStartTimer, and pending completion dwell state"
+  );
+  assert.ok(
+    panelContent.includes("id: rowSlideTranslate") &&
+      panelContent.includes("id: justCompletedAnim") &&
+      panelContent.includes("justCompletedTaskIds"),
+    "PanelContent must animate completed items sliding down into the completed fold"
+  );
+  assert.ok(
+    panelContent.includes("id: completedHeader") &&
+      panelContent.includes("id: foldPill") &&
+      panelContent.includes("completedFoldOpen"),
+    "PanelContent must feature dedicated completed fold divider and toggle pill"
+  );
+
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
   const detectScript = path.join(repoDir, "tools", "detect-context.sh");
   assert.ok(fs.existsSync(detectScript), "tools/detect-context.sh must exist");

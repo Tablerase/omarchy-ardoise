@@ -301,3 +301,47 @@ test("handleTextKey: focuses notes and inserts character when on notes subsectio
   assert.equal(insertedText, "H");
 });
 
+test("handleMove & handleTextKey: navigation respects completed fold collapse", () => {
+  const activeTask = { id: 1, title: "Active 1", done: false };
+  const doneTask1 = { id: 2, title: "Done 1", done: true };
+  const doneTask2 = { id: 3, title: "Done 2", done: true };
+  const todos = [activeTask, doneTask1, doneTask2];
+
+  const mockRoot: any = {
+    filteredTodos: todos,
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    footerButtonIndex: 0,
+    completedFoldOpen: false,
+    pendingCompletionIds: [],
+    ensureTaskVisible: () => {}
+  };
+
+  // 1. Moving down from active task when fold is closed jumps directly to footer
+  handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.focusSection, "footer");
+  assert.equal(mockRoot.footerButtonIndex, 0);
+
+  // 2. Moving up from footer when fold is closed lands on last active task (index 0)
+  handleMove(mockRoot, 0, -1, TodoStore);
+  assert.equal(mockRoot.focusSection, "tasks");
+  assert.equal(mockRoot.cursorIndex, 0, "lands on last active task, not folded completed task");
+
+  // 3. 'G' key when fold is closed targets last active task (index 0)
+  mockRoot.cursorIndex = 0;
+  handleTextKey(mockRoot, "G");
+  assert.equal(mockRoot.cursorIndex, 0, "G jumps to last active task when fold is closed");
+
+  // 4. When fold is open, navigation traverses into completed tasks
+  mockRoot.completedFoldOpen = true;
+  mockRoot.cursorIndex = 0;
+  handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.focusSection, "tasks");
+  assert.equal(mockRoot.cursorIndex, 1, "moves into completed task 1");
+
+  handleTextKey(mockRoot, "G");
+  assert.equal(mockRoot.cursorIndex, 2, "G jumps to last completed task when fold is open");
+});
+
+
