@@ -148,15 +148,15 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - **OmaTasks-Inspired Item Layout**:
        - Sizing is deterministic, content-driven, and dynamically compact:
          `implicitHeight: isExpanded ? (expandedContent.implicitHeight + Style.space(16)) : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0))`
-       - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title (stretching dynamically between the checkbox and action buttons) + Action buttons on the right (Expand chevron `󰅀`/`󰅃` and Delete `󰅙`). The pencil icon indicator (`󰏫`) and redundant left-side urgency stripes/gradients are removed in favor of the clean circular checkbox indicator.
+       - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title + Inline Profile badge (`profInlineLabel`, shown in "all" view when the task has no chips) + Action buttons on the right (Expand chevron `󰅀`/`󰅃` and Delete `󰅙`). The pencil icon indicator (`󰏫`) and redundant left-side urgency stripes/gradients are removed in favor of the clean circular checkbox indicator.
        - **Line 2 (Note Preview Line)**: Rendered when collapsed and task has notes (`hasNotes === true`):
          - Single-line elided text preview (`Text.ElideRight`, italic, `Color.textMuted`), indented cleanly below the title.
          - Hover tooltip displaying the full multiline note text.
-       - **Line 3 (Metadata & Chips Row)**: Sub-line rendered when badges exist (`hasBadges === true`):
-         - Bounded strictly between the checkbox margin and the right edge (or docked profile indicator), with `Style.space(20)` height ensuring chip borders and pills are never cropped vertically.
-         - Profile badge (`profLabel`): Docked cleanly to the right when viewing "all" (`#profile`, elided).
+       - **Line 3 (Metadata & Chips Row)**: Sub-line rendered when chips exist (`hasBadges === hasChips === true`, i.e., has repo, tags, or reminder):
+         - Bounded strictly between the checkbox margin and the right edge (with docked profile indicator when viewing "all"), with `Style.space(20)` height ensuring chip borders and pills are never cropped vertically.
+         - Profile badge (`profLabel`): Docked cleanly to the right when viewing "all" (`#profile`, elided). If the task has no other chips, the profile label moves inline to Line 1 instead, eliminating the empty 3rd row.
          - Sub-line chips (`chipsRow`): Indented under title text displaying reminder pill (`󰥔 time` — tasks due today display strictly their scheduled time `HH:MM` without redundant "Due today at" or "Today" prefixes), repo badge (`󰊤 repo`), and tag chips (`#tag`).
-       - When an item has no notes or badges: Single-line layout (`Style.space(34)`), with title, checkbox, and action buttons mathematically and visually centered with comfortable vertical padding.
+       - When an item has no notes or chips: Single-line layout (`Style.space(34)`), with title, checkbox, inline profile (in "all" view), and action buttons mathematically and visually centered with comfortable vertical padding.
        - Collapsed row content is vertically centered across 1-line, 2-line, and 3-line items via explicit height propagation on `expandedContent` and `itemHeaderCol`.
        - **Row Separators**: A light section separator (`PanelSeparator`, 1px, `strength: 0.08`) is rendered between adjacent item rows in the list to enhance readability.
      - **Repo Name Display Formatting**:
@@ -185,6 +185,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
      - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
      - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.
+     - **Synchronized Row Expansion & Fluid Motion**: Expanding/collapsing a task drawer (`itemRowHeightAnim`, 200ms `OutCubic`) strictly clips the row (`clip: true`) and fades in drawer details (`expandedDetailsCol`, 180ms `OutCubic`). The outer delegate wrapper height updates in the exact same frame (bypassing secondary filters during expand/collapse), ensuring tasks below translate down synchronously in lockstep without visual overlap or delay.
      - Separator.
      - `TaskNotesArea` multi-line notes editor (directly placed within the column without misaligned outer wrappers, using `isNavFocused` to draw the control's native focus border when active in sub-section navigation).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear. Bordered navigation focus indicators.
@@ -206,8 +207,14 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Urgency visual progress bar (overdue / due today / later).
    - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
-   - Fuzzy filter text field (`keySearchField`).
-   - Two-stage dismiss: pressing <kbd>Backspace</kbd> when `keySearchField.text` is empty dismisses the help modal and restores focus to the panel.
+   - Fuzzy filter text field (`keySearchField`) wrapped in `BorderSurface`.
+   - **Universal Input Handling**:
+     - Follows project-wide input convention: padded, custom font/color styling, and active navigation focus border (`isNavFocused`).
+     - **Two-Stage Escape**:
+       - When `keySearchField.text` is empty: pressing <kbd>Escape</kbd> (or <kbd>Backspace</kbd>) dismisses the modal and restores focus to the panel.
+       - When `keySearchField.text` has content: pressing <kbd>Escape</kbd> blurs the field into normal motion navigation mode on `"search"` with active `BorderSurface` focus outline, preserving draft search queries.
+       - In normal motion mode: pressing <kbd>Escape</kbd> dismisses; pressing <kbd>Enter</kbd>, <kbd>Space</kbd>, <kbd>i</kbd>, <kbd>a</kbd>, or typing any character re-enters text edit mode; pressing <kbd>j</kbd>/<kbd>Down</kbd>/<kbd>Tab</kbd> moves into the shortcuts list (`helpFlickable`); pressing <kbd>k</kbd>/<kbd>Up</kbd>/<kbd>Shift+Tab</kbd> moves to `closeHelpBtn`.
+     - When navigating the shortcuts list: pressing <kbd>k</kbd> or <kbd>Up</kbd> at the top item moves back up to the search field in motion mode without swallowing keystrokes; typing any character redirects into search.
    - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Modals). Uses `<slash>` instead of ambiguous `/ /` notation, and dynamically lists the active desktop keybinding (`root.detectedShortcut`).
 
 #### Navigation State Flow (`focusSection`)

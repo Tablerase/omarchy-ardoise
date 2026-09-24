@@ -124,6 +124,14 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "keySearchField must handle Backspace when empty to dismiss help modal"
   );
   assert.ok(
+    allUiContent.includes('keySearchField.text.trim().length === 0'),
+    "keySearchField must implement two-stage escape checking for empty text"
+  );
+  assert.ok(
+    allUiContent.includes('readonly property bool isNavFocused: (root.focusSection === "search") && !keySearchField.activeFocus'),
+    "keySearchField BorderSurface must reflect navigation focus when blurred in search section"
+  );
+  assert.ok(
     !panelLogicContent.includes('"i / a / /"'),
     "keybindingsList must avoid ambiguous 'i / a / /' notation"
   );
@@ -251,6 +259,22 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "PanelContent must feature dedicated completed fold divider and toggle pill"
   );
 
+  // 4c. Synchronized Row Expansion & Fluid Motion
+  assert.ok(
+    panelContent.includes("enabled: delegateRoot.isSlidingOut || delegateRoot.isHiddenByFold"),
+    "delegateRoot Behavior on implicitHeight must be disabled during expand/collapse to prevent double-animation lag"
+  );
+  assert.ok(
+    panelContent.includes("id: itemRowHeightAnim") &&
+      panelContent.includes("clip: (itemRowHeightAnim && itemRowHeightAnim.running) || delegateRoot.isSlidingOut"),
+    "itemRow must strictly clip during height animation to avoid content rendering over adjacent items"
+  );
+  assert.ok(
+    panelContent.includes("id: expandedDetailsCol") &&
+      panelContent.includes("Behavior on opacity"),
+    "expandedDetailsCol must smoothly fade in with opacity transition"
+  );
+
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
   const detectScript = path.join(repoDir, "tools", "detect-context.sh");
   assert.ok(fs.existsSync(detectScript), "tools/detect-context.sh must exist");
@@ -311,6 +335,7 @@ test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Serv
 import QtQuick
 import Quickshell
 import "plugin" as Plugin
+import "Ui" as Ui
 
 ShellRoot {
     id: root
@@ -326,6 +351,21 @@ ShellRoot {
     Plugin.PanelContent {
         id: panelContent
         barWidget: barWidget
+    }
+
+    Ui.PanelKeyCatcher {
+        id: panelKeyCatcher
+        blocked: panelContent.activeFocusBlocked
+        onMoveRequested: function(dx, dy) { panelContent.handleMove(dx, dy) }
+        onTabRequested: function(dir) { panelContent.handleTab(dir) }
+        onActivateRequested: function() { panelContent.handleActivate() }
+        onReturnRequested: function() { panelContent.handleReturn() }
+        onTextKey: function(t) { panelContent.handleTextKey(t) }
+        onDeleteRequested: function() { panelContent.handleDelete() }
+        onCloseRequested: function() {
+            if (panelContent.handleEscape && panelContent.handleEscape()) return
+            panelContent.closeRequested()
+        }
     }
 
     Plugin.Service {
@@ -379,40 +419,114 @@ ShellRoot {
                 return;
             }
 
-            console.log("[TEST] Testing PanelContent Vim motions & navigation...");
-            panelContent.focusSection = "tasks";
-            panelContent.handleMove(0, 1);
-            if (panelContent.cursorIndex < 0) {
-                console.error("[TEST FAIL] handleMove failed to update cursorIndex");
-                Qt.exit(106);
+            console.log("[TEST] Testing PanelKeyCatcher & PanelContent Vim motions & navigation pipeline...");
+
+            // 1. Initial State: KeyCatcher and panelContent MUST NOT be blocked!
+            if (panelKeyCatcher.blocked) {
+                console.error("[TEST FAIL] panelKeyCatcher.blocked is true on default startup! Vim motions and Tab are dead.");
+                Qt.exit(120);
                 return;
             }
-            panelContent.handleReturn();
-            panelContent.handleActivate();
-            panelContent.handleTab(1);
-            if (panelContent.focusSection !== "footer") {
-                console.error("[TEST FAIL] handleTab failed to switch section to footer");
-                Qt.exit(107);
-                return;
-            }
-            panelContent.handleTab(-1);
-            if (panelContent.focusSection !== "tasks") {
-                console.error("[TEST FAIL] handleTab failed to switch section back to tasks");
-                Qt.exit(108);
+            if (panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelContent.activeFocusBlocked is true on default startup!");
+                Qt.exit(121);
                 return;
             }
 
-            // Test Help Overlay toggle via '?' key
-            panelContent.handleTextKey("?");
-            if (!panelContent.showKeyHelp) {
-                console.error("[TEST FAIL] handleTextKey('?') failed to open showKeyHelp");
-                Qt.exit(109);
+            // 2. Normal tasks navigation: panelKeyCatcher must remain unblocked
+            panelContent.currentFilter = "all";
+            panelContent.store = {
+                version: 1,
+                activeProfile: "personal",
+                profiles: ["personal", "work"],
+                todos: [
+                    { id: 1, title: "Automated task 1", profile: "personal", done: false },
+                    { id: 2, title: "Automated task 2", profile: "personal", done: false }
+                ]
+            };
+            panelContent.focusSection = "tasks";
+            panelContent.cursorActive = true;
+            panelContent.cursorIndex = 0;
+            panelContent.handleMove(0, 1);
+            if (panelContent.cursorIndex < 1) {
+                console.error("[TEST FAIL] handleMove failed to advance cursorIndex in tasks (cursorIndex=" + panelContent.cursorIndex + ")");
+                Qt.exit(122);
                 return;
             }
+            if (panelKeyCatcher.blocked || panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher became blocked during task motion!");
+                Qt.exit(123);
+                return;
+            }
+
+            panelContent.handleMove(0, -1);
+            if (panelContent.cursorIndex !== 0) {
+                console.error("[TEST FAIL] handleMove failed to move cursorIndex back");
+                Qt.exit(124);
+                return;
+            }
+
+            // 3. Section transitions (Tab / Shift+Tab): panelKeyCatcher must remain unblocked
+            panelContent.handleTab(1);
+            if (panelContent.focusSection !== "footer") {
+                console.error("[TEST FAIL] handleTab failed to transition forward to footer");
+                Qt.exit(125);
+                return;
+            }
+            if (panelKeyCatcher.blocked || panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher became blocked in footer section!");
+                Qt.exit(126);
+                return;
+            }
+
+            panelContent.handleTab(-1);
+            if (panelContent.focusSection !== "tasks") {
+                console.error("[TEST FAIL] handleTab failed to transition back to tasks");
+                Qt.exit(127);
+                return;
+            }
+
+            // 4. Input section normal (motion) mode: panelKeyCatcher MUST NOT be blocked
+            panelContent.focusSection = "input";
+            panelContent.releaseFocus(); // ensure not in edit mode
+            if (panelKeyCatcher.blocked || panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher must NOT be blocked when input section is in motion mode!");
+                Qt.exit(128);
+                return;
+            }
+
+            // 5. Help Modal Lifecycle: KeyCatcher MUST BE BLOCKED while open, and UNBLOCKED when closed!
+            panelContent.focusSection = "tasks";
+            panelContent.handleTextKey("?");
+            if (!panelContent.showKeyHelp) {
+                console.error("[TEST FAIL] handleTextKey('?') failed to open HelpModal");
+                Qt.exit(129);
+                return;
+            }
+            if (!panelKeyCatcher.blocked || !panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher must be blocked while HelpModal is open");
+                Qt.exit(130);
+                return;
+            }
+
+            // Close HelpModal via '?' toggle
             panelContent.handleTextKey("?");
             if (panelContent.showKeyHelp) {
-                console.error("[TEST FAIL] handleTextKey('?') failed to close showKeyHelp");
-                Qt.exit(110);
+                console.error("[TEST FAIL] handleTextKey('?') failed to close HelpModal");
+                Qt.exit(131);
+                return;
+            }
+            if (panelKeyCatcher.blocked || panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher remained blocked after closing HelpModal! This breaks all panel vim motions.");
+                Qt.exit(132);
+                return;
+            }
+
+            // Verify motions continue smoothly after HelpModal closes
+            panelContent.handleMove(0, 1);
+            if (panelContent.cursorIndex < 1) {
+                console.error("[TEST FAIL] Motions failed to work after closing HelpModal");
+                Qt.exit(133);
                 return;
             }
 
@@ -514,8 +628,9 @@ ShellRoot {
                     Qt.exit(121);
                     return;
                 }
-                // Return cursor and collapse back
+                // Return cursor to header and collapse back
                 panelContent.cursorIndex = 0;
+                panelContent.expandedSubSection = "header";
                 panelContent.handleReturn();
                 if (panelContent.expandedTaskId !== -1 || panelContent.expandedViaKeyboard) {
                     console.error("[TEST FAIL] handleReturn failed to collapse task or reset expandedViaKeyboard");

@@ -286,7 +286,8 @@ Item {
     (newTodoField && newTodoField.activeFocus) ||
     (descArea && descArea.editorActiveFocus) ||
     addingProfile ||
-    (typeof helpModal !== "undefined" && helpModal && helpModal.searchFieldActiveFocus)
+    root.showKeyHelp ||
+    (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus))
   )
 
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedShortcut)
@@ -1129,6 +1130,7 @@ Item {
             height: implicitHeight
 
             Behavior on implicitHeight {
+              enabled: delegateRoot.isSlidingOut || delegateRoot.isHiddenByFold
               NumberAnimation { duration: 250; easing.type: Easing.InOutQuad }
             }
 
@@ -1226,7 +1228,8 @@ Item {
 
               readonly property alias descAreaInstance: descArea
               readonly property bool hasNotes: Boolean(itemRow.modelData.description && itemRow.modelData.description.trim().length > 0)
-              readonly property bool hasBadges: Boolean((root.currentFilter === "all" && itemRow.modelData.profile) || itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0) || itemRow.modelData.reminder)
+              readonly property bool hasChips: Boolean(itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0) || itemRow.modelData.reminder)
+              readonly property bool hasBadges: hasChips
               readonly property bool isCursorSelected: root.cursorActive && (root.focusSection === "tasks") && (delegateRoot.index === root.cursorIndex)
               readonly property bool isHeaderFocused: isCursorSelected && (!isExpanded || root.expandedSubSection === "header")
               readonly property bool isExpanded: root.expandedTaskId === itemRow.modelData.id
@@ -1241,6 +1244,7 @@ Item {
               }
 
               width: parent.width
+              clip: (itemRowHeightAnim && itemRowHeightAnim.running) || delegateRoot.isSlidingOut
               implicitHeight: delegateRoot.isHiddenByFold ? 0 : (isExpanded
                 ? (expandedContent.implicitHeight + Style.space(16))
                 : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0)))
@@ -1298,7 +1302,8 @@ Item {
 
               Behavior on implicitHeight {
                 NumberAnimation {
-                  duration: 150
+                  id: itemRowHeightAnim
+                  duration: 200
                   easing.type: Easing.OutCubic
                   onRunningChanged: {
                     if (!running && itemRow.isExpanded) {
@@ -1489,12 +1494,37 @@ Item {
                       }
                     }
 
-                    // Title text (stretches cleanly between checkBtn and rowActions)
+                    // Inline profile indicator (shown when viewing "all" and task has no chips)
+                    Text {
+                      id: profInlineLabel
+                      visible: root.currentFilter === "all" && Boolean(itemRow.modelData.profile) && !itemRow.hasChips
+                      anchors.right: rowActions.left
+                      anchors.rightMargin: Style.space(6)
+                      anchors.verticalCenter: parent.verticalCenter
+                      verticalAlignment: Text.AlignVCenter
+                      width: Math.min(implicitWidth, parent.width * 0.28)
+                      text: "#" + (itemRow.modelData.profile || "")
+                      color: Color.muted
+                      opacity: itemRow.isDone ? 0.4 : 0.65
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(8.5)
+                      elide: Text.ElideRight
+                      horizontalAlignment: Text.AlignRight
+
+                      HoverHandler { id: profInlineHover }
+                      PanelToolTip {
+                        visible: profInlineHover.hovered && profInlineLabel.truncated
+                        text: "#" + (itemRow.modelData.profile || "")
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
+                    }
+
+                    // Title text (stretches cleanly between checkBtn and profInlineLabel/rowActions)
                     Text {
                       id: titleLabel
                       anchors.left: checkBtn.right
                       anchors.leftMargin: Style.space(8)
-                      anchors.right: rowActions.left
+                      anchors.right: profInlineLabel.visible ? profInlineLabel.left : rowActions.left
                       anchors.rightMargin: Style.space(6)
                       anchors.verticalCenter: parent.verticalCenter
                       verticalAlignment: Text.AlignVCenter
@@ -1675,9 +1705,17 @@ Item {
                 Column {
                   id: expandedDetailsCol
                   visible: itemRow.isExpanded
+                  opacity: itemRow.isExpanded ? 1.0 : 0.0
                   width: parent.width
                   height: visible ? implicitHeight : 0
                   spacing: Style.space(6)
+
+                  Behavior on opacity {
+                    NumberAnimation {
+                      duration: 180
+                      easing.type: Easing.OutCubic
+                    }
+                  }
 
                   PanelSeparator { width: parent.width }
 
