@@ -105,7 +105,10 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: panelContent.activeFocusBlocked
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (panelContent.handleEscape && panelContent.handleEscape()) return
+        root.close()
+      }
       onTabRequested: function(direction) {
         if (!panelContent.handleTab(direction)) {
           root.switchPanel(direction)

@@ -133,13 +133,17 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Vertically flickable column of tasks (`itemRow`).
    - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
    - Individual task row:
-     - Checkbox: Custom animated check box (`isDone`).
-     - Task Title: Strikethrough when done, urgency glow when due/overdue.
-     - Profile badge: Tag glyph `󰓹` + elided name (`#profile` or `#project/repo`).
-     - Repository badge (`repoBadge`): When filtered to a profile, displays git repository glyph `󰊤` + repo name for multi-repo task differentiation.
-     - Due date badge: Clock glyph `󰥔` + relative countdown.
-     - Expand button: Chevron `󰅂` explicitly toggling detailed drawer (`expandedViaKeyboard = true`), keeping drawer open across mouse motion.
-     - Delete button: Trash icon `󰆴`.
+     - **Two-Line Responsive Layout**:
+       - When an item possesses category badges, repo chips, or tags (`hasBadges === true`):
+         - **Line 1 (Title Row)**: Checkbox (`isDone`) + Full-Width Title (occupying all available horizontal space up to action buttons) + Action & Indicator icons (Expand chevron `󰅂`, Delete `󰆴`, Notes indicator `󰏫`, Reminder badge `󰥔`).
+         - **Line 2 (Chips Row)**: Sub-line indented cleanly under the title text displaying:
+           - Profile badge (`#profile` or `#profile/repo`).
+           - Repository badge (`󰊤 repo`): Multi-repo task differentiator.
+           - Tag chips (`#tag1`, `#tag2`...): Subsystem tag pills.
+       - When an item has no badges or tags: Compact single-line layout (`Style.space(34)`), saving vertical space.
+     - **Repo Name Display Formatting**:
+       - In item badges, repository strings strip any owner/organization prefix (e.g. `Tablerase/omarchy-ardoise` displays cleanly as `omarchy-ardoise`) to save space and reduce cognitive clutter, while strictly preserving the full remote repository and local path in data and hover tooltips.
+       - Target codebase context chip remains strictly located within the expanded drawer to avoid crowding the collapsed task list.
    - **Item Ordering Algorithm (`TodoStore.getFilteredTodos`)**:
      Tasks are strictly partitioned and sorted across 3 priority tiers:
      1. **Due / Reminder Tasks (Top Tier)**: Incomplete tasks with scheduled reminders or due dates, sorted chronologically ascending (earliest due and most overdue appear at the very top).
@@ -150,11 +154,21 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.
      - Separator.
      - `TaskNotesArea` multi-line notes editor (revealed when expanded via <kbd>Enter</kbd>).
-     - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear.
-     - Profile reassign flow pills.
+     - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear. Bordered navigation focus indicators.
+     - **Compact Profile Reassignment Row (`profReassignContainer`)**: Single-line horizontal scrollable row (`Style.space(22)`) replacing multi-line wrapping flow, keeping drawer height tightly bounded.
      - **Location & Codebase Context Row (`locRow`)**:
        - Displays `󰉋 Target:` with repository identifier (`󰊤 repo/subpath`) or directory path (`󰉋 localPath`), along with subsystem `#tag` chips.
        - Includes a **[Codebase]** action button that launches `omarchy-launch-editor` directly in the target repository directory.
+   - **Expanded Sub-Section Keyboard State Machine (`expandedSubSection`)**:
+     - When a task is expanded, focus is hierarchical:
+       1. `"header"` (default): Item row header is focused. <kbd>Enter</kbd> collapses the drawer; <kbd>Space</kbd> toggles `done`.
+       2. `"notes"`: Notes editor area is focused. Pressing <kbd>i</kbd> or <kbd>Enter</kbd> enters insert mode; <kbd>Escape</kbd> leaves insert mode back to motion mode.
+       3. `"reminders"`: Reminder presets row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles presets; <kbd>Space</kbd> / <kbd>Enter</kbd> applies the preset.
+       4. `"profiles"`: Profile reassignment row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles profiles (with auto-scroll); <kbd>Space</kbd> / <kbd>Enter</kbd> reassigns task profile.
+       5. `"codebase"` (conditional on location): Codebase launch button is focused. <kbd>Enter</kbd> / <kbd>Space</kbd> opens editor.
+     - Navigating with <kbd>Tab</kbd> / <kbd>j</kbd> / <kbd>↓</kbd> steps sequentially through sub-sections, then continues to the next task in the list.
+     - Navigating with <kbd>Shift+Tab</kbd> / <kbd>k</kbd> / <kbd>↑</kbd> steps backward through sub-sections, returning to `"header"`.
+     - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
    - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].
@@ -165,7 +179,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 
 #### Navigation State Flow (`focusSection`)
 ```
-[profiles] ◄──Up/Down──► [input] ◄──Up/Down──► [tasks] ◄──Up/Down──► [footer]
+[profiles] ◄──Up/Down──► [input] ◄──Up/Down──► [tasks (header ◄──► notes ◄──► rem ◄──► prof ◄──► code)] ◄──Up/Down──► [footer]
 ```
 - At task index `0`, pressing <kbd>Up</kbd> or <kbd>k</kbd> transitions focus directly into `input`.
 - In `input`, pressing <kbd>Down</kbd> or <kbd>Tab</kbd> moves into `tasks`.
@@ -191,11 +205,14 @@ Quickshell taskbar widget placed in the status bar.
 | Context | Key | Action |
 | :--- | :--- | :--- |
 | **Global Desktop** | `SUPER + SHIFT + T` (or custom hyprland bind) | Toggle Main Panel |
-| **Panel** | `j` / `↓` | Move cursor down (tasks, footer, input) |
-| **Panel** | `k` / `↑` | Move cursor up (at task 0, transitions to `input`) |
-| **Panel** | `Tab` / `Shift+Tab` | Advance / reverse major sections (`profiles` ↔ `input` ↔ `tasks` ↔ `footer`) |
-| **Panel** | `Space` | Toggle task completion (`done`) |
-| **Panel** | `Enter` / `Return` | Expand / collapse task details (drawer) |
+| **Panel** | `j` / `↓` | Move cursor down (tasks, drawer sub-sections, footer, input) |
+| **Panel** | `k` / `↑` | Move cursor up (drawer sub-sections, tasks; at task 0, transitions to `input`) |
+| **Panel** | `Tab` / `Shift+Tab` | Advance / reverse major sections and expanded task sub-sections |
+| **Panel** | `Space` | Toggle task completion (`done`), or apply selected reminder/profile |
+| **Panel** | `Enter` / `Return` | Expand / collapse task details (drawer), or enter editor on notes |
+| **Panel (Drawer)** | `h` / `l` / `←` / `→` | Cycle reminder presets or profile reassignments |
+| **Panel (Drawer)** | `i` / `Enter` | Enter notes text editor (insert mode) |
+| **Panel (Drawer)** | `Escape` | Return from sub-section to task header, or collapse drawer |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `c` | Archive and clear completed tasks in current profile |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |

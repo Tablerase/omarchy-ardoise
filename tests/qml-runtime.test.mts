@@ -86,6 +86,7 @@ test("Static QML Analysis: All QQC2 and custom UI components have required impor
 test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace dismiss, and GitHub brand link", () => {
   const quickAddContent = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const panelQmlContent = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
 
   // 1. QuickAdd action buttons: Add button must NOT have hardcoded 'selected: true',
   // and both buttons must link 'selected' and 'hasCursor' to the active actionIndex.
@@ -163,6 +164,29 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     quickAddContent.includes("id: locationPill") &&
       quickAddContent.includes('(root.focusSection === "location")'),
     "QuickAdd location pill must display focus styling when active"
+  );
+  assert.ok(
+    panelContent.includes("id: itemHeaderCol") && panelContent.includes("id: chipsRow"),
+    "PanelContent must feature a two-line layout separating title and chips when badges are present"
+  );
+  assert.ok(
+    panelContent.includes("cleanRepoName") &&
+      panelContent.includes("root.cleanRepoName(itemRow.modelData.repo)"),
+    "PanelContent must format repo chip to strip repo owner for display without modifying location"
+  );
+  assert.ok(
+    panelContent.includes("id: profReassignContainer") &&
+      panelContent.includes("id: profReassignFlickable"),
+    "PanelContent must feature a compact horizontal scrollable profile reassignment bar in expanded view"
+  );
+  assert.ok(
+    panelContent.includes('property string expandedSubSection: "header"') &&
+      panelContent.includes("root.expandedSubSection === "),
+    "PanelContent must support navigable sub-sections in expanded tasks (notes, reminders, profiles, codebase)"
+  );
+  assert.ok(
+    panelQmlContent.includes("panelContent.handleEscape && panelContent.handleEscape()"),
+    "Panel.qml must delegate escape handling to panelContent.handleEscape for two-stage escape"
   );
 
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)

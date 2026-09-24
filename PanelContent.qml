@@ -36,6 +36,44 @@ Item {
   property int footerButtonIndex: 0
   property bool showKeyHelp: false
   property string keyHelpSearch: ""
+  property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
+  property int expandedReminderIndex: 0
+  property int expandedProfileIndex: 0
+
+  function cleanRepoName(repo) {
+    if (!repo) return ""
+    var str = String(repo).trim()
+    var idx = str.lastIndexOf("/")
+    return (idx !== -1 && idx < str.length - 1) ? str.slice(idx + 1) : str
+  }
+
+  function openCodebase(task) {
+    if (!task || !task.location || !task.location.localPath) return
+    root.savePendingNotes()
+    root.closeRequested()
+    var locPath = task.location.localPath
+    if (locPath.startsWith("~")) locPath = Quickshell.env("HOME") + locPath.slice(1)
+    if (root.bar) root.bar.run("omarchy-launch-editor \"" + locPath + "\"")
+  }
+
+  function handleEscape() {
+    if (root.showKeyHelp) {
+      root.showKeyHelp = false
+      return true
+    }
+    if (root.focusSection === "tasks" && root.expandedSubSection !== "header") {
+      root.expandedSubSection = "header"
+      return true
+    }
+    if (root.expandedTaskId !== -1) {
+      root.savePendingNotes()
+      root.expandedTaskId = -1
+      root.expandedViaKeyboard = false
+      root.expandedSubSection = "header"
+      return true
+    }
+    return false
+  }
 
   onVisibleChanged: {
     if (!visible) {
@@ -46,6 +84,9 @@ Item {
       cursorActive = false
       focusSection = "tasks"
       showKeyHelp = false
+      expandedSubSection = "header"
+      expandedReminderIndex = 0
+      expandedProfileIndex = 0
     } else {
       mouseMovementDetected = false
       expandedViaKeyboard = false
@@ -64,6 +105,9 @@ Item {
   }
 
   onExpandedTaskIdChanged: {
+    expandedSubSection = "header"
+    expandedReminderIndex = 0
+    expandedProfileIndex = 0
     if (expandedTaskId !== -1) {
       Qt.callLater(function() {
         for (var i = 0; i < root.filteredTodos.length; i++) {
@@ -122,9 +166,81 @@ Item {
       root.expandedTaskId = -1
     }
     if (root.focusSection === "tasks") {
+      var currentTask = (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) ? root.filteredTodos[root.cursorIndex] : null
+      var isCurExpanded = Boolean(currentTask && root.expandedTaskId === currentTask.id)
+
+      if (isCurExpanded) {
+        var hasLoc = Boolean(currentTask.location && currentTask.location.localPath)
+        if (dy > 0) {
+          if (root.expandedSubSection === "header") {
+            root.expandedSubSection = "notes"
+          } else if (root.expandedSubSection === "notes") {
+            root.expandedSubSection = "reminders"
+            root.expandedReminderIndex = 0
+          } else if (root.expandedSubSection === "reminders") {
+            root.expandedSubSection = "profiles"
+            root.expandedProfileIndex = 0
+          } else if (root.expandedSubSection === "profiles") {
+            if (hasLoc) {
+              root.expandedSubSection = "codebase"
+            } else {
+              if (root.cursorIndex < root.filteredTodos.length - 1) {
+                root.cursorIndex++
+                root.expandedSubSection = "header"
+                root.ensureTaskVisible(root.cursorIndex, false)
+              } else {
+                root.focusSection = "footer"
+                root.footerButtonIndex = 0
+              }
+            }
+          } else if (root.expandedSubSection === "codebase") {
+            if (root.cursorIndex < root.filteredTodos.length - 1) {
+              root.cursorIndex++
+              root.expandedSubSection = "header"
+              root.ensureTaskVisible(root.cursorIndex, false)
+            } else {
+              root.focusSection = "footer"
+              root.footerButtonIndex = 0
+            }
+          }
+          return
+        } else if (dy < 0) {
+          if (root.expandedSubSection === "codebase") {
+            root.expandedSubSection = "profiles"
+          } else if (root.expandedSubSection === "profiles") {
+            root.expandedSubSection = "reminders"
+          } else if (root.expandedSubSection === "reminders") {
+            root.expandedSubSection = "notes"
+          } else if (root.expandedSubSection === "notes") {
+            root.expandedSubSection = "header"
+          } else if (root.expandedSubSection === "header") {
+            if (root.cursorIndex > 0) {
+              root.cursorIndex--
+              root.expandedSubSection = "header"
+              root.ensureTaskVisible(root.cursorIndex, false)
+            } else {
+              root.focusSection = "input"
+              Qt.callLater(function() { newTodoField.forceActiveFocus() })
+            }
+          }
+          return
+        } else if (dx !== 0) {
+          if (root.expandedSubSection === "reminders") {
+            var maxRem = root.reminderPresets.length + (currentTask.reminder ? 1 : 0)
+            root.expandedReminderIndex = Math.max(0, Math.min(maxRem - 1, root.expandedReminderIndex + dx))
+            return
+          } else if (root.expandedSubSection === "profiles") {
+            var allProfs = TodoStore.getSortedProfiles(root.store, false, "")
+            root.expandedProfileIndex = Math.max(0, Math.min(allProfs.length - 1, root.expandedProfileIndex + dx))
+            return
+          }
+        }
+      }
+
       if (dy < 0) {
         if (root.cursorIndex > 0) {
           root.cursorIndex--
+          root.expandedSubSection = "header"
           root.ensureTaskVisible(root.cursorIndex, false)
         } else {
           // At top of task list: move UP into task input field!
@@ -134,6 +250,7 @@ Item {
       } else if (dy > 0) {
         if (root.filteredTodos.length > 0 && root.cursorIndex < root.filteredTodos.length - 1) {
           root.cursorIndex++
+          root.expandedSubSection = "header"
           root.ensureTaskVisible(root.cursorIndex, false)
         } else {
           // At bottom of task list or empty: move DOWN into footer buttons!
@@ -159,6 +276,7 @@ Item {
         if (root.filteredTodos.length > 0) {
           root.focusSection = "tasks"
           root.cursorIndex = root.filteredTodos.length - 1
+          root.expandedSubSection = "header"
           root.ensureTaskVisible(root.cursorIndex, false)
         } else {
           root.focusSection = "input"
@@ -177,7 +295,28 @@ Item {
     if (root.focusSection === "tasks") {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
         var task = root.filteredTodos[root.cursorIndex]
-        if (task) root.toggleTodo(task.id)
+        if (task) {
+          if (root.expandedTaskId === task.id && root.expandedSubSection !== "header") {
+            if (root.expandedSubSection === "notes") {
+              if (root.descArea) root.descArea.forceActiveFocus()
+            } else if (root.expandedSubSection === "reminders") {
+              if (root.expandedReminderIndex < root.reminderPresets.length) {
+                root.updateTodo(task.id, { reminder: root.reminderPresets[root.expandedReminderIndex].value })
+              } else {
+                root.updateTodo(task.id, { reminder: null })
+              }
+            } else if (root.expandedSubSection === "profiles") {
+              var profs = TodoStore.getSortedProfiles(root.store, false, "")
+              if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
+                root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] })
+              }
+            } else if (root.expandedSubSection === "codebase") {
+              root.openCodebase(task)
+            }
+          } else {
+            root.toggleTodo(task.id)
+          }
+        }
       }
     } else if (root.focusSection === "footer") {
       triggerFooterButton(root.footerButtonIndex)
@@ -193,13 +332,34 @@ Item {
       if (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
         var task = root.filteredTodos[root.cursorIndex]
         if (task) {
-          root.savePendingNotes()
-          if (root.expandedTaskId === task.id) {
-            root.expandedTaskId = -1
-            root.expandedViaKeyboard = false
+          if (root.expandedTaskId === task.id && root.expandedSubSection !== "header") {
+            if (root.expandedSubSection === "notes") {
+              if (root.descArea) root.descArea.forceActiveFocus()
+            } else if (root.expandedSubSection === "reminders") {
+              if (root.expandedReminderIndex < root.reminderPresets.length) {
+                root.updateTodo(task.id, { reminder: root.reminderPresets[root.expandedReminderIndex].value })
+              } else {
+                root.updateTodo(task.id, { reminder: null })
+              }
+            } else if (root.expandedSubSection === "profiles") {
+              var profs = TodoStore.getSortedProfiles(root.store, false, "")
+              if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
+                root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] })
+              }
+            } else if (root.expandedSubSection === "codebase") {
+              root.openCodebase(task)
+            }
           } else {
-            root.expandedTaskId = task.id
-            root.expandedViaKeyboard = true
+            root.savePendingNotes()
+            if (root.expandedTaskId === task.id) {
+              root.expandedTaskId = -1
+              root.expandedViaKeyboard = false
+              root.expandedSubSection = "header"
+            } else {
+              root.expandedTaskId = task.id
+              root.expandedViaKeyboard = true
+              root.expandedSubSection = "header"
+            }
           }
         }
       }
@@ -252,6 +412,10 @@ Item {
       root.openEditor(currentTaskId)
       return
     }
+    if (text === "i" && root.focusSection === "tasks" && root.expandedSubSection === "notes") {
+      if (root.descArea) root.descArea.forceActiveFocus()
+      return
+    }
     if (text === "i" || text === "a" || text === "/") {
       root.focusSection = "input"
       Qt.callLater(function() { newTodoField.forceActiveFocus() })
@@ -271,6 +435,48 @@ Item {
       root.savePendingNotes()
       root.expandedTaskId = -1
     }
+
+    if (root.focusSection === "tasks") {
+      var currentTask = (root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) ? root.filteredTodos[root.cursorIndex] : null
+      var isCurExpanded = Boolean(currentTask && root.expandedTaskId === currentTask.id)
+      if (isCurExpanded) {
+        var hasLoc = Boolean(currentTask.location && currentTask.location.localPath)
+        if (direction > 0) {
+          if (root.expandedSubSection === "header") {
+            root.expandedSubSection = "notes"
+            return true
+          } else if (root.expandedSubSection === "notes") {
+            root.expandedSubSection = "reminders"
+            root.expandedReminderIndex = 0
+            return true
+          } else if (root.expandedSubSection === "reminders") {
+            root.expandedSubSection = "profiles"
+            root.expandedProfileIndex = 0
+            return true
+          } else if (root.expandedSubSection === "profiles") {
+            if (hasLoc) {
+              root.expandedSubSection = "codebase"
+              return true
+            }
+          }
+        } else if (direction < 0) {
+          if (root.expandedSubSection === "codebase") {
+            root.expandedSubSection = "profiles"
+            return true
+          } else if (root.expandedSubSection === "profiles") {
+            root.expandedSubSection = "reminders"
+            return true
+          } else if (root.expandedSubSection === "reminders") {
+            root.expandedSubSection = "notes"
+            return true
+          } else if (root.expandedSubSection === "notes") {
+            root.expandedSubSection = "header"
+            return true
+          }
+        }
+      }
+    }
+
     var sections = ["profiles", "input", "tasks", "footer"]
     var currentIdx = sections.indexOf(root.focusSection)
     if (currentIdx === -1) currentIdx = 2
@@ -279,6 +485,9 @@ Item {
       return false
     }
     root.focusSection = sections[nextIdx]
+    if (root.focusSection === "tasks") {
+      root.expandedSubSection = "header"
+    }
     if (root.focusSection === "input") {
       Qt.callLater(function() { newTodoField.forceActiveFocus() })
     } else {
@@ -1080,26 +1289,30 @@ Item {
             required property var modelData
             required property int index
 
+            readonly property bool hasBadges: Boolean((root.currentFilter === "all" && itemRow.modelData.profile) || itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0))
             readonly property bool isCursorSelected: root.cursorActive && (root.focusSection === "tasks") && (index === root.cursorIndex)
+            readonly property bool isHeaderFocused: isCursorSelected && (!isExpanded || root.expandedSubSection === "header")
             readonly property bool isExpanded: root.expandedTaskId === modelData.id
             readonly property bool isDone: Boolean(modelData.done)
             readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(modelData)
             readonly property bool isDueTodayTask: !isDone && !isOverdueTask && Boolean(modelData.reminder) && (new Date(modelData.reminder).toDateString() === new Date().toDateString())
 
             width: parent.width
-            implicitHeight: isExpanded ? expandedContent.implicitHeight + Style.space(14) : Style.space(40)
+            implicitHeight: isExpanded
+              ? (expandedContent.implicitHeight + Style.space(14))
+              : (hasBadges ? Style.space(48) : Style.space(34))
             radius: Style.cornerRadius
-            color: isCursorSelected
+            color: isHeaderFocused
               ? Util.alpha(Color.accent, 0.12)
               : (isExpanded
                 ? Color.menu.selectedBackground
                 : (rowHoverHandler.hovered ? Color.menu.selectedBackground : "transparent"))
-            border.color: isCursorSelected
+            border.color: isHeaderFocused
               ? Color.accent
               : (isExpanded
                 ? Color.menu.border
                 : (isOverdueTask ? Util.alpha(root.bar ? root.bar.urgent : Color.urgent, 0.35) : (isDueTodayTask ? Util.alpha(Color.accent, 0.35) : "transparent")))
-            border.width: isCursorSelected ? 1.5 : (isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0)
+            border.width: isHeaderFocused ? 1.5 : (isExpanded || isOverdueTask || isDueTodayTask ? 1 : 0)
 
             Behavior on implicitHeight {
               NumberAnimation {
@@ -1240,37 +1453,168 @@ Item {
               anchors.right: parent.right
               anchors.rightMargin: Style.space(6)
 
-              // Primary row
-              Item {
+              // Primary header block (Title + Actions + Chips if present)
+              Column {
+                id: itemHeaderCol
                 width: parent.width
-                implicitHeight: Style.space(30)
+                spacing: Style.space(3)
 
-                Row {
-                  id: titleRow
-                  anchors.left: parent.left
-                  anchors.right: rowActions.left
-                  anchors.rightMargin: Style.space(6)
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(6)
+                // Row 1: Checkbox + Full-width Title + Action buttons
+                Item {
+                  width: parent.width
+                  implicitHeight: Style.space(26)
 
-                  // Checkbox icon (neutral by default, urgent red only when overdue)
-                  Text {
-                    id: checkboxIcon
+                  Row {
+                    id: titleLeadRow
+                    anchors.left: parent.left
+                    anchors.right: rowActions.left
+                    anchors.rightMargin: Style.space(6)
                     anchors.verticalCenter: parent.verticalCenter
-                    text: itemRow.isDone ? "󰄲" : "󰄱"
-                    color: itemRow.isDone
-                      ? Color.muted
-                      : (TodoStore.isOverdue(itemRow.modelData) ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted)
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.body
+                    spacing: Style.space(6)
+
+                    // Checkbox icon (neutral by default, urgent red only when overdue)
+                    Text {
+                      id: checkboxIcon
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: itemRow.isDone ? "󰄲" : "󰄱"
+                      color: itemRow.isDone
+                        ? Color.muted
+                        : (TodoStore.isOverdue(itemRow.modelData) ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted)
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.body
+                    }
+
+                    // Title text (takes all available width!)
+                    Text {
+                      id: titleLabel
+                      anchors.verticalCenter: parent.verticalCenter
+                      width: Math.max(Style.space(40), titleLeadRow.width - checkboxIcon.implicitWidth - titleLeadRow.spacing)
+                      text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
+                      color: itemRow.isDone ? Color.muted : root.barForeground
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.strikeout: itemRow.isDone
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+
+                      HoverHandler {
+                        id: titleHover
+                      }
+
+                      PanelToolTip {
+                        visible: titleHover.hovered && titleLabel.truncated
+                        text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
+                    }
                   }
+
+                  // Indicators and action buttons
+                  Row {
+                    id: rowActions
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(4)
+
+                    // Description indicator icon
+                    Text {
+                      visible: !itemRow.isExpanded && Boolean(itemRow.modelData.description)
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "󰏫"
+                      color: Color.muted
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    // Reminder badge
+                    Rectangle {
+                      visible: !itemRow.isExpanded && Boolean(itemRow.modelData.reminder)
+                      anchors.verticalCenter: parent.verticalCenter
+                      implicitWidth: remRow.implicitWidth + Style.space(6)
+                      implicitHeight: Style.space(18)
+                      radius: implicitHeight / 2
+                      color: itemRow.isDone ? Color.menu.background : Util.alpha(Color.accent, 0.14)
+                      border.color: itemRow.isDone ? Color.menu.border : Color.accent
+                      border.width: 1
+
+                      Row {
+                        id: remRow
+                        anchors.centerIn: parent
+                        spacing: Style.space(2)
+
+                        Text {
+                          anchors.verticalCenter: parent.verticalCenter
+                          text: "󰥔"
+                          color: itemRow.isDone ? Color.muted : Color.accent
+                          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                          font.pixelSize: Style.space(8.5)
+                        }
+
+                        Text {
+                          anchors.verticalCenter: parent.verticalCenter
+                          text: TodoStore.formatReminder(itemRow.modelData.reminder)
+                          color: itemRow.isDone ? Color.muted : Color.accent
+                          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                          font.pixelSize: Style.space(8.5)
+                        }
+                      }
+                    }
+
+                    // Expand / Collapse details button
+                    PanelActionButton {
+                      anchors.verticalCenter: parent.verticalCenter
+                      size: Style.space(22)
+                      iconText: itemRow.isExpanded ? "󰅃" : "󰅀"
+                      fontSize: Style.font.caption
+                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      foreground: Color.muted
+                      hoverColor: Color.accent
+                      tooltipText: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
+                      onClicked: {
+                        root.savePendingNotes()
+                        root.cursorIndex = itemRow.index
+                        if (itemRow.isExpanded) {
+                          root.expandedTaskId = -1
+                          root.expandedViaKeyboard = false
+                          root.expandedSubSection = "header"
+                        } else {
+                          root.expandedTaskId = itemRow.modelData.id
+                          root.expandedViaKeyboard = true
+                          root.expandedSubSection = "header"
+                        }
+                      }
+                    }
+
+                    // Remove button
+                    PanelActionButton {
+                      anchors.verticalCenter: parent.verticalCenter
+                      size: Style.space(22)
+                      iconText: "󰅙"
+                      fontSize: Style.font.caption
+                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      foreground: Color.muted
+                      hoverColor: root.bar ? root.bar.urgent : Color.urgent
+                      tooltipText: "Delete task"
+                      onClicked: {
+                        root.removeTodo(itemRow.modelData.id)
+                      }
+                    }
+                  }
+                }
+
+                // Row 2 (Sub-line): Profile chip, Repo chip, and Tag chips (aligned under title)
+                Row {
+                  id: chipsRow
+                  visible: itemRow.hasBadges
+                  anchors.left: parent.left
+                  anchors.leftMargin: checkboxIcon.implicitWidth + Style.space(6)
+                  spacing: Style.space(4)
 
                   // Profile badge when viewing "All"
                   Rectangle {
                     id: profBadge
                     visible: root.currentFilter === "all" && Boolean(itemRow.modelData.profile)
                     anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: Math.min(Style.space(75), profLabel.implicitWidth + Style.space(8))
+                    implicitWidth: Math.min(Style.space(85), profLabel.implicitWidth + Style.space(8))
                     implicitHeight: Style.space(16)
                     radius: implicitHeight / 2
                     color: Color.menu.background
@@ -1281,7 +1625,11 @@ Item {
                       id: profLabel
                       anchors.centerIn: parent
                       width: Math.min(implicitWidth, profBadge.implicitWidth - Style.space(8))
-                      text: "#" + itemRow.modelData.profile + (itemRow.modelData.repo ? ("/" + itemRow.modelData.repo) : "")
+                      text: {
+                        var prof = itemRow.modelData.profile || ""
+                        var r = root.cleanRepoName(itemRow.modelData.repo)
+                        return "#" + prof + (r ? ("/" + r) : "")
+                      }
                       color: Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
@@ -1294,8 +1642,8 @@ Item {
                     }
 
                     PanelToolTip {
-                      visible: profBadgeHover.hovered && profLabel.truncated
-                      text: "#" + itemRow.modelData.profile + (itemRow.modelData.repo ? ("/" + itemRow.modelData.repo) : "")
+                      visible: profBadgeHover.hovered && (profLabel.truncated || Boolean(itemRow.modelData.repo))
+                      text: "#" + (itemRow.modelData.profile || "") + (itemRow.modelData.repo ? ("/" + itemRow.modelData.repo) : "")
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     }
                   }
@@ -1305,7 +1653,7 @@ Item {
                     id: repoBadge
                     visible: root.currentFilter !== "all" && Boolean(itemRow.modelData.repo)
                     anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: Math.min(Style.space(75), repoLabel.implicitWidth + Style.space(8))
+                    implicitWidth: Math.min(Style.space(85), repoLabel.implicitWidth + Style.space(8))
                     implicitHeight: Style.space(16)
                     radius: implicitHeight / 2
                     color: Util.alpha(Color.accent, 0.12)
@@ -1316,7 +1664,7 @@ Item {
                       id: repoLabel
                       anchors.centerIn: parent
                       width: Math.min(implicitWidth, repoBadge.implicitWidth - Style.space(8))
-                      text: "󰊤 " + itemRow.modelData.repo
+                      text: "󰊤 " + root.cleanRepoName(itemRow.modelData.repo)
                       color: Color.accent
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
@@ -1330,122 +1678,36 @@ Item {
                     }
 
                     PanelToolTip {
-                      visible: repoBadgeHover.hovered && repoLabel.truncated
+                      visible: repoBadgeHover.hovered
                       text: "Repo: " + (itemRow.modelData.repo || "")
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     }
                   }
 
-                  // Title text
-                  Text {
-                    id: titleLabel
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.max(Style.space(40), titleRow.width - checkboxIcon.implicitWidth - (profBadge.visible ? profBadge.implicitWidth + titleRow.spacing : 0) - (repoBadge.visible ? repoBadge.implicitWidth + titleRow.spacing : 0) - titleRow.spacing)
-                    text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
-                    color: itemRow.isDone ? Color.muted : root.barForeground
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.strikeout: itemRow.isDone
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
+                  // Tag chips
+                  Repeater {
+                    model: itemRow.modelData.tags || []
 
-                    HoverHandler {
-                      id: titleHover
-                    }
-
-                    PanelToolTip {
-                      visible: titleHover.hovered && titleLabel.truncated
-                      text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
-                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                    }
-                  }
-                }
-
-                // Indicators and action buttons
-                Row {
-                  id: rowActions
-                  anchors.right: parent.right
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(4)
-
-                  // Description indicator icon
-                  Text {
-                    visible: !itemRow.isExpanded && Boolean(itemRow.modelData.description)
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "󰏫"
-                    color: Color.muted
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.caption
-                  }
-
-                  // Reminder badge
-                  Rectangle {
-                    visible: !itemRow.isExpanded && Boolean(itemRow.modelData.reminder)
-                    anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: remRow.implicitWidth + Style.space(6)
-                    implicitHeight: Style.space(18)
-                    radius: implicitHeight / 2
-                    color: itemRow.isDone ? Color.menu.background : Util.alpha(Color.accent, 0.14)
-                    border.color: itemRow.isDone ? Color.menu.border : Color.accent
-                    border.width: 1
-
-                    Row {
-                      id: remRow
-                      anchors.centerIn: parent
-                      spacing: Style.space(2)
+                    Rectangle {
+                      required property string modelData
+                      anchors.verticalCenter: parent.verticalCenter
+                      implicitWidth: Math.min(Style.space(70), tagChipText.implicitWidth + Style.space(8))
+                      implicitHeight: Style.space(16)
+                      radius: implicitHeight / 2
+                      color: Color.menu.background
+                      border.color: Color.menu.border
+                      border.width: 1
 
                       Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "󰥔"
-                        color: itemRow.isDone ? Color.muted : Color.accent
+                        id: tagChipText
+                        anchors.centerIn: parent
+                        width: Math.min(implicitWidth, Style.space(62))
+                        text: "#" + parent.modelData
+                        color: Color.muted
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(8.5)
+                        elide: Text.ElideRight
                       }
-
-                      Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: TodoStore.formatReminder(itemRow.modelData.reminder)
-                        color: itemRow.isDone ? Color.muted : Color.accent
-                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                        font.pixelSize: Style.space(8.5)
-                      }
-                    }
-                  }
-
-                  // Expand / Collapse details button
-                  PanelActionButton {
-                    anchors.verticalCenter: parent.verticalCenter
-                    size: Style.space(22)
-                    iconText: itemRow.isExpanded ? "󰅃" : "󰅀"
-                    fontSize: Style.font.caption
-                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                    foreground: Color.muted
-                    hoverColor: Color.accent
-                    tooltipText: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
-                    onClicked: {
-                      root.savePendingNotes()
-                      root.cursorIndex = itemRow.index
-                      if (itemRow.isExpanded) {
-                        root.expandedTaskId = -1
-                        root.expandedViaKeyboard = false
-                      } else {
-                        root.expandedTaskId = itemRow.modelData.id
-                        root.expandedViaKeyboard = true
-                      }
-                    }
-                  }
-
-                  // Remove button
-                  PanelActionButton {
-                    anchors.verticalCenter: parent.verticalCenter
-                    size: Style.space(22)
-                    iconText: "󰅙"
-                    fontSize: Style.font.caption
-                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                    foreground: Color.muted
-                    hoverColor: root.bar ? root.bar.urgent : Color.urgent
-                    tooltipText: "Delete task"
-                    onClicked: {
-                      root.removeTodo(itemRow.modelData.id)
                     }
                   }
                 }
@@ -1460,47 +1722,56 @@ Item {
                 PanelSeparator { width: parent.width }
 
                 // Description / Notes input (reusable multi-line TaskNotesArea component)
-                TaskNotesArea {
-                  id: descArea
+                Rectangle {
+                  id: descAreaWrapper
                   width: parent.width
-                  text: itemRow.modelData.description || ""
-                  placeholderText: "Notes / description (Shift+Enter for newline)..."
-                  bar: root.bar
-                  foreground: root.barForeground
-                  accentColor: Color.accent
-                  Component.onCompleted: {
-                    if (itemRow.isExpanded) {
-                      root.descArea = descArea
-                    }
-                  }
-                  onEditorActiveFocusChanged: {
-                    if (editorActiveFocus) {
-                      root.descArea = descArea
-                    } else if (root.descArea === descArea && !editorActiveFocus) {
-                      if (itemRow.isExpanded && !rowHoverHandler.hovered) {
-                        hoverFoldTimer.restart()
+                  implicitHeight: descArea.implicitHeight + ((root.expandedSubSection === "notes" && !descArea.editorActiveFocus) ? Style.space(4) : 0)
+                  radius: Style.cornerRadius
+                  color: "transparent"
+                  border.color: (root.expandedSubSection === "notes" && !descArea.editorActiveFocus) ? Color.accent : "transparent"
+                  border.width: (root.expandedSubSection === "notes" && !descArea.editorActiveFocus) ? 1.5 : 0
+
+                  TaskNotesArea {
+                    id: descArea
+                    width: parent.width
+                    text: itemRow.modelData.description || ""
+                    placeholderText: "Notes / description (Shift+Enter for newline)..."
+                    bar: root.bar
+                    foreground: root.barForeground
+                    accentColor: Color.accent
+                    Component.onCompleted: {
+                      if (itemRow.isExpanded) {
+                        root.descArea = descArea
                       }
                     }
-                  }
-                  onEscapePressed: {
-                    root.savePendingNotes()
-                    root.focusSection = "tasks"
-                    root.cursorActive = true
-                    root.releaseFocus()
-                  }
-                  onTabPressed: function(direction) {
-                    root.savePendingNotes()
-                    root.releaseFocus()
-                    root.handleTab(direction)
-                  }
-                  Component.onDestruction: {
-                    if (root.descArea === descArea) {
-                      root.descArea = null
+                    onEditorActiveFocusChanged: {
+                      if (editorActiveFocus) {
+                        root.descArea = descArea
+                      } else if (root.descArea === descArea && !editorActiveFocus) {
+                        if (itemRow.isExpanded && !rowHoverHandler.hovered) {
+                          hoverFoldTimer.restart()
+                        }
+                      }
                     }
-                  }
-                  onSaved: function(newText) {
-                    if (itemRow.modelData && newText !== (itemRow.modelData.description || "")) {
-                      root.updateTodo(itemRow.modelData.id, { description: newText })
+                    onEscapePressed: {
+                      root.savePendingNotes()
+                      root.expandedSubSection = "notes"
+                      root.releaseFocus()
+                    }
+                    onTabPressed: function(direction) {
+                      root.savePendingNotes()
+                      root.releaseFocus()
+                      root.handleTab(direction)
+                    }
+                    Component.onDestruction: {
+                      if (root.descArea === descArea) {
+                        root.descArea = null
+                      }
+                    }
+                    onSaved: function(newText) {
+                      if (itemRow.modelData && newText !== (itemRow.modelData.description || "")) {
+                        root.updateTodo(itemRow.modelData.id, { description: newText })
+                      }
                     }
                   }
                 }
@@ -1513,9 +1784,10 @@ Item {
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "󰥔 Reminder:"
-                    color: Color.muted
+                    color: (root.expandedSubSection === "reminders") ? Color.accent : Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.space(9.5)
+                    font.bold: root.expandedSubSection === "reminders"
                   }
 
                   Repeater {
@@ -1524,27 +1796,34 @@ Item {
                     Rectangle {
                       id: remPresetBtn
                       required property var modelData
+                      required property int index
                       readonly property bool isSelected: itemRow.modelData.reminder === modelData.value
+                      readonly property bool isNavFocused: (root.expandedSubSection === "reminders") && (root.expandedReminderIndex === index)
+
                       implicitWidth: remPresetText.implicitWidth + Style.space(8)
                       implicitHeight: Style.space(20)
                       radius: Style.cornerRadius
-                      color: isSelected ? Color.accent : Color.menu.background
-                      border.color: isSelected ? Color.accent : Color.menu.border
-                      border.width: 1
+                      color: isSelected ? Color.accent : (isNavFocused ? Util.alpha(Color.accent, 0.2) : Color.menu.background)
+                      border.color: isNavFocused ? Color.accent : (isSelected ? Color.accent : Color.menu.border)
+                      border.width: isNavFocused ? 1.5 : 1
+                      scale: isNavFocused ? 1.05 : 1.0
+                      Behavior on scale { NumberAnimation { duration: 80 } }
 
                       Text {
                         id: remPresetText
                         anchors.centerIn: parent
                         text: remPresetBtn.modelData.label
-                        color: remPresetBtn.isSelected ? "white" : root.barForeground
+                        color: remPresetBtn.isSelected ? "white" : (remPresetBtn.isNavFocused ? Color.accent : root.barForeground)
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(9)
+                        font.bold: remPresetBtn.isSelected || remPresetBtn.isNavFocused
                       }
 
                       MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                          root.expandedReminderIndex = remPresetBtn.index
                           root.updateTodo(itemRow.modelData.id, { reminder: remPresetBtn.modelData.value })
                         }
                       }
@@ -1553,89 +1832,130 @@ Item {
 
                   // Clear reminder button
                   Rectangle {
+                    id: clearRemBtn
+                    readonly property bool isNavFocused: (root.expandedSubSection === "reminders") && (root.expandedReminderIndex === root.reminderPresets.length)
                     visible: Boolean(itemRow.modelData.reminder)
                     implicitWidth: clearRemText.implicitWidth + Style.space(8)
                     implicitHeight: Style.space(20)
                     radius: Style.cornerRadius
-                    color: Color.menu.background
-                    border.color: Color.menu.border
-                    border.width: 1
+                    color: clearRemBtn.isNavFocused ? Util.alpha(Color.accent, 0.2) : Color.menu.background
+                    border.color: clearRemBtn.isNavFocused ? Color.accent : Color.menu.border
+                    border.width: clearRemBtn.isNavFocused ? 1.5 : 1
+                    scale: clearRemBtn.isNavFocused ? 1.05 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 80 } }
 
                     Text {
                       id: clearRemText
                       anchors.centerIn: parent
                       text: "✕ Clear"
-                      color: Color.muted
+                      color: clearRemBtn.isNavFocused ? Color.accent : Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(9)
+                      font.bold: clearRemBtn.isNavFocused
                     }
 
                     MouseArea {
                       anchors.fill: parent
                       cursorShape: Qt.PointingHandCursor
                       onClicked: {
+                        root.expandedReminderIndex = root.reminderPresets.length
                         root.updateTodo(itemRow.modelData.id, { reminder: null })
                       }
                     }
                   }
                 }
 
-                // Profile selector row
-                Flow {
+                // Profile selector row (Compact single-line horizontal scrollable row)
+                Item {
+                  id: profReassignContainer
                   width: parent.width
-                  spacing: Style.space(4)
+                  implicitHeight: Style.space(22)
 
-                  Text {
-                    text: "Profile:"
-                    color: Color.muted
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.space(9.5)
-                    topPadding: Style.space(3)
+                  Row {
+                    id: profLabelRow
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(4)
+
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "Profile:"
+                      color: (root.expandedSubSection === "profiles") ? Color.accent : Color.muted
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(9.5)
+                      font.bold: root.expandedSubSection === "profiles"
+                    }
                   }
 
-                  Repeater {
-                    model: TodoStore.getSortedProfiles(root.store, false, "")
+                  Flickable {
+                    id: profReassignFlickable
+                    anchors.left: profLabelRow.right
+                    anchors.leftMargin: Style.space(4)
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    contentWidth: profReassignRow.implicitWidth
+                    flickableDirection: Flickable.HorizontalFlick
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
 
-                    Rectangle {
-                      id: profReassignBtn
-                      required property string modelData
-                      readonly property bool isSelected: itemRow.modelData.profile === modelData
-                      implicitWidth: profReassignText.width + Style.space(8)
-                      implicitHeight: Style.space(20)
-                      radius: Style.cornerRadius
-                      color: isSelected ? Color.accent : Color.menu.background
-                      border.color: isSelected ? Color.accent : Color.menu.border
-                      border.width: 1
+                    Row {
+                      id: profReassignRow
+                      spacing: Style.space(4)
+                      anchors.verticalCenter: parent.verticalCenter
 
-                      Text {
-                        id: profReassignText
-                        anchors.centerIn: parent
-                        width: Math.min(implicitWidth, Style.space(80))
-                        text: profReassignBtn.modelData
-                        color: profReassignBtn.isSelected ? "white" : root.barForeground
-                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                        font.pixelSize: Style.space(9)
-                        font.bold: profReassignBtn.isSelected
-                        elide: Text.ElideRight
-                        horizontalAlignment: Text.AlignHCenter
-                      }
+                      Repeater {
+                        id: profReassignRepeater
+                        model: TodoStore.getSortedProfiles(root.store, false, "")
 
-                      MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                          root.updateTodo(itemRow.modelData.id, { profile: profReassignBtn.modelData })
+                        Rectangle {
+                          id: profReassignBtn
+                          required property string modelData
+                          required property int index
+                          readonly property bool isSelected: itemRow.modelData.profile === modelData
+                          readonly property bool isNavFocused: (root.expandedSubSection === "profiles") && (root.expandedProfileIndex === index)
+
+                          implicitWidth: profReassignText.implicitWidth + Style.space(10)
+                          implicitHeight: Style.space(20)
+                          radius: Style.cornerRadius
+                          color: isSelected ? Color.accent : (isNavFocused ? Util.alpha(Color.accent, 0.2) : Color.menu.background)
+                          border.color: isNavFocused ? Color.accent : (isSelected ? Color.accent : Color.menu.border)
+                          border.width: isNavFocused ? 1.5 : 1
+                          scale: isNavFocused ? 1.05 : 1.0
+                          Behavior on scale { NumberAnimation { duration: 80 } }
+
+                          Text {
+                            id: profReassignText
+                            anchors.centerIn: parent
+                            width: Math.min(implicitWidth, Style.space(80))
+                            text: profReassignBtn.modelData
+                            color: profReassignBtn.isSelected ? "white" : (profReassignBtn.isNavFocused ? Color.accent : root.barForeground)
+                            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                            font.pixelSize: Style.space(9)
+                            font.bold: profReassignBtn.isSelected || profReassignBtn.isNavFocused
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignHCenter
+                          }
+
+                          MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                              root.expandedProfileIndex = profReassignBtn.index
+                              root.updateTodo(itemRow.modelData.id, { profile: profReassignBtn.modelData })
+                            }
+                          }
+
+                          HoverHandler {
+                            id: profReassignHover
+                          }
+
+                          PanelToolTip {
+                            visible: profReassignHover.hovered && profReassignText.truncated
+                            text: profReassignBtn.modelData
+                            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                          }
                         }
-                      }
-
-                      HoverHandler {
-                        id: profReassignHover
-                      }
-
-                      PanelToolTip {
-                        visible: profReassignHover.hovered && profReassignText.truncated
-                        text: profReassignBtn.modelData
-                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       }
                     }
                   }
@@ -1745,13 +2065,10 @@ Item {
                     fontSize: Style.space(9)
                     fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                     bordered: true
+                    hasCursor: (root.expandedSubSection === "codebase")
                     tooltipText: "Open codebase directory in editor"
                     onClicked: {
-                      root.savePendingNotes()
-                      root.closeRequested()
-                      var locPath = itemRow.modelData.location.localPath
-                      if (locPath.startsWith("~")) locPath = Quickshell.env("HOME") + locPath.slice(1)
-                      if (root.bar) root.bar.run("omarchy-launch-editor \"" + locPath + "\"")
+                      root.openCodebase(itemRow.modelData)
                     }
                   }
                 }
