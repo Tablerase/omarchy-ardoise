@@ -8,10 +8,15 @@ import { execSync, spawnSync } from "node:child_process";
 const repoDir = path.resolve(import.meta.dirname, "..");
 
 test("Static QML Analysis: All QQC2 and custom UI components have required imports", () => {
-  const qmlFiles = fs
+  const rootFiles = fs
     .readdirSync(repoDir)
     .filter((f) => f.endsWith(".qml"))
     .map((f) => path.join(repoDir, f));
+  const uiSubDir = path.join(repoDir, "ui");
+  const uiFiles = fs.existsSync(uiSubDir)
+    ? fs.readdirSync(uiSubDir).filter((f) => f.endsWith(".qml")).map((f) => path.join(uiSubDir, f))
+    : [];
+  const qmlFiles = [...rootFiles, ...uiFiles];
 
   assert.ok(qmlFiles.length >= 4, "Found core QML files in repository");
 
@@ -86,7 +91,14 @@ test("Static QML Analysis: All QQC2 and custom UI components have required impor
 test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace dismiss, and GitHub brand link", () => {
   const quickAddContent = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const panelLogicContent = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
   const panelQmlContent = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
+  const taskNotesAreaContent = fs.readFileSync(path.join(repoDir, "TaskNotesArea.qml"), "utf8");
+  const uiSubDir = path.join(repoDir, "ui");
+  const uiFilesContent = fs.existsSync(uiSubDir)
+    ? fs.readdirSync(uiSubDir).filter((f) => f.endsWith(".qml")).map((f) => fs.readFileSync(path.join(uiSubDir, f), "utf8")).join("\n")
+    : "";
+  const allUiContent = panelContent + "\n" + uiFilesContent;
 
   // 1. QuickAdd action buttons: Add button must NOT have hardcoded 'selected: true',
   // and both buttons must link 'selected' and 'hasCursor' to the active actionIndex.
@@ -108,15 +120,15 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
 
   // 2. Help search & shortcuts: Backspace on empty text dismisses modal
   assert.ok(
-    panelContent.includes("event.key === Qt.Key_Backspace && keySearchField.text.length === 0"),
+    allUiContent.includes("event.key === Qt.Key_Backspace && keySearchField.text.length === 0"),
     "keySearchField must handle Backspace when empty to dismiss help modal"
   );
   assert.ok(
-    !panelContent.includes('"i / a / /"'),
+    !panelLogicContent.includes('"i / a / /"'),
     "keybindingsList must avoid ambiguous 'i / a / /' notation"
   );
   assert.ok(
-    panelContent.includes('"i / a / <slash>"'),
+    panelLogicContent.includes('"i / a / <slash>"'),
     "keybindingsList must use unambiguous 'i / a / <slash>' key entry"
   );
   assert.ok(
@@ -187,6 +199,21 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   assert.ok(
     panelQmlContent.includes("panelContent.handleEscape && panelContent.handleEscape()"),
     "Panel.qml must delegate escape handling to panelContent.handleEscape for two-stage escape"
+  );
+  assert.ok(
+    taskNotesAreaContent.includes("property bool isNavFocused: false") &&
+      taskNotesAreaContent.includes("(textArea.activeFocus || root.isNavFocused)"),
+    "TaskNotesArea must support isNavFocused for unified focus border"
+  );
+  assert.ok(
+    panelContent.includes("function focusNotesEditor()") &&
+      (panelContent + panelLogicContent).includes("root.focusNotesEditor()"),
+    "PanelContent must provide robust focusNotesEditor helper for notes navigation"
+  );
+  assert.ok(
+    allUiContent.includes("function ensureVisible(idx)") &&
+      panelContent.includes("itemRow.ensureReassignProfileVisible"),
+    "profReassignFlickable must support ensureVisible auto-scrolling on profile navigation"
   );
 
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
@@ -484,9 +511,18 @@ ShellRoot {
                 Qt.exit(115);
                 return;
             }
+            // Enable notes section
+            quickAdd.showNote = true;
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "notes") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to notes when showNote=true");
+                Qt.exit(130);
+                return;
+            }
+            // Move from notes down to profiles
             quickAdd.advanceSection(1);
             if (quickAdd.focusSection !== "profiles") {
-                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to profiles");
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from notes failed to move to profiles");
                 Qt.exit(116);
                 return;
             }
@@ -495,6 +531,21 @@ ShellRoot {
             if (quickAdd.focusSection !== "actions") {
                 console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to actions");
                 Qt.exit(117);
+                return;
+            }
+            // Enable location context: location must be the last section
+            quickAdd.detectedContext = { repo: "test/repo", localPath: "/tmp" };
+            quickAdd.attachLocation = true;
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "location") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from actions failed to move to location");
+                Qt.exit(131);
+                return;
+            }
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "title") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from location failed to wrap to title");
+                Qt.exit(132);
                 return;
             }
             quickAdd.dismiss();

@@ -34,6 +34,10 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
    - Projects represent high-level conceptual umbrellas (e.g. `#omarchy`), while repositories represent physical codebases (e.g. `ardoise`, `shell`).
    - Quick Add automatically queries the active Hyprland window, resolves the terminal/editor working directory, Git root, and Git remote identifier, and attaches location context without manual user input.
    - Tasks store cross-device safe Git remote identities (`location.repo`) alongside normalized local directory paths (`location.localPath`).
+8. **Clean Separation of UI and Logic (`PanelLogic.js`)**:
+   - `PanelContent.qml` strictly handles visual hierarchy, layout items, styling, animations, and QtQuick property bindings.
+   - Core 2D navigation state machine transitions (`handleMove`, `handleTab`, `handleActivate`, `handleReturn`, `handleEscape`, `handleTextKey`, `handleDelete`), section / sub-section stepping (`getNextSection`, `getNextSubSection`, `getPrevSubSection`), editor and codebase command generation (`buildEditorCommand`, `buildCodebaseCommand`), repo name formatting (`cleanRepoName`), and keybinding catalogs/filtering (`getKeybindingsList`, `filterKeybindings`) are isolated in `PanelLogic.js`.
+   - This separation facilitates rapid manual styling tweaks without risk of breaking navigation algorithms, while enabling comprehensive automated unit testing in Node and Deno.
 
 ---
 
@@ -59,6 +63,14 @@ The plugin comprises 3 primary desktop surfaces rendered via Quickshell:
 └──────────────────────────────┘    └──────────────────────────────┘
 ```
 
+### Modular Component Library (`ui/`)
+To preserve long-term maintainability and visual consistency across the main panel and modal surfaces (inspired by OmaTasks), UI widgets are modularized in `ui/`:
+- **`ui/Chip.qml`**: Reusable compact pill/badge component for reminders, repositories, tags, and auto-detected locations. Strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, and optional removal button.
+- **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss.
+- **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary status and urgency indicator (accent border and tint for due today, urgent border and tint for overdue, muted border with checkmark for completed, muted border for normal pending).
+- **`ui/ReminderPills.qml`**: Reusable reminder preset pill row ("Today", "Tomorrow", "In 3 Days", "In 1 Week", "Clear") with navigation cursor scaling.
+- **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, and smooth auto-scroll (`ensureVisible`).
+
 ---
 
 ## 3. Surface Specifications & Component Trees
@@ -73,41 +85,39 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 3. **Title Input Field (`taskInput`)**:
    - Autofocused on modal open with explicit `BorderSurface` focus border.
    - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
-   - <kbd>Escape</kbd>: dismisses if empty; blurs to `options` motion mode if text is present.
+   - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
 4. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
-5. **Auto-Detected Codebase Context Chip** (Conditional: `detectedContext && attachLocation`):
-   - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath (e.g. `Tablerase/omarchy-ardoise` or `~/Work/...`) + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
-   - Automatically detected from active Hyprland terminal/editor process tree on modal open.
-   - Attached to the created task on submit unless explicitly dismissed via `󰅖`.
-6. **Option Toggles Row**:
+5. **Option Toggles Row**:
    - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
    - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`.
    - Both buttons use `bordered: true` for clear cursor focus framing.
-7. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
+6. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
-   - <kbd>Escape</kbd>: blurs textarea and returns focus to `options` on the card.
-8. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
-   - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear". Bordered focus styling.
-9. **Profile Selector Container (`profileFlow`)**:
-   - Positioned at the bottom, just above the footer actions for fast writing.
-   - Section header label highlights in accent color when `profiles` section is focused.
-   - Flow wrapping profile pills sorted by activity/count. Focused pill features high-contrast border and 1.05 scale pop.
+   - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
+7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
+   - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear". Bordered focus styling via `Ui.ReminderPills`.
+8. **Profile Selector Container (`quickAddProfileContainer`)**:
+   - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-10. **Separator**: Bottom dividing line (`PanelSeparator`).
-11. **Footer Actions Item**:
+9. **Separator**: Bottom dividing line (`PanelSeparator`).
+10. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
     - Right: Action buttons [Cancel] and [Add]:
       - Both buttons use `bordered: true` and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
       - When Cancel is navigated to (`actionIndex === 0`), Cancel receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
       - When Add is navigated to (`actionIndex === 1`), Add receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop.
       - At neutral rest state (e.g. while typing title or notes), neither button is selected, preventing misleading highlights.
+11. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
+    - Positioned at the very end of the modal (last section).
+    - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
+    - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after actions (or <kbd>k</kbd>/<kbd>Up</kbd> backward from title). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to title.
 
 #### Navigation State Flow (`focusSection`)
 ```
-[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [actions]
-   ▲                                                                                                                            │
-   └──────────────────────────────────────────────Tab/Down (Loops around)───────────────────────────────────────────────────────┘
+[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [actions] ──Tab/Down──► [(location)]
+   ▲                                                                                                                                                    │
+   └──────────────────────────────────────────────────Tab/Down (Loops around)───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -126,21 +136,29 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - Auto-scrollable flickable with left/right fade gradient hints.
    - "+" button to quickly create a new profile inline.
 3. **Quick Input Row**:
-   - `newTodoField`: Task title entry with inline placeholder.
+   - `newTodoField`: Task title entry with inline placeholder wrapped in `BorderSurface`.
+   - Visual focus outline displayed when focused in normal navigation mode (`focusSection === "input"`).
+   - **Universal Escape**: Pressing <kbd>Escape</kbd> while typing blurs the text field into normal motion mode on the `"input"` section without closing the panel or discarding text. In normal mode, pressing <kbd>j</kbd>/<kbd>Down</kbd> moves into `tasks`, <kbd>k</kbd>/<kbd>Up</kbd> moves into `profiles`, and pressing <kbd>Enter</kbd>, <kbd>Space</kbd>, or typing any printable character re-enters edit mode.
    - Profile badge showing currently active filter tag.
    - Add button.
 4. **Task List View (`taskListView`)**:
    - Vertically flickable column of tasks (`itemRow`).
    - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
    - Individual task row:
-     - **Two-Line Responsive Layout**:
-       - When an item possesses category badges, repo chips, or tags (`hasBadges === true`):
-         - **Line 1 (Title Row)**: Checkbox (`isDone`) + Full-Width Title (occupying all available horizontal space up to action buttons) + Action & Indicator icons (Expand chevron `󰅂`, Delete `󰆴`, Notes indicator `󰏫`, Reminder badge `󰥔`).
-         - **Line 2 (Chips Row)**: Sub-line indented cleanly under the title text displaying:
-           - Profile badge (`#profile` or `#profile/repo`).
-           - Repository badge (`󰊤 repo`): Multi-repo task differentiator.
-           - Tag chips (`#tag1`, `#tag2`...): Subsystem tag pills.
-       - When an item has no badges or tags: Compact single-line layout (`Style.space(34)`), saving vertical space.
+     - **OmaTasks-Inspired Item Layout**:
+       - Sizing is deterministic, content-driven, and dynamically compact:
+         `implicitHeight: isExpanded ? (expandedContent.implicitHeight + Style.space(16)) : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0))`
+       - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title (stretching dynamically between the checkbox and action buttons) + Action buttons on the right (Expand chevron `󰅀`/`󰅃` and Delete `󰅙`). The pencil icon indicator (`󰏫`) and redundant left-side urgency stripes/gradients are removed in favor of the clean circular checkbox indicator.
+       - **Line 2 (Note Preview Line)**: Rendered when collapsed and task has notes (`hasNotes === true`):
+         - Single-line elided text preview (`Text.ElideRight`, italic, `Color.textMuted`), indented cleanly below the title.
+         - Hover tooltip displaying the full multiline note text.
+       - **Line 3 (Metadata & Chips Row)**: Sub-line rendered when badges exist (`hasBadges === true`):
+         - Bounded strictly between the checkbox margin and the right edge (or docked profile indicator), with `Style.space(20)` height ensuring chip borders and pills are never cropped vertically.
+         - Profile badge (`profLabel`): Docked cleanly to the right when viewing "all" (`#profile`, elided).
+         - Sub-line chips (`chipsRow`): Indented under title text displaying reminder pill (`󰥔 time` — tasks due today display strictly their scheduled time `HH:MM` without redundant "Due today at" or "Today" prefixes), repo badge (`󰊤 repo`), and tag chips (`#tag`).
+       - When an item has no notes or badges: Single-line layout (`Style.space(34)`), with title, checkbox, and action buttons mathematically and visually centered with comfortable vertical padding.
+       - Collapsed row content is vertically centered across 1-line, 2-line, and 3-line items via explicit height propagation on `expandedContent` and `itemHeaderCol`.
+       - **Row Separators**: A light section separator (`PanelSeparator`, 1px, `strength: 0.08`) is rendered between adjacent item rows in the list to enhance readability.
      - **Repo Name Display Formatting**:
        - In item badges, repository strings strip any owner/organization prefix (e.g. `Tablerase/omarchy-ardoise` displays cleanly as `omarchy-ardoise`) to save space and reduce cognitive clutter, while strictly preserving the full remote repository and local path in data and hover tooltips.
        - Target codebase context chip remains strictly located within the expanded drawer to avoid crowding the collapsed task list.
@@ -153,18 +171,18 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
      - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.
      - Separator.
-     - `TaskNotesArea` multi-line notes editor (revealed when expanded via <kbd>Enter</kbd>).
+     - `TaskNotesArea` multi-line notes editor (directly placed within the column without misaligned outer wrappers, using `isNavFocused` to draw the control's native focus border when active in sub-section navigation).
      - Reminder preset row: Today, Tomorrow, In 3 Days, In 1 Week, Clear. Bordered navigation focus indicators.
-     - **Compact Profile Reassignment Row (`profReassignContainer`)**: Single-line horizontal scrollable row (`Style.space(22)`) replacing multi-line wrapping flow, keeping drawer height tightly bounded.
+     - **Compact Profile Reassignment Row (`profReassignContainer`)**: Single-line horizontal scrollable row (`Style.space(22)`) with auto-scroll (`ensureVisible`) keeping the currently navigated profile pill smoothly centered in view on <kbd>h</kbd> / <kbd>l</kbd> keypress.
      - **Location & Codebase Context Row (`locRow`)**:
        - Displays `󰉋 Target:` with repository identifier (`󰊤 repo/subpath`) or directory path (`󰉋 localPath`), along with subsystem `#tag` chips.
        - Includes a **[Codebase]** action button that launches `omarchy-launch-editor` directly in the target repository directory.
    - **Expanded Sub-Section Keyboard State Machine (`expandedSubSection`)**:
      - When a task is expanded, focus is hierarchical:
        1. `"header"` (default): Item row header is focused. <kbd>Enter</kbd> collapses the drawer; <kbd>Space</kbd> toggles `done`.
-       2. `"notes"`: Notes editor area is focused. Pressing <kbd>i</kbd> or <kbd>Enter</kbd> enters insert mode; <kbd>Escape</kbd> leaves insert mode back to motion mode.
+       2. `"notes"`: Notes editor area is focused. Pressing <kbd>i</kbd>, <kbd>Enter</kbd>, or typing any printable character enters insert mode and appends into the notes field; <kbd>Escape</kbd> or <kbd>Enter</kbd> leaves insert mode back to navigation mode without losing draft text. Clicking directly into the notes field focuses the editor without toggling task status.
        3. `"reminders"`: Reminder presets row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles presets; <kbd>Space</kbd> / <kbd>Enter</kbd> applies the preset.
-       4. `"profiles"`: Profile reassignment row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles profiles (with auto-scroll); <kbd>Space</kbd> / <kbd>Enter</kbd> reassigns task profile.
+       4. `"profiles"`: Profile reassignment row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles profiles (with auto-scroll into view); <kbd>Space</kbd> / <kbd>Enter</kbd> reassigns task profile.
        5. `"codebase"` (conditional on location): Codebase launch button is focused. <kbd>Enter</kbd> / <kbd>Space</kbd> opens editor.
      - Navigating with <kbd>Tab</kbd> / <kbd>j</kbd> / <kbd>↓</kbd> steps sequentially through sub-sections, then continues to the next task in the list.
      - Navigating with <kbd>Shift+Tab</kbd> / <kbd>k</kbd> / <kbd>↑</kbd> steps backward through sub-sections, returning to `"header"`.
@@ -222,7 +240,10 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
-| **Panel (Input)** | `Escape` | Release focus back to task list (normal mode) |
+| **Panel (Input)** | `Escape` | Blur text field to normal motion mode on `input` without discarding text |
+| **Panel (Input Normal)** | `i` / `a` / `Enter` / `Space` | Enter text edit mode in input field |
+| **Panel (Input Normal)** | `j` / `↓` | Move down to task list |
+| **Panel (Input Normal)** | `k` / `↑` | Move up to profile filter bar |
 | **Quick Add** | `Escape` | If title empty: dismiss modal. If non-empty: leave insert mode to `options`. |
 | **Quick Add (Normal)**| `Escape` | Dismiss modal |
 | **Quick Add (Normal)**| `i` / `a` | Enter insert mode into title input (or notes if on notes) |

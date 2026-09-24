@@ -21,6 +21,7 @@ ScrollView {
   property color accentColor: Color.accent
   property int minHeight: Style.space(56)
   property int maxHeight: Style.space(130)
+  property bool isNavFocused: false
 
   readonly property bool editorActiveFocus: textArea.activeFocus
   readonly property alias textArea: textArea
@@ -55,8 +56,12 @@ ScrollView {
   clip: true
 
   background: BorderSurface {
-    color: Style.controlFill(textArea.activeFocus, textArea.hovered, root.foreground, root.accentColor)
-    borderSpec: Border.controlSpec(textArea.activeFocus ? "focus" : (textArea.hovered ? "hover-cursor" : "normal"), root.foreground, root.accentColor)
+    color: Style.controlFill(textArea.activeFocus || root.isNavFocused, textArea.hovered, root.foreground, root.accentColor)
+    borderSpec: Border.controlSpec(
+      (textArea.activeFocus || root.isNavFocused) ? "focus" : (textArea.hovered ? "hover-cursor" : "normal"),
+      root.foreground,
+      root.accentColor
+    )
     radius: Style.cornerRadius
   }
 

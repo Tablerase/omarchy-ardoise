@@ -14,6 +14,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
+import "./ui" as Ui
 
 Item {
   id: root
@@ -46,13 +47,12 @@ Item {
   property int actionIndex: 1 // 0: cancel, 1: add
 
   function getActiveSections() {
-    var secs = ["title"]
-    if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
-    secs.push("options")
+    var secs = ["title", "options"]
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
     secs.push("profiles")
     secs.push("actions")
+    if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
     return secs
   }
 
@@ -66,17 +66,12 @@ Item {
   }
 
   function applySectionFocus() {
-    if (focusSection === "title") {
-      Qt.callLater(function() { taskInput.forceActiveFocus() })
-    } else if (focusSection === "notes") {
-      Qt.callLater(function() {
-        if (descNotesArea) descNotesArea.forceActiveFocus()
-      })
-    } else {
-      taskInput.focus = false
-      if (descNotesArea) descNotesArea.focus = false
-      card.forceActiveFocus()
+    taskInput.focus = false
+    if (descNotesArea) {
+      if (descNotesArea.textArea) descNotesArea.textArea.focus = false
+      descNotesArea.focus = false
     }
+    card.forceActiveFocus()
   }
 
   function cycleProfileSelection(step) {
@@ -175,21 +170,11 @@ Item {
   }
 
   function ensureProfileVisible(profileName) {
-    if (typeof profileFlickable === "undefined" || !profileFlickable) return
+    if (typeof quickAddProfileSelector === "undefined" || !quickAddProfileSelector) return
     var profs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
     var idx = profs.indexOf(profileName)
-    if (idx !== -1 && typeof profileRepeater !== "undefined" && profileRepeater && profileRepeater.count > idx) {
-      var item = profileRepeater.itemAt(idx)
-      if (item) {
-        var itemLeft = item.x
-        var itemRight = item.x + item.width
-        if (itemLeft < profileFlickable.contentX) {
-          profileFlickable.contentX = Math.max(0, itemLeft - Style.space(8))
-        } else if (itemRight > profileFlickable.contentX + profileFlickable.width) {
-          var maxContentX = Math.max(0, profileFlickable.contentWidth - profileFlickable.width)
-          profileFlickable.contentX = Math.min(maxContentX, itemRight - profileFlickable.width + Style.space(8))
-        }
-      }
+    if (idx !== -1) {
+      quickAddProfileSelector.ensureVisible(idx)
     }
   }
 
@@ -448,13 +433,20 @@ Item {
           return
         }
 
-        // Typing any letter automatically directs to task title!
+        // Typing any printable character automatically directs to notes (if focused) or task title!
         if (event.text && event.text.length === 1 && !event.modifiers) {
           event.accepted = true
-          root.focusSection = "title"
-          taskInput.forceActiveFocus()
-          taskInput.text += event.text
-          taskInput.cursorPosition = taskInput.text.length
+          if (root.focusSection === "notes" && root.showNote && descNotesArea) {
+            descNotesArea.forceActiveFocus()
+            if (descNotesArea.textArea) {
+              descNotesArea.textArea.insert(descNotesArea.textArea.cursorPosition, event.text)
+            }
+          } else {
+            root.focusSection = "title"
+            taskInput.forceActiveFocus()
+            taskInput.text += event.text
+            taskInput.cursorPosition = taskInput.text.length
+          }
         }
       }
 
@@ -508,8 +500,13 @@ Item {
           topPadding: Style.space(8)
           bottomPadding: Style.space(8)
           background: BorderSurface {
-            color: Style.controlFill(taskInput.activeFocus, taskInput.hovered, Color.foreground, Color.accent)
-            borderSpec: Border.controlSpec(taskInput.activeFocus ? "focus" : (taskInput.hovered ? "hover-cursor" : "normal"), Color.foreground, Color.accent)
+            readonly property bool isNavFocused: (root.focusSection === "title") && !taskInput.activeFocus
+            color: Style.controlFill(taskInput.activeFocus || isNavFocused, taskInput.hovered, Color.foreground, Color.accent)
+            borderSpec: Border.controlSpec(
+              (taskInput.activeFocus || isNavFocused) ? "focus" : (taskInput.hovered ? "hover-cursor" : "normal"),
+              Color.foreground,
+              Color.accent
+            )
             radius: Style.cornerRadius
           }
           onAccepted: root.submit()
@@ -519,7 +516,7 @@ Item {
               root.dismiss()
             } else {
               taskInput.focus = false
-              root.focusSection = "options"
+              root.focusSection = "title"
               card.forceActiveFocus()
             }
           }
@@ -605,95 +602,6 @@ Item {
           }
         }
 
-        // Auto-detected codebase context pill
-        Row {
-          visible: Boolean(root.detectedContext && root.attachLocation)
-          spacing: Style.space(6)
-          height: visible ? Style.space(22) : 0
-
-          Rectangle {
-            id: locationPill
-            anchors.verticalCenter: parent.verticalCenter
-            implicitWidth: ctxRow.implicitWidth + Style.space(14)
-            implicitHeight: Style.space(20)
-            radius: Style.cornerRadius
-            color: (root.focusSection === "location") ? Util.alpha(Color.accent, 0.24) : Util.alpha(Color.accent, 0.12)
-            border.color: (root.focusSection === "location") ? Color.accent : Util.alpha(Color.accent, 0.35)
-            border.width: (root.focusSection === "location") ? 2 : 1
-            scale: (root.focusSection === "location") ? 1.04 : 1.0
-            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: {
-                root.focusSection = "location"
-                root.applySectionFocus()
-              }
-            }
-
-            Row {
-              id: ctxRow
-              anchors.centerIn: parent
-              spacing: Style.space(6)
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.detectedContext && root.detectedContext.repo ? "󰊤" : "󰉋"
-                color: Color.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.space(10)
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: {
-                  if (!root.detectedContext) return ""
-                  if (root.detectedContext.repo) {
-                    var txt = root.detectedContext.repo
-                    if (root.detectedContext.subpath) txt += "/" + root.detectedContext.subpath
-                    return txt
-                  }
-                  return root.detectedContext.localPath || ""
-                }
-                color: Color.accent
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-                font.bold: true
-                elide: Text.ElideMiddle
-                maximumLineCount: 1
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "󰅖"
-                color: (detachMouse.containsMouse || root.focusSection === "location") ? Color.urgent : Color.muted
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-
-                MouseArea {
-                  id: detachMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.attachLocation = false
-                    if (root.focusSection === "location") root.advanceSection(1)
-                  }
-                }
-              }
-            }
-          }
-
-          Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: (root.focusSection === "location") ? "(press x or Del to remove)" : "(auto-detected)"
-            color: (root.focusSection === "location") ? Color.accent : Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.space(8.5)
-            font.bold: root.focusSection === "location"
-          }
-        }
 
         // Option Toggles (Note & Reminder)
         Row {
@@ -747,10 +655,13 @@ Item {
             id: descNotesArea
             width: parent.width
             placeholderText: "Add note / description (Shift+Enter for newline)..."
+            isNavFocused: (root.focusSection === "notes") && !editorActiveFocus
             onSubmitted: root.submit()
             onEscapePressed: {
               taskInput.focus = false
-              root.focusSection = "options"
+              if (descNotesArea.textArea) descNotesArea.textArea.focus = false
+              descNotesArea.focus = false
+              root.focusSection = "notes"
               card.forceActiveFocus()
             }
             onTabPressed: function(direction) {
@@ -786,56 +697,36 @@ Item {
           visible: root.showReminderOptions
           spacing: Style.space(6)
 
-          Row {
-            spacing: Style.space(6)
-
-            Repeater {
-              model: root.reminderPresets
-
-              Button {
-                id: presetBtn
-                required property var modelData
-                required property int index
-                text: modelData.label
-                fontSize: Style.font.caption
-                fontFamily: Style.font.family
-                bordered: true
-                selected: root.selectedReminder === modelData.value
-                hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === index)
-                onClicked: {
-                  root.selectedReminder = modelData.value
-                  root.showReminderOptions = false
-                  root.focusSection = "options"
-                }
-              }
+          Ui.ReminderPills {
+            presets: root.reminderPresets
+            selectedValue: root.selectedReminder
+            hasReminder: Boolean(root.selectedReminder)
+            focusedIndex: root.reminderPresetIndex
+            isNavFocused: root.focusSection === "reminders"
+            onReminderSelected: function(val, idx) {
+              root.selectedReminder = val
+              root.showReminderOptions = false
+              root.focusSection = "options"
             }
-
-            Button {
-              visible: Boolean(root.selectedReminder)
-              iconText: "󰅖"
-              text: "Clear"
-              fontSize: Style.font.caption
-              fontFamily: Style.font.family
-              bordered: true
-              hasCursor: (root.focusSection === "reminders") && (root.reminderPresetIndex === root.reminderPresets.length)
-              onClicked: {
-                root.selectedReminder = ""
-                root.showReminderOptions = false
-                root.focusSection = "options"
-              }
+            onClearSelected: function(idx) {
+              root.selectedReminder = ""
+              root.showReminderOptions = false
+              root.focusSection = "options"
             }
           }
         }
 
-        // Profile Selector Pills with responsive wrap Flow
-        Flow {
-          id: profileFlow
+        // Profile Selector Pills
+        Item {
+          id: quickAddProfileContainer
           width: parent.width
-          spacing: Style.space(6)
+          implicitHeight: Style.space(24)
 
           Row {
+            id: quickAddProfileLabelRow
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(4)
-            height: Style.space(24)
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
@@ -847,68 +738,18 @@ Item {
             }
           }
 
-          Repeater {
-            id: profileRepeater
-            model: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
-
-            Rectangle {
-              id: profilePill
-              required property string modelData
-              readonly property bool isKeyboardFocused: (root.focusSection === "profiles") && (root.selectedProfile === modelData)
-              implicitWidth: pillRow.implicitWidth + Style.space(12)
-              implicitHeight: Style.space(24)
-              radius: implicitHeight / 2
-              color: root.selectedProfile === modelData ? Color.accent : Color.menu.selectedBackground
-              border.color: isKeyboardFocused ? (Color.menu.text || Color.foreground) : (root.selectedProfile === modelData ? Color.accent : Color.menu.border)
-              border.width: isKeyboardFocused ? 2 : 1
-              scale: isKeyboardFocused ? 1.05 : 1.0
-
-              Behavior on scale {
-                NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
-              }
-
-              Row {
-                id: pillRow
-                anchors.centerIn: parent
-                spacing: Style.space(4)
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: TodoStore.getProfileGlyph(profilePill.modelData)
-                  color: root.selectedProfile === profilePill.modelData ? "white" : Color.muted
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-
-                Text {
-                  id: pillLabel
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: profilePill.modelData
-                  color: root.selectedProfile === profilePill.modelData ? "white" : (Color.menu.text || Color.foreground)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                  font.bold: root.selectedProfile === profilePill.modelData
-                  width: Math.min(implicitWidth, Style.space(90))
-                  elide: Text.ElideRight
-                }
-              }
-
-              HoverHandler {
-                id: pillHover
-              }
-
-              PanelToolTip {
-                visible: pillHover.hovered && pillLabel.truncated
-                text: profilePill.modelData
-              }
-
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  root.selectedProfile = profilePill.modelData
-                }
-              }
+          Ui.ProfileSelector {
+            id: quickAddProfileSelector
+            anchors.left: quickAddProfileLabelRow.right
+            anchors.leftMargin: Style.space(6)
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+            selectedProfile: root.selectedProfile
+            focusedIndex: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile).indexOf(root.selectedProfile)
+            isNavFocused: root.focusSection === "profiles"
+            onProfileSelected: function(name, idx) {
+              root.selectedProfile = name
             }
           }
         }
@@ -970,6 +811,51 @@ Item {
               Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
               onClicked: root.submit()
             }
+          }
+        }
+
+        // Auto-detected codebase context pill (last section)
+        Row {
+          visible: Boolean(root.detectedContext && root.attachLocation)
+          spacing: Style.space(6)
+          height: visible ? Style.space(22) : 0
+
+          Ui.Chip {
+            id: locationPill
+            anchors.verticalCenter: parent.verticalCenter
+            iconText: root.detectedContext && root.detectedContext.repo ? "󰊤" : "󰉋"
+            text: {
+              if (!root.detectedContext) return ""
+              if (root.detectedContext.repo) {
+                var txt = root.detectedContext.repo
+                if (root.detectedContext.subpath) txt += "/" + root.detectedContext.subpath
+                return txt
+              }
+              return root.detectedContext.localPath || ""
+            }
+            chipColor: Color.accent
+            removable: true
+            maximumWidth: Style.space(260)
+            borderAlpha: (root.focusSection === "location") ? 1.0 : 0.35
+            scale: (root.focusSection === "location") ? 1.04 : 1.0
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+            onClicked: {
+              root.focusSection = "location"
+              root.applySectionFocus()
+            }
+            onRemoved: {
+              root.attachLocation = false
+              if (root.focusSection === "location") root.advanceSection(1)
+            }
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: (root.focusSection === "location") ? "(press x or Del to remove)" : "(auto-detected)"
+            color: (root.focusSection === "location") ? Color.accent : Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.space(8.5)
+            font.bold: root.focusSection === "location"
           }
         }
       }

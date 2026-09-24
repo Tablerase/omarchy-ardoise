@@ -1047,13 +1047,14 @@ function formatReminder(reminderStr) {
   var tomorrow = new Date(now.getTime() + 86400000)
   var isTomorrow = d.toDateString() === tomorrow.toDateString()
 
-  if (diff < 0) {
-    return "Due " + (isToday ? "today at " + timeStr : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }))
+  if (isToday) {
+    return timeStr
   }
 
-  if (isToday) {
-    return "Today " + timeStr
+  if (diff < 0) {
+    return "Due " + d.toLocaleDateString(undefined, { month: "short", day: "numeric" })
   }
+
   if (isTomorrow) {
     return "Tomorrow " + timeStr
   }

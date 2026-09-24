@@ -101,6 +101,8 @@ Panel {
     contentWidth: panel.fittedContentWidth(Style.space(400))
     contentHeight: panel.fittedContentHeight(panelContent.implicitHeight)
 
+    property bool _returnHandledThisFrame: false
+
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
@@ -117,11 +119,14 @@ Panel {
       onMoveRequested: function(dx, dy) {
         panelContent.handleMove(dx, dy)
       }
-      onActivateRequested: {
-        panelContent.handleActivate()
-      }
       onReturnRequested: {
+        panel._returnHandledThisFrame = true
+        Qt.callLater(function() { panel._returnHandledThisFrame = false })
         panelContent.handleReturn()
+      }
+      onActivateRequested: {
+        if (panel._returnHandledThisFrame) return
+        panelContent.handleActivate()
       }
       onDeleteRequested: {
         panelContent.handleDelete()

@@ -229,7 +229,11 @@ test("formatReminder: formats relative time descriptions", () => {
   const now = new Date();
   const todayLater = new Date(now.getTime() + 7200000).toISOString(); // +2h
   const formattedToday = formatReminder(todayLater);
-  assert.ok(formattedToday.startsWith("Today"));
+  assert.match(formattedToday, /^\d{2}:\d{2}$/);
+
+  // Past reminder today should also format as only time (e.g. "10:30")
+  const todayEarlier = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 30).toISOString();
+  assert.equal(formatReminder(todayEarlier), "09:30");
 
   const tomorrow = new Date(now.getTime() + 86400000).toISOString();
   const formattedTomorrow = formatReminder(tomorrow);
