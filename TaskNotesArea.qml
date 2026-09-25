@@ -39,6 +39,11 @@ ScrollView {
     textArea.forceActiveFocus()
   }
 
+  function releaseFocus() {
+    textArea.focus = false
+    root.focus = false
+  }
+
   function save() {
     if (root.text !== textArea.text) {
       root.text = textArea.text
@@ -122,9 +127,9 @@ ScrollView {
         event.accepted = true
       } else {
         event.accepted = true
-        root.save()
+        root.releaseFocus()
         root.submitted()
-        focus = false
+        root.save()
       }
     }
 
@@ -134,29 +139,31 @@ ScrollView {
         event.accepted = true
       } else {
         event.accepted = true
-        root.save()
+        root.releaseFocus()
         root.submitted()
-        focus = false
+        root.save()
       }
     }
 
     Keys.onEscapePressed: function(event) {
       event.accepted = true
-      root.save()
+      root.releaseFocus()
       root.escapePressed()
-      focus = false
+      root.save()
     }
 
     Keys.onTabPressed: function(event) {
       event.accepted = true
-      root.save()
+      root.releaseFocus()
       root.tabPressed(1)
+      root.save()
     }
 
     Keys.onBacktabPressed: function(event) {
       event.accepted = true
-      root.save()
+      root.releaseFocus()
       root.tabPressed(-1)
+      root.save()
     }
 
     onActiveFocusChanged: {

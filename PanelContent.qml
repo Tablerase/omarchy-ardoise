@@ -49,6 +49,13 @@ Item {
   onExpandedSubSectionChanged: {
     if (root.expandedSubSection === "reminders") {
       root.refreshReminderPresets()
+      Qt.callLater(function() {
+        root.ensureReminderVisible(root.expandedReminderIndex)
+      })
+    } else if (root.expandedSubSection === "profiles") {
+      Qt.callLater(function() {
+        root.ensureReassignProfileVisible(root.expandedProfileIndex)
+      })
     }
   }
 
@@ -84,6 +91,21 @@ Item {
       return true
     }
     return false
+  }
+
+  function ensureReminderVisible(idx) {
+    if (root.cursorIndex >= 0 && typeof todoListRepeater !== "undefined" && todoListRepeater && root.cursorIndex < todoListRepeater.count) {
+      var item = todoListRepeater.itemAt(root.cursorIndex)
+      if (item && item.ensureReminderVisible) {
+        item.ensureReminderVisible(idx)
+      }
+    }
+  }
+
+  onExpandedReminderIndexChanged: {
+    if (root.expandedSubSection === "reminders") {
+      root.ensureReminderVisible(root.expandedReminderIndex)
+    }
   }
 
   function ensureReassignProfileVisible(idx) {
@@ -242,7 +264,48 @@ Item {
     else if (idx === 3) root.openQuickAdd()
   }
 
-  readonly property var filteredTodos: TodoStore.getFilteredTodos(root.store, root.currentFilter)
+  property var filteredTodos: []
+
+  function syncFilteredTodos() {
+    var next = TodoStore.getFilteredTodos(root.store, root.currentFilter)
+    if (!root.filteredTodos || root.filteredTodos.length !== next.length) {
+      root.filteredTodos = next
+      return
+    }
+    for (var i = 0; i < next.length; i++) {
+      if (root.filteredTodos[i].id !== next[i].id || root.filteredTodos[i].done !== next[i].done) {
+        root.filteredTodos = next
+        return
+      }
+    }
+    // Structure and order unchanged: update properties in-place so Repeater does not rebuild delegates
+    for (var j = 0; j < next.length; j++) {
+      var cur = root.filteredTodos[j]
+      var upd = next[j]
+      cur.title = upd.title
+      cur.description = upd.description
+      cur.profile = upd.profile
+      cur.repo = upd.repo
+      cur.tags = upd.tags
+      cur.location = upd.location
+      cur.reminder = upd.reminder
+      cur.notified = upd.notified
+      cur.updatedAt = upd.updatedAt
+      if (typeof todoListRepeater !== "undefined" && todoListRepeater && j < todoListRepeater.count) {
+        var delegate = todoListRepeater.itemAt(j)
+        if (delegate) {
+          if (typeof delegate.updateModelData === "function") {
+            delegate.updateModelData(upd)
+          } else {
+            delegate.modelData = upd
+          }
+        }
+      }
+    }
+  }
+
+  onStoreChanged: syncFilteredTodos()
+  Component.onCompleted: syncFilteredTodos()
   property var pendingCompletionIds: []
   property var slidingOutTaskIds: []
   property var justCompletedTaskIds: []
@@ -315,6 +378,14 @@ Item {
 
   function releaseFocus() {
     if (newTodoField) newTodoField.focus = false
+    if (root.descArea) {
+      if (typeof root.descArea.releaseFocus === "function") {
+        root.descArea.releaseFocus()
+      } else if (root.descArea.textArea) {
+        root.descArea.textArea.focus = false
+      }
+      root.descArea.focus = false
+    }
     root.returnFocusRequested()
     if (parent && typeof parent.forceActiveFocus === "function") {
       parent.forceActiveFocus()
@@ -489,6 +560,7 @@ Item {
   }
 
   onCurrentFilterChanged: {
+    syncFilteredTodos()
     flushPendingCompletions()
     savePendingNotes()
     Qt.callLater(function() { root.ensureProfileVisible(root.currentFilter) })
@@ -1154,6 +1226,15 @@ Item {
             readonly property bool isHiddenByFold: delegateRoot.modelData.done && !isPendingCompletion && !root.completedFoldOpen
 
             readonly property alias descAreaInstance: itemRow.descAreaInstance
+            function updateModelData(data) {
+              delegateRoot.modelData = data
+              if (itemRow) itemRow.modelData = data
+            }
+            function ensureReminderVisible(idx) {
+              if (itemRow && itemRow.ensureReminderVisible) {
+                itemRow.ensureReminderVisible(idx)
+              }
+            }
             function ensureReassignProfileVisible(idx) {
               if (itemRow && itemRow.ensureReassignProfileVisible) {
                 itemRow.ensureReassignProfileVisible(idx)
@@ -1279,6 +1360,12 @@ Item {
               readonly property bool isDone: delegateRoot.isDone
               readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(itemRow.modelData)
               readonly property bool isDueTodayTask: !isDone && !isOverdueTask && Boolean(itemRow.modelData.reminder) && (new Date(itemRow.modelData.reminder).toDateString() === new Date().toDateString())
+
+              function ensureReminderVisible(idx) {
+                if (reminderPillsFlickable) {
+                  reminderPillsFlickable.ensureVisible(idx)
+                }
+              }
 
               function ensureReassignProfileVisible(idx) {
                 if (profReassignFlickable) {
@@ -1801,19 +1888,60 @@ Item {
                       root.descArea = descArea
                       root.expandedSubSection = "notes"
                     } else if (root.descArea === descArea && !editorActiveFocus) {
-                      if (itemRow.isExpanded && !rowHoverHandler.hovered) {
+                      if (itemRow.isExpanded && !rowHoverHandler.hovered && !root.expandedViaKeyboard) {
                         hoverFoldTimer.restart()
                       }
                     }
                   }
                   onEscapePressed: {
-                    root.savePendingNotes()
+                    hoverFoldTimer.stop()
+                    root.focusSection = "tasks"
+                    root.cursorActive = true
+                    root.expandedViaKeyboard = true
                     root.expandedSubSection = "notes"
+                    if (root.descArea) {
+                      if (typeof root.descArea.releaseFocus === "function") {
+                        root.descArea.releaseFocus()
+                      } else if (root.descArea.textArea) {
+                        root.descArea.textArea.focus = false
+                      }
+                      root.descArea.focus = false
+                    }
                     root.releaseFocus()
+                    root.savePendingNotes()
+                  }
+                  onSubmitted: {
+                    hoverFoldTimer.stop()
+                    root.focusSection = "tasks"
+                    root.cursorActive = true
+                    root.expandedViaKeyboard = true
+                    root.expandedSubSection = "notes"
+                    if (root.descArea) {
+                      if (typeof root.descArea.releaseFocus === "function") {
+                        root.descArea.releaseFocus()
+                      } else if (root.descArea.textArea) {
+                        root.descArea.textArea.focus = false
+                      }
+                      root.descArea.focus = false
+                    }
+                    root.releaseFocus()
+                    root.savePendingNotes()
                   }
                   onTabPressed: function(direction) {
-                    root.savePendingNotes()
+                    hoverFoldTimer.stop()
+                    root.focusSection = "tasks"
+                    root.cursorActive = true
+                    root.expandedViaKeyboard = true
+                    if (root.descArea) {
+                      if (typeof root.descArea.releaseFocus === "function") {
+                        root.descArea.releaseFocus()
+                      } else if (root.descArea.textArea) {
+                        root.descArea.textArea.focus = false
+                      }
+                      root.descArea.focus = false
+                    }
                     root.releaseFocus()
+                    root.savePendingNotes()
                     root.handleTab(direction)
                   }
                   Component.onDestruction: {
@@ -1828,21 +1956,35 @@ Item {
                   }
                 }
 
-                // Reminder Presets Row
-                Row {
+                // Reminder Presets Row (Compact single-line horizontal scrollable row with auto-scroll)
+                Item {
+                  id: reminderContainer
                   width: parent.width
-                  spacing: Style.space(4)
+                  implicitHeight: Style.space(22)
 
-                  Text {
+                  Row {
+                    id: reminderLabelRow
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "󰥔 Reminder:"
-                    color: (root.expandedSubSection === "reminders") ? Color.accent : Color.muted
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.space(9.5)
-                    font.bold: root.expandedSubSection === "reminders"
+                    spacing: Style.space(4)
+
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "󰥔 Reminder:"
+                      color: (root.expandedSubSection === "reminders") ? Color.accent : Color.muted
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(9.5)
+                      font.bold: root.expandedSubSection === "reminders"
+                    }
                   }
 
                   Ui.ReminderPills {
+                    id: reminderPillsFlickable
+                    anchors.left: reminderLabelRow.right
+                    anchors.leftMargin: Style.space(4)
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
                     presets: root.reminderPresets
                     selectedValue: (itemRow.modelData.reminder && itemRow.modelData.reminder.preset) ? itemRow.modelData.reminder.preset : (itemRow.modelData.reminder || "")
                     hasReminder: Boolean(itemRow.modelData.reminder)
@@ -1852,6 +1994,7 @@ Item {
                     barForeground: root.barForeground
                     onReminderSelected: function(val, idx) {
                       root.expandedReminderIndex = idx
+                      itemRow.ensureReminderVisible(idx)
                       var freshRem = (typeof TodoStore.computePresetReminder === "function")
                         ? TodoStore.computePresetReminder(idx)
                         : val
@@ -1859,6 +2002,7 @@ Item {
                     }
                     onClearSelected: function(idx) {
                       root.expandedReminderIndex = idx
+                      itemRow.ensureReminderVisible(idx)
                       root.updateTodo(itemRow.modelData.id, { reminder: null })
                     }
                   }

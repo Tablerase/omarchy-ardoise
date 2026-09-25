@@ -717,6 +717,7 @@ Item {
           spacing: Style.space(6)
 
           Ui.ReminderPills {
+            width: parent.width
             presets: root.reminderPresets
             selectedValue: root.selectedReminder
             hasReminder: Boolean(root.selectedReminder)

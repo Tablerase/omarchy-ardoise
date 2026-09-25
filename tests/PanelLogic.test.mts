@@ -157,6 +157,9 @@ test("handleMove: 2D navigation across tasks, sub-sections, and sections", () =>
     { repo: "test/repo", localPath: "/path/to/repo" }
   );
 
+  let reminderVisibleIndex = -1;
+  let cycleFilterCallCount = 0;
+
   const mockRoot: any = {
     store: storeWithTasks,
     filteredTodos: storeWithTasks.todos,
@@ -175,7 +178,8 @@ test("handleMove: 2D navigation across tasks, sub-sections, and sections", () =>
     releaseFocus: () => { releaseFocused = true; },
     ensureTaskVisible: (idx: number) => { visibleTaskIndex = idx; },
     ensureReassignProfileVisible: (idx: number) => { reassignVisibleIndex = idx; },
-    cycleProfileFilter: () => {}
+    ensureReminderVisible: (idx: number) => { reminderVisibleIndex = idx; },
+    cycleProfileFilter: () => { cycleFilterCallCount++; }
   };
 
   // Navigating UP from task 0 transitions to input (normal mode)
@@ -207,9 +211,21 @@ test("handleMove: 2D navigation across tasks, sub-sections, and sections", () =>
   handleMove(mockRoot, 0, 1, TodoStore);
   assert.equal(mockRoot.expandedSubSection, "notes");
 
-  // Down -> reminders
+  // Horizontal motion on notes should be isolated (no cycleProfileFilter)
+  handleMove(mockRoot, 1, 0, TodoStore);
+  handleMove(mockRoot, -1, 0, TodoStore);
+  assert.equal(cycleFilterCallCount, 0, "dx on notes should not cycle profile filter");
+
+  // Down -> reminders (scrolls to index 0)
   handleMove(mockRoot, 0, 1, TodoStore);
   assert.equal(mockRoot.expandedSubSection, "reminders");
+  assert.equal(mockRoot.expandedReminderIndex, 0);
+  assert.equal(reminderVisibleIndex, 0);
+
+  // Lateral motion on reminders scrolls chips
+  handleMove(mockRoot, 1, 0, TodoStore);
+  assert.equal(mockRoot.expandedReminderIndex, 1);
+  assert.equal(reminderVisibleIndex, 1);
 
   // Down -> profiles
   handleMove(mockRoot, 0, 1, TodoStore);
@@ -220,13 +236,19 @@ test("handleMove: 2D navigation across tasks, sub-sections, and sections", () =>
   handleMove(mockRoot, 0, 1, TodoStore);
   assert.equal(mockRoot.expandedSubSection, "codebase");
 
+  // Horizontal motion on codebase should be isolated
+  handleMove(mockRoot, 1, 0, TodoStore);
+  assert.equal(cycleFilterCallCount, 0, "dx on codebase should not cycle profile filter");
+
   // Up -> profiles
   handleMove(mockRoot, 0, -1, TodoStore);
   assert.equal(mockRoot.expandedSubSection, "profiles");
 
-  // Up -> reminders
+  // Up -> reminders (ensures current reminder visible)
+  reminderVisibleIndex = -1;
   handleMove(mockRoot, 0, -1, TodoStore);
   assert.equal(mockRoot.expandedSubSection, "reminders");
+  assert.equal(reminderVisibleIndex, 1);
 
   // Up -> notes
   handleMove(mockRoot, 0, -1, TodoStore);

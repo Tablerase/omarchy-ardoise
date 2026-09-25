@@ -627,6 +627,11 @@ ShellRoot {
 
             // Test releaseFocus method
             panelContent.releaseFocus();
+            if (typeof panelContent.ensureReminderVisible !== "function") {
+                console.error("[TEST FAIL] panelContent is missing ensureReminderVisible");
+                Qt.exit(134);
+                return;
+            }
 
             // Test footer shortcut hotkeys: 'c', 'd', 'e'
             var closeRequestedCount = 0;
@@ -706,9 +711,54 @@ ShellRoot {
                 }
                 // Keyboard motion while expandedViaKeyboard should NOT collapse the expanded task
                 panelContent.handleMove(0, 1);
-                if (panelContent.expandedTaskId !== testTask.id) {
-                    console.error("[TEST FAIL] handleMove collapsed task that was expandedViaKeyboard");
+                if (panelContent.expandedTaskId !== testTask.id || panelContent.expandedSubSection !== "notes") {
+                    console.error("[TEST FAIL] handleMove failed to navigate to notes while keeping task expanded");
                     Qt.exit(121);
+                    return;
+                }
+                // Test notes editor activation, text edit, and Escape recovery without delegate destruction
+                panelContent.focusNotesEditor();
+                if (panelContent.descArea) {
+                    var originalDescArea = panelContent.descArea;
+                    if (originalDescArea.textArea) {
+                        originalDescArea.textArea.text = "Updated description during test edit";
+                    }
+                    originalDescArea.releaseFocus();
+                    originalDescArea.escapePressed();
+                    originalDescArea.save();
+                    if (panelContent.descArea !== originalDescArea) {
+                        console.error("[TEST FAIL] Editing and saving notes caused delegate rebuild / glitch (item collapsed/re-expanded)");
+                        Qt.exit(132);
+                        return;
+                    }
+                    if (panelContent.descArea.editorActiveFocus) {
+                        console.error("[TEST FAIL] descArea.escapePressed() failed to release editor focus");
+                        Qt.exit(127);
+                        return;
+                    }
+                    if (panelContent.activeFocusBlocked) {
+                        console.error("[TEST FAIL] activeFocusBlocked remained true after escaping notes editor");
+                        Qt.exit(128);
+                        return;
+                    }
+                    if (panelContent.expandedSubSection !== "notes" || !panelContent.expandedViaKeyboard) {
+                        console.error("[TEST FAIL] Escape from notes editor lost notes sub-section or expandedViaKeyboard flag");
+                        Qt.exit(129);
+                        return;
+                    }
+                }
+                // Moving down after Escape from notes enters reminders sub-section
+                panelContent.handleMove(0, 1);
+                if (panelContent.expandedSubSection !== "reminders" || panelContent.expandedTaskId !== testTask.id) {
+                    console.error("[TEST FAIL] handleMove(0, 1) after notes Escape failed to enter reminders");
+                    Qt.exit(130);
+                    return;
+                }
+                // Lateral navigation on reminders cycles presets and triggers ensureReminderVisible
+                panelContent.handleMove(1, 0);
+                if (panelContent.expandedReminderIndex !== 1) {
+                    console.error("[TEST FAIL] handleMove(1, 0) failed to increment expandedReminderIndex");
+                    Qt.exit(131);
                     return;
                 }
                 // Return cursor to header and collapse back

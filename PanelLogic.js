@@ -196,6 +196,9 @@ function handleMove(root, dx, dy, TodoStore) {
         } else if (root.expandedSubSection === "notes") {
           root.expandedSubSection = "reminders";
           root.expandedReminderIndex = 0;
+          if (typeof root.ensureReminderVisible === "function") {
+            root.ensureReminderVisible(0);
+          }
         } else if (root.expandedSubSection === "reminders") {
           root.expandedSubSection = "profiles";
           var profsDown = TodoStore.getSortedProfiles(root.store, false, "");
@@ -233,6 +236,9 @@ function handleMove(root, dx, dy, TodoStore) {
           root.expandedSubSection = "profiles";
         } else if (root.expandedSubSection === "profiles") {
           root.expandedSubSection = "reminders";
+          if (typeof root.ensureReminderVisible === "function") {
+            root.ensureReminderVisible(root.expandedReminderIndex);
+          }
         } else if (root.expandedSubSection === "reminders") {
           root.expandedSubSection = "notes";
         } else if (root.expandedSubSection === "notes") {
@@ -252,6 +258,9 @@ function handleMove(root, dx, dy, TodoStore) {
         if (root.expandedSubSection === "reminders") {
           var maxRem = root.reminderPresets.length + (currentTask.reminder ? 1 : 0);
           root.expandedReminderIndex = Math.max(0, Math.min(maxRem - 1, root.expandedReminderIndex + dx));
+          if (typeof root.ensureReminderVisible === "function") {
+            root.ensureReminderVisible(root.expandedReminderIndex);
+          }
           return;
         } else if (root.expandedSubSection === "profiles") {
           var allProfs = TodoStore.getSortedProfiles(root.store, false, "");
@@ -259,6 +268,8 @@ function handleMove(root, dx, dy, TodoStore) {
           if (typeof root.ensureReassignProfileVisible === "function") {
             root.ensureReassignProfileVisible(root.expandedProfileIndex);
           }
+          return;
+        } else if (root.expandedSubSection === "notes" || root.expandedSubSection === "codebase") {
           return;
         }
       }
@@ -368,6 +379,9 @@ function handleTab(root, direction, TodoStore) {
           root.expandedSubSection = nextSub;
           if (nextSub === "reminders") {
             root.expandedReminderIndex = 0;
+            if (typeof root.ensureReminderVisible === "function") {
+              root.ensureReminderVisible(0);
+            }
           } else if (nextSub === "profiles") {
             var profsTab = TodoStore.getSortedProfiles(root.store, false, "");
             var curIdxTab = profsTab.indexOf(currentTask.profile);
@@ -382,6 +396,11 @@ function handleTab(root, direction, TodoStore) {
         var prevSub = getPrevSubSection(root.expandedSubSection);
         if (prevSub) {
           root.expandedSubSection = prevSub;
+          if (prevSub === "reminders" && typeof root.ensureReminderVisible === "function") {
+            root.ensureReminderVisible(root.expandedReminderIndex);
+          } else if (prevSub === "profiles" && typeof root.ensureReassignProfileVisible === "function") {
+            root.ensureReassignProfileVisible(root.expandedProfileIndex);
+          }
           return true;
         }
       }
