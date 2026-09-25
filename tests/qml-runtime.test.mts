@@ -324,6 +324,64 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   }
 });
 
+test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip components render keyboard badges with consistent styling across buttons and help modal", () => {
+  const keyBadgePath = path.join(repoDir, "ui", "KeyBadge.qml");
+  const shortcutToolTipPath = path.join(repoDir, "ui", "ShortcutToolTip.qml");
+  const helpModalPath = path.join(repoDir, "ui", "HelpModal.qml");
+  const panelContentPath = path.join(repoDir, "PanelContent.qml");
+
+  assert.ok(fs.existsSync(keyBadgePath), "ui/KeyBadge.qml must exist");
+  assert.ok(fs.existsSync(shortcutToolTipPath), "ui/ShortcutToolTip.qml must exist");
+
+  const keyBadgeContent = fs.readFileSync(keyBadgePath, "utf8");
+  const shortcutToolTipContent = fs.readFileSync(shortcutToolTipPath, "utf8");
+  const helpModalContent = fs.readFileSync(helpModalPath, "utf8");
+  const panelContent = fs.readFileSync(panelContentPath, "utf8");
+
+  // 1. KeyBadge styling invariants
+  assert.ok(keyBadgeContent.includes('property string keyText: ""'), "KeyBadge must have keyText property");
+  assert.ok(keyBadgeContent.includes('property color badgeColor: Color.accent'), "KeyBadge must default badgeColor to Color.accent");
+  assert.ok(keyBadgeContent.includes('font.family: "monospace"'), "KeyBadge must use monospace font");
+
+  // 2. ShortcutToolTip multi-key and styling invariants
+  assert.ok(shortcutToolTipContent.includes("KeyBadge {"), "ShortcutToolTip must instantiate KeyBadge component");
+  assert.ok(shortcutToolTipContent.includes('split(" / ")'), "ShortcutToolTip must split multiple key combinations for badges");
+  assert.ok(shortcutToolTipContent.includes("BorderSurface {"), "ShortcutToolTip background must use BorderSurface");
+  assert.ok(
+    shortcutToolTipContent.includes("anchors.horizontalCenter: parent.horizontalCenter"),
+    "ShortcutToolTip must center shortcut and description in its line"
+  );
+
+  // 3. HelpModal parity
+  assert.ok(helpModalContent.includes("KeyBadge {"), "HelpModal must render shortcut items using KeyBadge");
+  assert.ok(helpModalContent.includes("ShortcutToolTip {"), "HelpModal closeHelpBtn must use ShortcutToolTip");
+
+  // 4. PanelContent button tooltips using ShortcutToolTip
+  const expectedButtons = [
+    { id: "helpBtn", shortcut: "?" },
+    { id: "shortcutBtn", shortcut: "root.detectedShortcut" },
+    { id: "addBtn", shortcut: "Enter" },
+    { id: "rowExpandBtn", shortcut: "Enter" },
+    { id: "rowDeleteBtn", shortcut: "x" },
+    { id: "clearBtn", shortcut: "c" },
+    { id: "archiveBtn", shortcut: "d" },
+    { id: "editBtn", shortcut: "e" },
+    { id: "quickAddBtn", shortcut: "A / " }
+  ];
+
+  for (const btn of expectedButtons) {
+    assert.ok(
+      panelContent.includes(`id: ${btn.id}`) || panelContent.includes(`id: ${btn.id}\n`),
+      `PanelContent must contain button ${btn.id}`
+    );
+  }
+
+  assert.ok(
+    panelContent.includes("Ui.ShortcutToolTip {"),
+    "PanelContent must use Ui.ShortcutToolTip for rich tooltips with badges"
+  );
+});
+
 test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {
   // Check if quickshell is installed and accessible
   let quickshellPath = "";

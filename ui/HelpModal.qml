@@ -156,8 +156,16 @@ Rectangle {
         foreground: (root.focusSection === "close") ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted
         hoverColor: root.bar ? root.bar.urgent : Color.urgent
         hasCursor: root.focusSection === "close"
-        tooltipText: "Close (Esc)"
+        tooltipText: ""
         onClicked: root.close()
+
+        HoverHandler { id: closeHelpBtnHover }
+        ShortcutToolTip {
+          visible: closeHelpBtnHover.hovered
+          description: "Close"
+          shortcut: "Esc"
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        }
         onActiveFocusChanged: {
           if (activeFocus) {
             root.focusSection = "close"
@@ -380,24 +388,9 @@ Rectangle {
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(6)
 
-              Rectangle {
+              KeyBadge {
                 anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: keyLabel.implicitWidth + Style.space(8)
-                implicitHeight: Style.space(18)
-                radius: Style.space(4)
-                color: Util.alpha(Color.accent, 0.15)
-                border.color: Color.accent
-                border.width: 1
-
-                Text {
-                  id: keyLabel
-                  anchors.centerIn: parent
-                  text: keyHelpRow.modelData.key
-                  color: Color.accent
-                  font.family: "monospace"
-                  font.pixelSize: Style.space(9)
-                  font.bold: true
-                }
+                keyText: keyHelpRow.modelData.key
               }
 
               Text {

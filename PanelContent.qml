@@ -576,12 +576,20 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           foreground: root.showKeyHelp ? Color.accent : Color.muted
           hoverColor: Color.accent
-          tooltipText: "Shortcuts & Vim motions (?)"
+          tooltipText: ""
           onClicked: {
             root.showKeyHelp = !root.showKeyHelp
             if (!root.showKeyHelp) {
               root.releaseFocus()
             }
+          }
+
+          HoverHandler { id: helpBtnHover }
+          Ui.ShortcutToolTip {
+            visible: helpBtnHover.hovered
+            description: "Shortcuts & Vim motions"
+            shortcut: "?"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
         }
 
@@ -593,10 +601,18 @@ Item {
           fontSize: Style.font.subtitle
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           foreground: root.shortcutRegistered ? root.barForeground : Color.muted
-          tooltipText: root.shortcutRegistered
-            ? ("Shortcut active: " + root.detectedShortcut + " (click to copy & edit config)")
-            : ("Set shortcut: " + root.detectedShortcut + " (click to copy & edit config)")
+          tooltipText: ""
           onClicked: root.shortcutClicked()
+
+          HoverHandler { id: shortcutBtnHover }
+          Ui.ShortcutToolTip {
+            visible: shortcutBtnHover.hovered
+            description: root.shortcutRegistered
+              ? "Shortcut active (click to copy & edit config)"
+              : "Set shortcut (click to copy & edit config)"
+            shortcut: root.detectedShortcut
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
 
           Rectangle {
             id: indicatorBadge
@@ -1029,13 +1045,21 @@ Item {
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         foreground: Color.accent
         hoverColor: Color.accent
-        tooltipText: "Add task (Enter)"
+        tooltipText: ""
         onClicked: {
           if (newTodoField.text.trim() !== "") {
             var prof = (root.currentFilter !== "all") ? root.currentFilter : null
             root.addTodo(newTodoField.text, "", prof, null)
             newTodoField.text = ""
           }
+        }
+
+        HoverHandler { id: addBtnHover }
+        Ui.ShortcutToolTip {
+          visible: addBtnHover.hovered
+          description: "Add task"
+          shortcut: "Enter"
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         }
       }
     }
@@ -1466,6 +1490,7 @@ Item {
 
                       // Expand / Collapse details button
                       PanelActionButton {
+                        id: rowExpandBtn
                         anchors.verticalCenter: parent.verticalCenter
                         size: Style.space(22)
                         iconText: itemRow.isExpanded ? "󰅃" : "󰅀"
@@ -1473,7 +1498,7 @@ Item {
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         foreground: Color.muted
                         hoverColor: Color.accent
-                        tooltipText: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
+                        tooltipText: ""
                         onClicked: {
                           root.savePendingNotes()
                           root.cursorIndex = delegateRoot.index
@@ -1487,10 +1512,19 @@ Item {
                             root.expandedSubSection = "header"
                           }
                         }
+
+                        HoverHandler { id: rowExpandHover }
+                        Ui.ShortcutToolTip {
+                          visible: rowExpandHover.hovered
+                          description: itemRow.isExpanded ? "Hide details" : "Show notes & reminders"
+                          shortcut: "Enter"
+                          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                        }
                       }
 
                       // Remove button
                       PanelActionButton {
+                        id: rowDeleteBtn
                         anchors.verticalCenter: parent.verticalCenter
                         size: Style.space(22)
                         iconText: "󰅙"
@@ -1498,9 +1532,17 @@ Item {
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         foreground: Color.muted
                         hoverColor: root.bar ? root.bar.urgent : Color.urgent
-                        tooltipText: "Delete task"
+                        tooltipText: ""
                         onClicked: {
                           root.removeTodo(itemRow.modelData.id)
+                        }
+
+                        HoverHandler { id: rowDeleteHover }
+                        Ui.ShortcutToolTip {
+                          visible: rowDeleteHover.hovered
+                          description: "Delete task"
+                          shortcut: "x"
+                          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         }
                       }
                     }
@@ -1982,33 +2024,60 @@ Item {
         clip: true
 
         Button {
+          id: clearBtn
           iconText: "󰃢"
           text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
-          tooltipText: (root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)) + " (c)"
+          tooltipText: ""
           onClicked: root.clearCompleted(root.currentFilter)
+
+          HoverHandler { id: clearBtnHover }
+          Ui.ShortcutToolTip {
+            visible: clearBtnHover.hovered
+            description: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
+            shortcut: "c"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
         }
 
         Button {
+          id: archiveBtn
           iconText: "󰋚"
           text: footerContainer.wrapNeeded ? "" : "Archive"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 1)
-          tooltipText: "Open todos-archive.json in editor (d)"
+          tooltipText: ""
           onClicked: root.openArchive()
+
+          HoverHandler { id: archiveBtnHover }
+          Ui.ShortcutToolTip {
+            visible: archiveBtnHover.hovered
+            description: "Open todos-archive.json in editor"
+            shortcut: "d"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
         }
 
         Button {
+          id: editBtn
           iconText: "󰏫"
           text: footerContainer.wrapNeeded ? "" : "Edit"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 2)
-          tooltipText: "Open todos.json in editor (e)"
+          tooltipText: ""
           onClicked: root.openEditor()
+
+          HoverHandler { id: editBtnHover }
+          Ui.ShortcutToolTip {
+            visible: editBtnHover.hovered
+            description: "Open todos.json in editor"
+            shortcut: "e"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
         }
       }
 
@@ -2021,8 +2090,16 @@ Item {
         fontSize: Style.font.caption
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 3)
-        tooltipText: "Open Quick Add modal (A / " + root.detectedShortcut + ")"
+        tooltipText: ""
         onClicked: root.openQuickAdd()
+
+        HoverHandler { id: quickAddBtnHover }
+        Ui.ShortcutToolTip {
+          visible: quickAddBtnHover.hovered
+          description: "Open Quick Add modal"
+          shortcut: "A / " + root.detectedShortcut
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        }
       }
     }
   }

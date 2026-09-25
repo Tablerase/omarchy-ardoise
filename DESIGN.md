@@ -70,6 +70,8 @@ To preserve long-term maintainability and visual consistency across the main pan
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary status and urgency indicator (accent border and tint for due today, urgent border and tint for overdue, muted border with checkmark for completed, muted border for normal pending).
 - **`ui/ReminderPills.qml`**: Reusable reminder preset pill row (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `Clear`) with navigation cursor scaling and dynamic timestamp recalculation at selection time.
 - **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, and smooth auto-scroll (`ensureVisible`).
+- **`ui/KeyBadge.qml`**: Reusable keyboard shortcut badge component rendering key representations with pixel-perfect parity to the help guide (`Util.alpha(badgeColor, 0.15)` background fill, `badgeColor` border, monospace bold font, `radius: Style.space(4)`).
+- **`ui/ShortcutToolTip.qml`**: Rich multi-line tooltip component presenting an action description on top and keyboard shortcut badges below separated by a line break, with both the description text and shortcut badge row horizontally centered in their respective lines. Supports automatic regex parsing of legacy parenthesized shortcuts `(key)` or explicit `description` and `shortcut` properties, automatically splitting multi-key combinations (e.g. `"A / SUPER + SHIFT + T"`) into distinct `KeyBadge` pills with subtle `/` separators. Applied across all button tooltips in the panel and modals (Header Help & Shortcut buttons, Input Add button, Task Row Expand & Delete buttons, Footer Action buttons, and Help Modal Close button).
 
 ---
 
@@ -205,7 +207,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
-   - Action buttons: [Clear (c)] (archive and clear completed tasks in current profile) • [Archive (d)] (open todos-archive.json in editor) • [Edit (e)] (open todos.json in editor) • [Quick Add (A)].
+   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>c</kbd>, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open todos-archive.json in editor) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`) wrapped in `BorderSurface`.
    - **Universal Input Handling**:
