@@ -42,6 +42,12 @@ Item {
   property int expandedReminderIndex: 0
   property int expandedProfileIndex: 0
 
+  onExpandedSubSectionChanged: {
+    if (root.expandedSubSection === "reminders") {
+      root.refreshReminderPresets()
+    }
+  }
+
   function cleanRepoName(repo) {
     return Logic.cleanRepoName(repo)
   }
@@ -131,6 +137,7 @@ Item {
     expandedReminderIndex = 0
     expandedProfileIndex = 0
     if (expandedTaskId !== -1) {
+      root.refreshReminderPresets()
       Qt.callLater(function() {
         for (var i = 0; i < root.filteredTodos.length; i++) {
           if (root.filteredTodos[i].id === root.expandedTaskId) {
@@ -281,7 +288,11 @@ Item {
     }
   }
 
-  readonly property var reminderPresets: TodoStore.getReminderPresets()
+  property var reminderPresets: TodoStore.getReminderPresets()
+
+  function refreshReminderPresets() {
+    reminderPresets = TodoStore.getReminderPresets()
+  }
   readonly property bool activeFocusBlocked: Boolean(
     (newTodoField && newTodoField.activeFocus) ||
     (descArea && descArea.editorActiveFocus) ||
@@ -1791,7 +1802,10 @@ Item {
                     barForeground: root.barForeground
                     onReminderSelected: function(val, idx) {
                       root.expandedReminderIndex = idx
-                      root.updateTodo(itemRow.modelData.id, { reminder: val })
+                      var freshRem = (typeof TodoStore.computePresetReminder === "function")
+                        ? TodoStore.computePresetReminder(idx)
+                        : val
+                      root.updateTodo(itemRow.modelData.id, { reminder: freshRem })
                     }
                     onClearSelected: function(idx) {
                       root.expandedReminderIndex = idx

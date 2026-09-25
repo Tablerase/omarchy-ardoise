@@ -20,7 +20,14 @@ Panel {
   property string shortcutState: shortcutRegistered ? "active" : "missing"
   readonly property bool hasShortcut: shortcutRegistered
 
-  onOpenedChanged: if (opened) checkShortcutProc.running = true
+  onOpenedChanged: {
+    if (opened) {
+      checkShortcutProc.running = true
+      if (panelContent && typeof panelContent.refreshReminderPresets === "function") {
+        panelContent.refreshReminderPresets()
+      }
+    }
+  }
   Component.onCompleted: checkShortcutProc.running = true
 
   function parseBinds(rawText) {

@@ -68,7 +68,7 @@ To preserve long-term maintainability and visual consistency across the main pan
 - **`ui/Chip.qml`**: Reusable compact pill/badge component for reminders, repositories, tags, and auto-detected locations. Strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, and optional removal button.
 - **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss.
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary status and urgency indicator (accent border and tint for due today, urgent border and tint for overdue, muted border with checkmark for completed, muted border for normal pending).
-- **`ui/ReminderPills.qml`**: Reusable reminder preset pill row ("Today", "Tomorrow", "In 3 Days", "In 1 Week", "Clear") with navigation cursor scaling.
+- **`ui/ReminderPills.qml`**: Reusable reminder preset pill row (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `Clear`) with navigation cursor scaling and dynamic timestamp recalculation at selection time.
 - **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, and smooth auto-scroll (`ensureVisible`).
 
 ---
@@ -96,7 +96,7 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
    - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
 7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
-   - Presets: "Today" (+4h), "Tomorrow" (09:00), "In 3 Days", "In 1 Week", plus "Clear". Bordered focus styling via `Ui.ReminderPills`.
+   - Presets: `+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, plus "Clear". Presets and selected timestamps are dynamically recomputed at open and click/selection time relative to current local execution time rather than startup time. Bordered focus styling via `Ui.ReminderPills`.
 8. **Profile Selector Container (`quickAddProfileContainer`)**:
    - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
@@ -237,6 +237,19 @@ Quickshell taskbar widget placed in the status bar.
   - Left click: Toggles main panel (`tablerase.ardoise toggle`).
   - Right click: Opens Quick Add modal (`tablerase.ardoise quickadd`).
   - Scroll: Cycles active profile filter.
+- **Shell IPC Contract (`IpcHandler: tablerase.ardoise`)**:
+  - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
+  - `omarchy-shell tablerase.ardoise count`: Returns pending task count string.
+  - `omarchy-shell tablerase.ardoise add "<title> [#profile]"`: Adds task with optional `#profile`.
+  - `omarchy-shell tablerase.ardoise toggleTodo "<id>"`: Toggles task completion (`done`).
+  - `omarchy-shell tablerase.ardoise update "<id>" '<fieldsJson>'`: Updates task properties (e.g. reminder, notes, profile).
+  - `omarchy-shell tablerase.ardoise remove "<id>"`: Deletes task by ID.
+  - `omarchy-shell tablerase.ardoise clear`: Archives and clears completed tasks.
+  - `omarchy-shell tablerase.ardoise profiles`: Returns array of available profiles.
+  - `omarchy-shell tablerase.ardoise setProfile "<profile>"`: Sets active profile filter.
+  - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility.
+  - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
+  - `omarchy-shell tablerase.ardoise archiveCount`: Returns count of archived tasks.
 
 ---
 

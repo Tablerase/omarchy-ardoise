@@ -39,8 +39,11 @@ Item {
   property bool attachLocation: true
   readonly property bool hasDraft: draftTitle.trim().length > 0 || draftDescription.trim().length > 0
 
-  readonly property var reminderPresets: TodoStore.getReminderPresets()
+  property var reminderPresets: TodoStore.getReminderPresets()
 
+  function refreshReminderPresets() {
+    reminderPresets = TodoStore.getReminderPresets()
+  }
   property string focusSection: "title" // "title", "profiles", "options", "notes", "reminders", "actions"
   property int optionIndex: 0 // 0: note, 1: reminder
   property int reminderPresetIndex: 0
@@ -104,6 +107,7 @@ Item {
     showNote = false
     showReminderOptions = false
     selectedReminder = ""
+    refreshReminderPresets()
     selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
     focusSection = "title"
     optionIndex = 0
@@ -118,6 +122,7 @@ Item {
     root.focusSection = "title"
     root.optionIndex = 0
     root.actionIndex = 1
+    root.refreshReminderPresets()
     detectContextProc.running = true
     if (root.hasDraft) {
       taskInput.text = root.draftTitle
@@ -188,6 +193,18 @@ Item {
   onSelectedReminderChanged: {
     if (root.opened) {
       root.draftReminder = root.selectedReminder
+    }
+  }
+
+  onOpenedChanged: {
+    if (root.opened) {
+      root.refreshReminderPresets()
+    }
+  }
+
+  onShowReminderOptionsChanged: {
+    if (root.showReminderOptions) {
+      root.refreshReminderPresets()
     }
   }
 
@@ -399,7 +416,9 @@ Item {
             if (descNotesArea) descNotesArea.forceActiveFocus()
           } else if (root.focusSection === "reminders") {
             if (root.reminderPresetIndex < root.reminderPresets.length) {
-              root.selectedReminder = root.reminderPresets[root.reminderPresetIndex].value
+              root.selectedReminder = (typeof TodoStore.computePresetReminder === "function")
+                ? TodoStore.computePresetReminder(root.reminderPresetIndex)
+                : root.reminderPresets[root.reminderPresetIndex].value
             } else {
               root.selectedReminder = ""
             }
@@ -704,7 +723,9 @@ Item {
             focusedIndex: root.reminderPresetIndex
             isNavFocused: root.focusSection === "reminders"
             onReminderSelected: function(val, idx) {
-              root.selectedReminder = val
+              root.selectedReminder = (typeof TodoStore.computePresetReminder === "function")
+                ? TodoStore.computePresetReminder(idx)
+                : val
               root.showReminderOptions = false
               root.focusSection = "options"
             }

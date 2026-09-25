@@ -275,6 +275,27 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "expandedDetailsCol must smoothly fade in with opacity transition"
   );
 
+  // 4d. Dynamic Reminder Presets (Real-time recalculation)
+  assert.ok(
+    quickAddContent.includes("refreshReminderPresets") &&
+      quickAddContent.includes("TodoStore.computePresetReminder"),
+    "QuickAdd must support dynamic reminder preset refreshing and computePresetReminder"
+  );
+  assert.ok(
+    panelContent.includes("refreshReminderPresets") &&
+      panelContent.includes("TodoStore.computePresetReminder"),
+    "PanelContent must refresh reminder presets dynamically and use computePresetReminder"
+  );
+
+  const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  assert.ok(
+    barWidgetContent.includes('target: "tablerase.ardoise"') &&
+      barWidgetContent.includes("function toggleTodo(") &&
+      barWidgetContent.includes("function update(") &&
+      barWidgetContent.includes("function remove("),
+    "BarWidget must declare IpcHandler with target 'tablerase.ardoise' and task mutation methods"
+  );
+
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)
   const detectScript = path.join(repoDir, "tools", "detect-context.sh");
   assert.ok(fs.existsSync(detectScript), "tools/detect-context.sh must exist");

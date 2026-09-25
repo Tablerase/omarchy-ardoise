@@ -216,6 +216,27 @@ BarWidget {
     function open(): string { root.open(); return "ok" }
     function close(): string { root.close(); return "ok" }
     function add(task: string): string { root.addTodo(task); return "ok" }
+    function toggleTodo(idStr: string): string {
+      var id = Number(idStr)
+      if (!isNaN(id)) { root.toggleTodo(id); return "ok" }
+      return "invalid_id"
+    }
+    function remove(idStr: string): string {
+      var id = Number(idStr)
+      if (!isNaN(id)) { root.removeTodo(id); return "ok" }
+      return "invalid_id"
+    }
+    function update(idStr: string, fieldsJson: string): string {
+      var id = Number(idStr)
+      if (isNaN(id)) return "invalid_id"
+      try {
+        var fields = JSON.parse(fieldsJson)
+        root.updateTodo(id, fields)
+        return "ok"
+      } catch (e) {
+        return "invalid_json"
+      }
+    }
     function clear(): string { root.clearCompleted(); return "ok" }
     function count(): string { return String(root.pendingCount) }
     function list(): string { return JSON.stringify(root.todos) }

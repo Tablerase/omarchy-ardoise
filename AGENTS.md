@@ -21,3 +21,17 @@
 - **Commit Signing**: All local git commits must be signed using SSH: `git commit -S -m "..."`.
 - **No Remote Tags**: Do not create or push release tags (`v*`).
 - **Preview Tool Conservation**: Do not execute `./tools/render-preview.sh` during development unless specifically requested by the user.
+
+## Task & Shell IPC Standards
+- **Use `omarchy-shell` for Task State**: Never use ad-hoc Python, node, or bash scripts to inspect or mutate `~/.config/omarchy/todos.json`. Instead, interact directly through the plugin's native IPC handler via `omarchy-shell`:
+  - List tasks: `omarchy-shell tablerase.ardoise list`
+  - Get count: `omarchy-shell tablerase.ardoise count`
+  - Add task: `omarchy-shell tablerase.ardoise add "<title> [#profile]"`
+  - Toggle completion: `omarchy-shell tablerase.ardoise toggleTodo "<id>"`
+  - Update task: `omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "..."}'`
+  - Remove task: `omarchy-shell tablerase.ardoise remove "<id>"`
+  - Switch active profile: `omarchy-shell tablerase.ardoise setProfile "<profile>"`
+  - List profiles: `omarchy-shell tablerase.ardoise profiles`
+  - Clear completed: `omarchy-shell tablerase.ardoise clear`
+  - Toggle / Open / Close UI: `omarchy-shell tablerase.ardoise toggle` (or `open` / `close`)
+

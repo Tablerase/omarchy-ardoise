@@ -30,6 +30,7 @@ const {
   formatReminder,
   getProfileGlyph,
   getReminderPresets,
+  computePresetReminder,
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
@@ -247,13 +248,32 @@ test("getProfileGlyph: returns expected icons", () => {
   assert.equal(getProfileGlyph("custom_tag"), "󰲉");
 });
 
-test("getReminderPresets: returns 4 valid presets", () => {
+test("getReminderPresets: returns 4 valid presets and dynamically respects baseDate", () => {
   const presets = getReminderPresets();
   assert.equal(presets.length, 4);
+  assert.equal(presets[0].label, "+30m");
+  assert.equal(presets[1].label, "+1h");
+  assert.equal(presets[2].label, "Tomorrow 9am");
+  assert.equal(presets[3].label, "Tomorrow 6pm");
   for (const preset of presets) {
     assert.ok(preset.label);
+    assert.ok(preset.id);
     assert.ok(!isNaN(new Date(preset.value).getTime()));
   }
+
+  // With explicit baseDate (e.g. 12:55:00)
+  const base = new Date("2026-09-25T12:55:00.000Z");
+  const dynamicPresets = getReminderPresets(base);
+  assert.equal(new Date(dynamicPresets[0].value).getTime(), base.getTime() + 30 * 60 * 1000);
+  assert.equal(new Date(dynamicPresets[1].value).getTime(), base.getTime() + 60 * 60 * 1000);
+
+  // computePresetReminder
+  const computed30m = computePresetReminder(0, base);
+  assert.equal(new Date(computed30m!).getTime(), base.getTime() + 30 * 60 * 1000);
+  const computedById = computePresetReminder("30m", base);
+  assert.equal(computedById, computed30m);
+  const computedByLabel = computePresetReminder("+1h", base);
+  assert.equal(new Date(computedByLabel!).getTime(), base.getTime() + 60 * 60 * 1000);
 });
 
 test("normalize: migrates legacy array format and invalid inputs to Schema v1", () => {

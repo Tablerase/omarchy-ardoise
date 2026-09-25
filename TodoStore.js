@@ -84,6 +84,7 @@
 
 /**
  * @typedef {Object} ReminderPreset
+ * @property {string} [id]
  * @property {string} label
  * @property {string} value
  */
@@ -1077,12 +1078,23 @@ function getProfileGlyph(profile) {
   }
 }
 
+
 /**
  * Returns preset quick reminder choices.
+ * @param {Date|number|string} [baseDate]
  * @returns {ReminderPreset[]}
  */
-function getReminderPresets() {
+function getReminderPresets(baseDate) {
   var now = new Date()
+  if (baseDate instanceof Date && !isNaN(baseDate.getTime())) {
+    now = baseDate
+  } else if (typeof baseDate === "number" && !isNaN(baseDate)) {
+    now = new Date(baseDate)
+  } else if (typeof baseDate === "string" && baseDate.length > 0) {
+    var parsed = new Date(baseDate)
+    if (!isNaN(parsed.getTime())) now = parsed
+  }
+
   var in30m = new Date(now.getTime() + 30 * 60 * 1000)
   var in1h = new Date(now.getTime() + 60 * 60 * 1000)
 
@@ -1095,11 +1107,33 @@ function getReminderPresets() {
   tom6pm.setHours(18, 0, 0, 0)
 
   return [
-    { label: "+30m", value: in30m.toISOString() },
-    { label: "+1h", value: in1h.toISOString() },
-    { label: "Tomorrow 9am", value: tom9am.toISOString() },
-    { label: "Tomorrow 6pm", value: tom6pm.toISOString() }
+    { id: "30m", label: "+30m", value: in30m.toISOString() },
+    { id: "1h", label: "+1h", value: in1h.toISOString() },
+    { id: "tom9am", label: "Tomorrow 9am", value: tom9am.toISOString() },
+    { id: "tom6pm", label: "Tomorrow 6pm", value: tom6pm.toISOString() }
   ]
+}
+
+/**
+ * Computes a fresh ISO reminder timestamp for a given preset index or identifier.
+ * @param {number|string} presetIndexOrId
+ * @param {Date|number|string} [baseDate]
+ * @returns {string|null}
+ */
+function computePresetReminder(presetIndexOrId, baseDate) {
+  var presets = getReminderPresets(baseDate)
+  if (typeof presetIndexOrId === "number") {
+    if (presetIndexOrId >= 0 && presetIndexOrId < presets.length) {
+      return presets[presetIndexOrId].value
+    }
+  } else if (typeof presetIndexOrId === "string") {
+    for (var i = 0; i < presets.length; i++) {
+      if (presets[i].id === presetIndexOrId || presets[i].label === presetIndexOrId) {
+        return presets[i].value
+      }
+    }
+  }
+  return null
 }
 
 /**
@@ -1261,6 +1295,7 @@ if (typeof module !== "undefined" && module.exports) {
     formatReminder,
     getProfileGlyph,
     getReminderPresets,
+    computePresetReminder,
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,

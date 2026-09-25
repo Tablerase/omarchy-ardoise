@@ -344,4 +344,35 @@ test("handleMove & handleTextKey: navigation respects completed fold collapse", 
   assert.equal(mockRoot.cursorIndex, 2, "G jumps to last completed task when fold is open");
 });
 
+test("handleActivate & handleReturn: apply dynamic reminder on reminder sub-section", () => {
+  let updatedTodoId = -1;
+  let updatedFields: any = null;
+
+  const task = { id: 42, title: "Reminder Task", done: false };
+  const mockRoot: any = {
+    filteredTodos: [task],
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    expandedTaskId: 42,
+    expandedSubSection: "reminders",
+    expandedReminderIndex: 0, // +30m
+    reminderPresets: TodoStore.getReminderPresets(),
+    updateTodo: (id: number, fields: any) => {
+      updatedTodoId = id;
+      updatedFields = fields;
+    }
+  };
+
+  const before = Date.now();
+  handleActivate(mockRoot, TodoStore);
+  const after = Date.now();
+
+  assert.equal(updatedTodoId, 42);
+  assert.ok(updatedFields && updatedFields.reminder);
+  const reminderTime = new Date(updatedFields.reminder).getTime();
+  assert.ok(reminderTime >= before + 30 * 60 * 1000 - 500);
+  assert.ok(reminderTime <= after + 30 * 60 * 1000 + 500);
+});
+
 

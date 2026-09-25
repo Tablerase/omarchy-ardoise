@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "../TodoStore.js" as TodoStore
 
 Row {
   id: root
@@ -52,7 +53,12 @@ Row {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.reminderSelected(presetBtn.modelData.value, presetBtn.index)
+        onClicked: {
+          var freshVal = (typeof TodoStore !== "undefined" && typeof TodoStore.computePresetReminder === "function")
+            ? TodoStore.computePresetReminder(presetBtn.index)
+            : presetBtn.modelData.value
+          root.reminderSelected(freshVal, presetBtn.index)
+        }
       }
     }
   }
