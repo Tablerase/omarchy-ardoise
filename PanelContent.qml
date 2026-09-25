@@ -27,7 +27,11 @@ Item {
   property bool mouseMovementDetected: false
   property bool addingProfile: false
   property string shortcutState: "active"
-  property string detectedShortcut: "SUPER + SHIFT + T"
+  property string detectedShortcut: root.detectedPanelShortcut
+  property string detectedPanelShortcut: "SUPER + ALT + T"
+  property string detectedQuickAddShortcut: "SUPER + SHIFT + T"
+  property bool panelShortcutRegistered: false
+  property bool quickAddShortcutRegistered: false
   property bool shortcutRegistered: false
   property string moduleName: "tablerase.ardoise"
   property var descArea: null
@@ -301,7 +305,7 @@ Item {
     (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus))
   )
 
-  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedShortcut)
+  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.keyHelpSearch)
 
   signal closeRequested()
@@ -607,10 +611,12 @@ Item {
           HoverHandler { id: shortcutBtnHover }
           Ui.ShortcutToolTip {
             visible: shortcutBtnHover.hovered
-            description: root.shortcutRegistered
-              ? "Shortcut active (click to copy & edit config)"
-              : "Set shortcut (click to copy & edit config)"
-            shortcut: root.detectedShortcut
+            description: (root.panelShortcutRegistered && root.quickAddShortcutRegistered)
+              ? "Shortcuts active: Toggle Panel / Quick Add"
+              : (root.shortcutRegistered
+                ? (root.panelShortcutRegistered ? "Shortcuts: Panel active (Quick Add missing)" : "Shortcuts: Quick Add active (Panel missing)")
+                : "Set shortcuts (click to copy & edit config)")
+            shortcut: root.detectedPanelShortcut + " / " + root.detectedQuickAddShortcut
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
 
@@ -623,14 +629,16 @@ Item {
             anchors.right: parent.right
             anchors.bottomMargin: Style.space(1)
             anchors.rightMargin: Style.space(1)
-            color: root.shortcutRegistered ? Color.accent
-              : (root.shortcutState === "commented" ? "#e67e22" : Color.urgent)
+            color: (root.panelShortcutRegistered && root.quickAddShortcutRegistered) ? Color.accent
+              : ((root.panelShortcutRegistered || root.quickAddShortcutRegistered) ? "#e67e22"
+              : (root.shortcutState === "commented" ? "#e67e22" : Color.urgent))
             border.color: Color.menu.background
             border.width: 1
 
             Text {
               anchors.centerIn: parent
-              text: root.shortcutRegistered ? "✓" : "✕"
+              text: (root.panelShortcutRegistered && root.quickAddShortcutRegistered) ? "✓"
+                : ((root.panelShortcutRegistered || root.quickAddShortcutRegistered) ? "!" : "✕")
               color: "white"
               font.pixelSize: Style.space(6.5)
               font.bold: true
@@ -2097,7 +2105,7 @@ Item {
         Ui.ShortcutToolTip {
           visible: quickAddBtnHover.hovered
           description: "Open Quick Add modal"
-          shortcut: "A / " + root.detectedShortcut
+          shortcut: "A / " + root.detectedQuickAddShortcut
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         }
       }
@@ -2110,7 +2118,9 @@ Item {
     isOpen: root.showKeyHelp
     bar: root.bar
     barForeground: root.barForeground
-    detectedShortcut: root.detectedShortcut
+    detectedShortcut: root.detectedPanelShortcut
+    detectedPanelShortcut: root.detectedPanelShortcut
+    detectedQuickAddShortcut: root.detectedQuickAddShortcut
     onCloseRequested: {
       root.showKeyHelp = false
       root.releaseFocus()

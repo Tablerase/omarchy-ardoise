@@ -180,21 +180,23 @@ Because the plugin monitors `~/.config/omarchy/todos.json` with inotify (`watchC
 
 ---
 
-## Keyboard-First Task Capture (Quick Add)
+## Desktop Shortcuts (Panel & Quick Add)
 
-Summon the Quick Add modal anywhere on your desktop:
+Summon the dropdown task panel or the Quick Add modal anywhere on your desktop:
 
 ### Hyprland Keybinding Configuration
 
 **Omarchy Quattro (Omarchy 4.x / Lua):**
 Add to `~/.config/hypr/bindings.lua`:
 ```lua
+o.bind("SUPER + ALT + T", "Ardoise Panel Toggle", "omarchy-shell tablerase.ardoise toggle")
 o.bind("SUPER + SHIFT + T", "Ardoise Quick Add", "omarchy-shell shell toggle tablerase.ardoise '{}'")
 ```
 
 **Classic Omarchy (Omarchy 3.x / Conf):**
 Add to `~/.config/hypr/bindings.conf`:
 ```ini
+bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle
 bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise "{}"
 ```
 
@@ -203,10 +205,10 @@ Then reload Hyprland:
 hyprctl reload
 ```
 
-> **Tip:** In the Todos panel header, click the keyboard icon button (`󰌌`) to automatically copy the binding snippet to your clipboard and open the config file in your editor.
-> - `✓` **Green**: Shortcut is active and detected in Hyprland.
-> - `✓` **Orange**: Shortcut is commented out in your config file.
-> - `✕` **Red**: Shortcut is unconfigured.
+> **Tip:** In the Todos panel header, click the keyboard icon button (`󰌌`) to automatically copy both binding snippets to your clipboard and open the config file in your editor.
+> - `✓` **Green**: Both shortcuts are active and detected in Hyprland.
+> - `!` **Orange**: 1 of 2 shortcuts is active, or bindings are commented out in your config file.
+> - `✕` **Red**: Shortcuts are unconfigured.
 
 ### Bar Mouse Shortcuts
 - **󰍽 [L] Left Click**: Toggles the task list flyout panel.

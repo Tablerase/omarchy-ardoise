@@ -140,7 +140,7 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "keybindingsList must use unambiguous 'i / a / <slash>' key entry"
   );
   assert.ok(
-    panelContent.includes("root.detectedShortcut"),
+    panelContent.includes("root.detectedPanelShortcut") || panelContent.includes("root.detectedShortcut"),
     "keybindingsList must include the detected desktop shortcut"
   );
 
@@ -359,7 +359,7 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   // 4. PanelContent button tooltips using ShortcutToolTip
   const expectedButtons = [
     { id: "helpBtn", shortcut: "?" },
-    { id: "shortcutBtn", shortcut: "root.detectedShortcut" },
+    { id: "shortcutBtn", shortcut: "root.detectedPanelShortcut" },
     { id: "addBtn", shortcut: "Enter" },
     { id: "rowExpandBtn", shortcut: "Enter" },
     { id: "rowDeleteBtn", shortcut: "x" },
@@ -379,6 +379,10 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   assert.ok(
     panelContent.includes("Ui.ShortcutToolTip {"),
     "PanelContent must use Ui.ShortcutToolTip for rich tooltips with badges"
+  );
+  assert.ok(
+    panelContent.includes("root.detectedPanelShortcut") && panelContent.includes("root.detectedQuickAddShortcut"),
+    "PanelContent must track both panel toggle and quick add shortcuts"
   );
 });
 

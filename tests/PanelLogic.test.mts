@@ -55,10 +55,15 @@ test("buildCodebaseCommand: expands tilde and builds launch command", () => {
 test("getKeybindingsList & filterKeybindings: lists and filters shortcuts", () => {
   const defaultList = getKeybindingsList();
   assert.ok(defaultList.length >= 15, "contains full list of shortcuts");
-  assert.ok(defaultList.some((item: any) => item.key === "SUPER + SHIFT + T"), "includes default shortcut");
+  assert.ok(defaultList.some((item: any) => item.key === "SUPER + ALT + T" && item.desc.includes("toggle Ardoise panel")), "includes default panel toggle shortcut");
+  assert.ok(defaultList.some((item: any) => item.key === "SUPER + SHIFT + T" && item.desc.includes("Quick Add")), "includes default quick add shortcut");
 
   const customList = getKeybindingsList("SUPER + T");
   assert.ok(customList.some((item: any) => item.key === "SUPER + T"), "includes custom detected shortcut");
+
+  const customDualList = getKeybindingsList("SUPER + P", "SUPER + Q");
+  assert.ok(customDualList.some((item: any) => item.key === "SUPER + P" && item.desc.includes("toggle Ardoise panel")), "includes custom panel toggle shortcut");
+  assert.ok(customDualList.some((item: any) => item.key === "SUPER + Q" && item.desc.includes("Quick Add")), "includes custom quick add shortcut");
 
   const filteredEditor = filterKeybindings(defaultList, "editor");
   assert.ok(filteredEditor.length > 0, "finds editor references");

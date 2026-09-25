@@ -15,9 +15,16 @@ Panel {
   property var hostWidget: null
   property var barWidget: null
 
-  property string detectedShortcut: "SUPER + SHIFT + T"
-  property bool shortcutRegistered: false
-  property string shortcutState: shortcutRegistered ? "active" : "missing"
+  property string detectedShortcut: detectedPanelShortcut
+  property string detectedPanelShortcut: "SUPER + ALT + T"
+  property string detectedQuickAddShortcut: "SUPER + SHIFT + T"
+
+  property bool panelShortcutRegistered: false
+  property bool quickAddShortcutRegistered: false
+  property bool shortcutRegistered: panelShortcutRegistered || quickAddShortcutRegistered
+  property string shortcutState: (panelShortcutRegistered && quickAddShortcutRegistered)
+    ? "active"
+    : ((panelShortcutRegistered || quickAddShortcutRegistered) ? "partial" : "missing")
   readonly property bool hasShortcut: shortcutRegistered
 
   onOpenedChanged: {
@@ -31,8 +38,11 @@ Panel {
   Component.onCompleted: checkShortcutProc.running = true
 
   function parseBinds(rawText) {
-    var found = false
-    var shortcut = "SUPER + SHIFT + T"
+    var panelFound = false
+    var quickAddFound = false
+    var panelKey = "SUPER + ALT + T"
+    var quickAddKey = "SUPER + SHIFT + T"
+
     try {
       var list = JSON.parse(rawText)
       if (Array.isArray(list)) {
@@ -41,22 +51,45 @@ Panel {
           if (!item) continue
           var desc = (item.description && typeof item.description === "string") ? item.description.toLowerCase() : ""
           var arg = (item.arg && typeof item.arg === "string") ? item.arg : ""
-          var matches = (desc && (desc.includes("todo") || desc.includes("ardoise"))) ||
-                        (arg && (arg.includes("tablerase.ardoise") || arg.includes("tablerase.todo")))
-          if (matches) {
-            shortcut = TodoStore.formatKeybind(item.modmask, item.key)
-            found = true
-            break
+          var isArdoise = (desc && (desc.includes("todo") || desc.includes("ardoise"))) ||
+                          (arg && (arg.includes("tablerase.ardoise") || arg.includes("tablerase.todo")))
+          if (!isArdoise) continue
+
+          var keybind = TodoStore.formatKeybind(item.modmask, item.key)
+
+          var isQuickAdd = (desc && (desc.includes("quick") || desc.includes("add"))) ||
+                           (arg && (arg.includes("shell toggle") || arg.includes("shell summon") || arg.includes("quickadd")))
+          var isPanel = (desc && (desc.includes("panel") || desc.includes("toggle") || desc.includes("main") || desc.includes("open"))) ||
+                        (arg && (arg.includes("tablerase.ardoise toggle") || arg.includes("tablerase.ardoise open")))
+
+          if (isQuickAdd && !quickAddFound) {
+            quickAddKey = keybind
+            quickAddFound = true
+          } else if (isPanel && !panelFound) {
+            panelKey = keybind
+            panelFound = true
+          } else if (!panelFound) {
+            panelKey = keybind
+            panelFound = true
+          } else if (!quickAddFound) {
+            quickAddKey = keybind
+            quickAddFound = true
           }
         }
       }
     } catch (e) {
-      found = false
-      shortcut = "SUPER + SHIFT + T"
+      panelFound = false
+      quickAddFound = false
+      panelKey = "SUPER + ALT + T"
+      quickAddKey = "SUPER + SHIFT + T"
     }
 
-    root.detectedShortcut = shortcut
-    root.shortcutRegistered = found
+    root.detectedPanelShortcut = panelKey
+    root.detectedQuickAddShortcut = quickAddKey
+    root.detectedShortcut = panelKey
+    root.panelShortcutRegistered = panelFound
+    root.quickAddShortcutRegistered = quickAddFound
+    root.shortcutRegistered = panelFound || quickAddFound
   }
 
   // Query running Hyprland compositor for active keybinding
@@ -69,19 +102,23 @@ Panel {
     }
     onExited: function(exitCode) {
       if (exitCode !== 0 && !root.shortcutRegistered) {
-        root.detectedShortcut = "SUPER + SHIFT + T"
+        root.detectedPanelShortcut = "SUPER + ALT + T"
+        root.detectedQuickAddShortcut = "SUPER + SHIFT + T"
+        root.detectedShortcut = "SUPER + ALT + T"
+        root.panelShortcutRegistered = false
+        root.quickAddShortcutRegistered = false
         root.shortcutRegistered = false
       }
     }
   }
 
-  // Copy keybinding snippet to clipboard and open bindings file in editor
+  // Copy keybinding snippets to clipboard and open bindings file in editor
   Process {
     id: copyAndOpenProc
     command: [
       "bash",
       "-c",
-      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybinding Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
+      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + ALT + T\\\", \\\"Ardoise Panel Toggle\\\", \\\"omarchy-shell tablerase.ardoise toggle\\\")\no.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle\nbindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybindings Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
     ]
     onExited: function(exitCode) {
       checkShortcutProc.running = true
@@ -149,6 +186,10 @@ Panel {
         barWidget: root.barWidget
         shortcutState: root.shortcutState
         detectedShortcut: root.detectedShortcut
+        detectedPanelShortcut: root.detectedPanelShortcut
+        detectedQuickAddShortcut: root.detectedQuickAddShortcut
+        panelShortcutRegistered: root.panelShortcutRegistered
+        quickAddShortcutRegistered: root.quickAddShortcutRegistered
         shortcutRegistered: root.shortcutRegistered
         onReturnFocusRequested: keyCatcher.forceActiveFocus()
         onCloseRequested: root.close()

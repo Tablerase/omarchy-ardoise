@@ -10,13 +10,15 @@ Rectangle {
   property bool isOpen: false
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  property string detectedShortcut: "SUPER + SHIFT + T"
+  property string detectedShortcut: detectedPanelShortcut
+  property string detectedPanelShortcut: "SUPER + ALT + T"
+  property string detectedQuickAddShortcut: "SUPER + SHIFT + T"
 
   signal closeRequested()
 
   property string search: ""
   property string focusSection: "search" // "search" | "list" | "close"
-  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedShortcut)
+  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.search)
   readonly property bool searchFieldActiveFocus: root.isOpen && (keySearchField.activeFocus || (root.focusSection === "search"))
 

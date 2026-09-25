@@ -56,11 +56,13 @@ function buildCodebaseCommand(localPath, homeDir) {
 
 /**
  * Returns the catalog of supported keyboard shortcuts and navigation commands.
- * @param {string} [detectedShortcut]
+ * @param {string} [detectedPanelShortcut]
+ * @param {string} [detectedQuickAddShortcut]
  * @returns {Array<{key: string, desc: string, category: string}>}
  */
-function getKeybindingsList(detectedShortcut) {
-  var shortcut = detectedShortcut || "SUPER + SHIFT + T";
+function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut) {
+  var panelShortcut = detectedPanelShortcut || "SUPER + ALT + T";
+  var quickAddShortcut = detectedQuickAddShortcut || "SUPER + SHIFT + T";
   return [
     { key: "j / ↓", desc: "Next task", category: "Navigation" },
     { key: "k / ↑", desc: "Previous task", category: "Navigation" },
@@ -78,7 +80,8 @@ function getKeybindingsList(detectedShortcut) {
     { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
     { key: "Esc", desc: "Leave input / editor or close panel", category: "Global" },
     { key: "? / Backspace", desc: "Toggle or dismiss keybindings help modal", category: "Global" },
-    { key: shortcut, desc: "Global shortcut: toggle Ardoise panel", category: "Global" }
+    { key: panelShortcut, desc: "Global desktop shortcut: toggle Ardoise panel", category: "Global" },
+    { key: quickAddShortcut, desc: "Global desktop shortcut: summon Quick Add modal", category: "Global" }
   ];
 }
 

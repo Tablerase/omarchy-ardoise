@@ -126,13 +126,13 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 
 ### B. Main Panel (`PanelContent.qml` & `Panel.qml`)
 
-Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop shortcut (`SUPER + SHIFT + T` / dynamic detection), or `omarchy-shell summon`.
+Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop shortcut (`SUPER + ALT + T` / dynamic detection), or `omarchy-shell tablerase.ardoise toggle`.
 
 #### Visual Hierarchy (Top to Bottom)
 1. **Header Item**:
    - Left: Ardoise Brand Logo (`InboxIcon`) + Title ("Ardoise") + Pending Task Count badge.
      - Brand logo and title form an interactive group: hovering smoothly transitions the icon and text to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser.
-   - Right: Shortcuts Help Toggle button (`?`) + Detected Desktop Shortcut copy pill.
+   - Right: Shortcuts Help Toggle button (`?`) + Dual Desktop Shortcuts copy pill (`󰌌`, tracking Panel Toggle and Quick Add).
 2. **Top Filter Pills Row (`visibleProfiles`)**:
    - "All" pill + active/pending profile pills sorted by pending count and recency.
    - Auto-scrollable flickable with left/right fade gradient hints.
@@ -259,7 +259,8 @@ Quickshell taskbar widget placed in the status bar.
 
 | Context | Key | Action |
 | :--- | :--- | :--- |
-| **Global Desktop** | `SUPER + SHIFT + T` (or custom hyprland bind) | Toggle Main Panel |
+| **Global Desktop** | `SUPER + ALT + T` (or custom hyprland bind) | Toggle Main Panel (`omarchy-shell tablerase.ardoise toggle`) |
+| **Global Desktop** | `SUPER + SHIFT + T` (or custom hyprland bind) | Summon Quick Add Modal (`omarchy-shell shell toggle tablerase.ardoise '{}'`) |
 | **Panel** | `j` / `↓` | Move cursor down (tasks, drawer sub-sections, footer, input) |
 | **Panel** | `k` / `↑` | Move cursor up (drawer sub-sections, tasks; at task 0, transitions to `input`) |
 | **Panel** | `Tab` / `Shift+Tab` | Advance / reverse major sections and expanded task sub-sections |
