@@ -210,8 +210,9 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   );
   assert.ok(
     taskNotesAreaContent.includes("property bool isNavFocused: false") &&
-      taskNotesAreaContent.includes("(textArea.activeFocus || root.isNavFocused)"),
-    "TaskNotesArea must support isNavFocused for unified focus border"
+      taskNotesAreaContent.includes("textArea.activeFocus") &&
+      taskNotesAreaContent.includes("root.isNavFocused"),
+    "TaskNotesArea must support isNavFocused for differentiated nav (1px) vs insert (2px) focus border"
   );
   assert.ok(
     panelContent.includes("function focusNotesEditor()") &&
@@ -810,25 +811,25 @@ ShellRoot {
                 return;
             }
             quickAdd.cycleProfileSelection(1);
-            quickAdd.advanceSection(1);
-            if (quickAdd.focusSection !== "actions") {
-                console.error("[TEST FAIL] quickAdd.advanceSection(1) failed to move to actions");
-                Qt.exit(117);
-                return;
-            }
-            // Enable location context: location must be the last section
+            // Enable location context: location is positioned between profiles and actions
             quickAdd.detectedContext = { repo: "test/repo", localPath: "/tmp" };
             quickAdd.attachLocation = true;
             quickAdd.advanceSection(1);
             if (quickAdd.focusSection !== "location") {
-                console.error("[TEST FAIL] quickAdd.advanceSection(1) from actions failed to move to location");
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from profiles failed to move to location");
                 Qt.exit(131);
                 return;
             }
             quickAdd.advanceSection(1);
-            if (quickAdd.focusSection !== "title") {
-                console.error("[TEST FAIL] quickAdd.advanceSection(1) from location failed to wrap to title");
+            if (quickAdd.focusSection !== "actions") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from location failed to move to actions");
                 Qt.exit(132);
+                return;
+            }
+            quickAdd.advanceSection(1);
+            if (quickAdd.focusSection !== "title") {
+                console.error("[TEST FAIL] quickAdd.advanceSection(1) from actions failed to wrap to title");
+                Qt.exit(133);
                 return;
             }
             quickAdd.dismiss();

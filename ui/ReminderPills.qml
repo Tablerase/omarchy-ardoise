@@ -15,6 +15,7 @@ Item {
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color accentColor: Color.accent
   property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
+  property color fadeColor: Color.menu.background
 
   signal reminderSelected(string value, int index)
   signal clearSelected(int index)
@@ -144,6 +145,52 @@ Item {
           onClicked: root.clearSelected(root.presets.length)
         }
       }
+    }
+  }
+
+  // Soft blur/fade edge on the left
+  Rectangle {
+    id: leftFadeEdge
+    z: 1
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    width: Style.space(24)
+    enabled: false
+    visible: opacity > 0
+    opacity: (reminderFlickable.contentWidth > reminderFlickable.width && reminderFlickable.contentX > 2) ? 1.0 : 0.0
+
+    Behavior on opacity {
+      NumberAnimation { duration: 150 }
+    }
+
+    gradient: Gradient {
+      orientation: Gradient.Horizontal
+      GradientStop { position: 0.0; color: root.fadeColor }
+      GradientStop { position: 1.0; color: Qt.rgba(root.fadeColor.r, root.fadeColor.g, root.fadeColor.b, 0) }
+    }
+  }
+
+  // Soft blur/fade edge on the right
+  Rectangle {
+    id: rightFadeEdge
+    z: 1
+    anchors.right: parent.right
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    width: Style.space(32)
+    enabled: false
+    visible: opacity > 0
+    opacity: (reminderFlickable.contentWidth > reminderFlickable.width && reminderFlickable.contentX < (reminderFlickable.contentWidth - reminderFlickable.width - 2)) ? 1.0 : 0.0
+
+    Behavior on opacity {
+      NumberAnimation { duration: 150 }
+    }
+
+    gradient: Gradient {
+      orientation: Gradient.Horizontal
+      GradientStop { position: 0.0; color: Qt.rgba(root.fadeColor.r, root.fadeColor.g, root.fadeColor.b, 0) }
+      GradientStop { position: 1.0; color: root.fadeColor }
     }
   }
 }

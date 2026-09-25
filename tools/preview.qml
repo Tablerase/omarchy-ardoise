@@ -13,6 +13,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "plugin" as Plugin
+import "plugin/ui" as PluginUi
 import "plugin/TodoStore.js" as TodoStore
 
 ShellRoot {
@@ -151,7 +152,7 @@ ShellRoot {
                         anchors.centerIn: parent
                         spacing: Style.space(6)
 
-                        Plugin.InboxIcon {
+                        PluginUi.InboxIcon {
                             width: Style.space(16); height: Style.space(16)
                             color: Color.urgent || "#d20f39"
                             anchors.verticalCenter: parent.verticalCenter

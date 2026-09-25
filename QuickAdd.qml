@@ -54,8 +54,8 @@ Item {
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
     secs.push("profiles")
-    secs.push("actions")
     if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
+    secs.push("actions")
     return secs
   }
 
@@ -486,7 +486,7 @@ Item {
           width: parent.width
           spacing: Style.space(8)
 
-          InboxIcon {
+          Ui.InboxIcon {
             anchors.verticalCenter: parent.verticalCenter
             width: Style.space(18)
             height: width
@@ -520,12 +520,15 @@ Item {
           bottomPadding: Style.space(8)
           background: BorderSurface {
             readonly property bool isNavFocused: (root.focusSection === "title") && !taskInput.activeFocus
-            color: Style.controlFill(taskInput.activeFocus || isNavFocused, taskInput.hovered, Color.foreground, Color.accent)
-            borderSpec: Border.controlSpec(
-              (taskInput.activeFocus || isNavFocused) ? "focus" : (taskInput.hovered ? "hover-cursor" : "normal"),
-              Color.foreground,
-              Color.accent
-            )
+            color: taskInput.activeFocus
+              ? Util.alpha(Color.accent, 0.08)
+              : Style.controlFill(false, taskInput.hovered, Color.foreground, Color.accent)
+            borderSpec: taskInput.activeFocus
+              ? Border.flat(Color.accent, 2)
+              : (isNavFocused
+                  ? Border.flat(Color.accent, 1)
+                  : (taskInput.hovered ? Border.controlSpec("hover-cursor", Color.foreground, Color.accent)
+                                       : Border.controlSpec("normal", Color.foreground, Color.accent)))
             radius: Style.cornerRadius
           }
           onAccepted: root.submit()
@@ -629,13 +632,20 @@ Item {
 
           Button {
             id: noteBtn
+            readonly property bool isActive: root.showNote
             iconText: "󰏫"
             text: root.showNote ? "Hide Note" : "Add Note"
-            selected: root.showNote
             bordered: true
             fontSize: Style.font.caption
             fontFamily: Style.font.family
             hasCursor: (root.focusSection === "options") && (root.optionIndex === 0)
+            foreground: (hasCursor || isActive) ? Color.accent : (Color.menu.text || Color.foreground)
+            background: isActive ? Util.alpha(Color.accent, 0.12) : "transparent"
+            borderSpec: hasCursor
+              ? Border.flat(Color.accent, 2)
+              : (isActive ? Border.flat(Color.accent, 1) : Border.controlSpec("normal", Color.foreground, Color.accent))
+            scale: hasCursor ? 1.05 : 1.0
+            Behavior on scale { NumberAnimation { duration: 80 } }
             onClicked: {
               root.showNote = !root.showNote
               if (root.showNote) {
@@ -647,13 +657,20 @@ Item {
 
           Button {
             id: reminderBtn
+            readonly property bool isActive: Boolean(root.selectedReminder)
             iconText: "󰥔"
             text: root.selectedReminder ? TodoStore.formatReminder(root.selectedReminder) : "Set Reminder"
-            selected: Boolean(root.selectedReminder)
             bordered: true
             fontSize: Style.font.caption
             fontFamily: Style.font.family
             hasCursor: (root.focusSection === "options") && (root.optionIndex === 1)
+            foreground: (hasCursor || isActive) ? Color.accent : (Color.menu.text || Color.foreground)
+            background: isActive ? Util.alpha(Color.accent, 0.12) : "transparent"
+            borderSpec: hasCursor
+              ? Border.flat(Color.accent, 2)
+              : (isActive ? Border.flat(Color.accent, 1) : Border.controlSpec("normal", Color.foreground, Color.accent))
+            scale: hasCursor ? 1.05 : 1.0
+            Behavior on scale { NumberAnimation { duration: 80 } }
             onClicked: {
               root.showReminderOptions = !root.showReminderOptions
               if (root.showReminderOptions) {
@@ -776,67 +793,7 @@ Item {
           }
         }
 
-        PanelSeparator { width: parent.width }
-
-        // Action controls
-        Item {
-          width: parent.width
-          implicitHeight: Math.max(hintText.implicitHeight, actionButtons.implicitHeight)
-
-          Text {
-            id: hintText
-            anchors.left: parent.left
-            anchors.right: actionButtons.left
-            anchors.rightMargin: Style.space(12)
-            anchors.verticalCenter: parent.verticalCenter
-            text: {
-              if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
-              if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
-              return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
-            }
-            color: Color.muted
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
-          }
-
-          Row {
-            id: actionButtons
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(8)
-
-            Button {
-              id: cancelBtn
-              iconText: "󰅖"
-              text: "Cancel"
-              fontSize: Style.font.caption
-              fontFamily: Style.font.family
-              bordered: true
-              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 0)
-              selected: (root.focusSection === "actions") && (root.actionIndex === 0)
-              scale: hasCursor ? 1.05 : 1.0
-              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-              onClicked: root.dismiss()
-            }
-
-            Button {
-              id: addBtn
-              iconText: "󰐕"
-              text: "Add"
-              fontSize: Style.font.caption
-              fontFamily: Style.font.family
-              bordered: true
-              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
-              selected: (root.focusSection === "actions") && (root.actionIndex === 1)
-              scale: hasCursor ? 1.05 : 1.0
-              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-              onClicked: root.submit()
-            }
-          }
-        }
-
-        // Auto-detected codebase context pill (last section)
+        // Auto-detected codebase context pill (positioned above actions)
         Row {
           visible: Boolean(root.detectedContext && root.attachLocation)
           spacing: Style.space(6)
@@ -878,6 +835,72 @@ Item {
             font.family: Style.font.family
             font.pixelSize: Style.space(8.5)
             font.bold: root.focusSection === "location"
+          }
+        }
+
+        PanelSeparator { width: parent.width }
+
+        // Action controls
+        Item {
+          width: parent.width
+          implicitHeight: Math.max(hintText.implicitHeight, actionButtons.implicitHeight)
+
+          Text {
+            id: hintText
+            anchors.left: parent.left
+            anchors.right: actionButtons.left
+            anchors.rightMargin: Style.space(12)
+            anchors.verticalCenter: parent.verticalCenter
+            text: {
+              if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
+              if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
+              return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
+            }
+            color: Color.muted
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+          }
+
+          Row {
+            id: actionButtons
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(8)
+
+            Button {
+              id: cancelBtn
+              iconText: "󰅖"
+              text: "Cancel"
+              fontSize: Style.font.caption
+              fontFamily: Style.font.family
+              bordered: true
+              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 0)
+              selected: (root.focusSection === "actions") && (root.actionIndex === 0)
+              borderSpec: hasCursor
+                ? Border.flat(Color.accent, 2)
+                : Border.controlSpec("normal", Color.foreground, Color.accent)
+              scale: hasCursor ? 1.05 : 1.0
+              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+              onClicked: root.dismiss()
+            }
+
+            Button {
+              id: addBtn
+              iconText: "󰐕"
+              text: "Add"
+              fontSize: Style.font.caption
+              fontFamily: Style.font.family
+              bordered: true
+              hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
+              selected: (root.focusSection === "actions") && (root.actionIndex === 1)
+              borderSpec: hasCursor
+                ? Border.flat(Color.accent, 2)
+                : Border.controlSpec("normal", Color.foreground, Color.accent)
+              scale: hasCursor ? 1.05 : 1.0
+              Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+              onClicked: root.submit()
+            }
           }
         }
       }

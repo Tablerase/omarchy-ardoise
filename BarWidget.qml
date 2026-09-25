@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
+import "./ui" as Ui
 
 BarWidget {
   id: root
@@ -275,7 +276,7 @@ BarWidget {
       anchors.centerIn: parent
       spacing: Style.space(6)
 
-      InboxIcon {
+      Ui.InboxIcon {
         anchors.verticalCenter: parent.verticalCenter
         width: Style.space(16)
         height: width

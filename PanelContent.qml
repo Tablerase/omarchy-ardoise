@@ -595,7 +595,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(6)
 
-            InboxIcon {
+            Ui.InboxIcon {
               anchors.verticalCenter: parent.verticalCenter
               width: Style.space(16)
               height: width
@@ -924,7 +924,7 @@ Item {
         gradient: Gradient {
           orientation: Gradient.Horizontal
           GradientStop { position: 0.0; color: root.cardBackground }
-          GradientStop { position: 1.0; color: "transparent" }
+          GradientStop { position: 1.0; color: Qt.rgba(root.cardBackground.r, root.cardBackground.g, root.cardBackground.b, 0) }
         }
       }
 
@@ -945,8 +945,7 @@ Item {
 
         gradient: Gradient {
           orientation: Gradient.Horizontal
-          GradientStop { position: 0.0; color: "transparent" }
-          GradientStop { position: 0.5; color: Qt.rgba(root.cardBackground.r, root.cardBackground.g, root.cardBackground.b, 0.6) }
+          GradientStop { position: 0.0; color: Qt.rgba(root.cardBackground.r, root.cardBackground.g, root.cardBackground.b, 0) }
           GradientStop { position: 1.0; color: root.cardBackground }
         }
       }
@@ -983,6 +982,15 @@ Item {
         width: parent.width - confirmProfileBtn.implicitWidth - Style.space(6)
         placeholderText: "Profile name (e.g. project1)..."
         font.pixelSize: Style.font.caption
+        background: BorderSurface {
+          color: newProfileInput.activeFocus
+            ? Util.alpha(Color.accent, 0.08)
+            : Style.controlFill(false, newProfileInput.hovered, root.barForeground, Color.accent)
+          borderSpec: newProfileInput.activeFocus
+            ? Border.flat(Color.accent, 2)
+            : (newProfileInput.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent) : Border.controlSpec("normal", root.barForeground, Color.accent))
+          radius: Style.cornerRadius
+        }
         onAccepted: {
           if (text.trim() !== "") {
             var p = TodoStore.cleanProfileName(text)
@@ -1045,12 +1053,15 @@ Item {
         font.pixelSize: Style.font.caption
         background: BorderSurface {
           readonly property bool isNavFocused: root.cursorActive && (root.focusSection === "input") && !newTodoField.activeFocus
-          color: Style.controlFill(newTodoField.activeFocus || isNavFocused, newTodoField.hovered, root.barForeground, Color.accent)
-          borderSpec: Border.controlSpec(
-            (newTodoField.activeFocus || isNavFocused) ? "focus" : (newTodoField.hovered ? "hover-cursor" : "normal"),
-            root.barForeground,
-            Color.accent
-          )
+          color: newTodoField.activeFocus
+            ? Util.alpha(Color.accent, 0.08)
+            : Style.controlFill(false, newTodoField.hovered, root.barForeground, Color.accent)
+          borderSpec: newTodoField.activeFocus
+            ? Border.flat(Color.accent, 2)
+            : (isNavFocused
+                ? Border.flat(Color.accent, 1)
+                : (newTodoField.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                                        : Border.controlSpec("normal", root.barForeground, Color.accent)))
           radius: Style.cornerRadius
         }
         onActiveFocusChanged: {
@@ -1985,6 +1996,7 @@ Item {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
+                    fadeColor: Color.menu.selectedBackground
                     presets: root.reminderPresets
                     selectedValue: (itemRow.modelData.reminder && itemRow.modelData.reminder.preset) ? itemRow.modelData.reminder.preset : (itemRow.modelData.reminder || "")
                     hasReminder: Boolean(itemRow.modelData.reminder)
@@ -2037,6 +2049,7 @@ Item {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
+                    fadeColor: Color.menu.selectedBackground
                     profiles: TodoStore.getSortedProfiles(root.store, false, "")
                     selectedProfile: itemRow.modelData.profile || ""
                     focusedIndex: root.expandedProfileIndex

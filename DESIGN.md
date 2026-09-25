@@ -68,8 +68,9 @@ To preserve long-term maintainability and visual consistency across the main pan
 - **`ui/Chip.qml`**: Reusable compact pill/badge component for reminders, repositories, tags, and auto-detected locations. Strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, and optional removal button.
 - **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss.
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary status and urgency indicator (accent border and tint for due today, urgent border and tint for overdue, muted border with checkmark for completed, muted border for normal pending).
-- **`ui/ReminderPills.qml`**: Reusable horizontal scrollable reminder preset pill row (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `Clear`) with navigation cursor scaling, dynamic timestamp recalculation at selection time, and smooth auto-scroll (`ensureVisible`) keeping the active pill centered in view.
-- **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, and smooth auto-scroll (`ensureVisible`).
+- **`ui/InboxIcon.qml`**: Scalable vector inbox tray icon rendered via Canvas 2D, shared across the status bar widget, panel brand header, and QuickAdd modal.
+- **`ui/ReminderPills.qml`**: Reusable horizontal scrollable reminder preset pill row (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `Clear`) with navigation cursor scaling, dynamic timestamp recalculation at selection time, smooth auto-scroll (`ensureVisible`) keeping the active pill centered in view, and single-hue alpha fade gradient overlays (`fadeColor`, `z: 1`, 24 px left / 32 px right) cleanly dissolving overflowing content without dark smudges on light backgrounds.
+- **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, smooth auto-scroll (`ensureVisible`), and single-hue alpha fade gradient overlays (`fadeColor`, `z: 1`, 24 px left / 32 px right) cleanly dissolving overflowing content without dark smudges on light backgrounds.
 - **`ui/KeyBadge.qml`**: Reusable keyboard shortcut badge component rendering key representations with pixel-perfect parity to the help guide (`Util.alpha(badgeColor, 0.15)` background fill, `badgeColor` border, monospace bold font, `radius: Style.space(4)`).
 - **`ui/ShortcutToolTip.qml`**: Rich multi-line tooltip component presenting an action description on top and keyboard shortcut badges below separated by a line break, with both the description text and shortcut badge row horizontally centered in their respective lines. Supports automatic regex parsing of legacy parenthesized shortcuts `(key)` or explicit `description` and `shortcut` properties, automatically splitting multi-key combinations (e.g. `"A / SUPER + SHIFT + T"`) into distinct `KeyBadge` pills with subtle `/` separators. Applied across all button tooltips in the panel and modals (Header Help & Shortcut buttons, Input Add button, Task Row Expand & Delete buttons, Footer Action buttons, and Help Modal Close button).
 
@@ -82,42 +83,45 @@ To preserve long-term maintainability and visual consistency across the main pan
 Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card styled with `Color.menu.background`.
 
 #### Visual Hierarchy (Top to Bottom)
-1. **Header Row**: Inbox Icon (`InboxIcon.qml`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
+1. **Header Row**: Inbox Icon (`ui/InboxIcon.qml`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
 2. **Separator**: Top dividing line (`PanelSeparator`).
 3. **Title Input Field (`taskInput`)**:
-   - Autofocused on modal open with explicit `BorderSurface` focus border.
+   - In **insert mode** (`activeFocus === true`): 2px solid `Color.accent` border + soft accent tint fill (`Util.alpha(Color.accent, 0.08)`) — clear "I am typing" indicator.
+   - In **nav/normal mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid `Color.accent` border, no fill tint — field is selected in keyboard nav but not being edited.
    - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
    - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
 4. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
 5. **Option Toggles Row**:
-   - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
-   - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`.
-   - Both buttons use `bordered: true` for clear cursor focus framing.
+   - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When active, displays clean accent tint (`Util.alpha(Color.accent, 0.12)`), 1px accent border, and accent text/icon. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring and prominent focus fill. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
+   - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`. When active with a chosen reminder, displays accent tint, 1px accent border, and formatted reminder string. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring.
+   - Both buttons use `bordered: true`, scale popping, and explicit accent focus rings, ensuring navigation focus is always noticeably brighter and higher-contrast than resting active states.
 6. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
+   - **Insert mode** (`activeFocus === true`): 2px solid accent border + accent tint fill — clear editing indicator.
+   - **Nav mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid accent border, no tint — field is selected in keyboard nav but not being edited.
    - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
 7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
    - Presets: `+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, plus "Clear". Presets and selected timestamps are dynamically recomputed at open and click/selection time relative to current local execution time rather than startup time. Bordered focus styling via `Ui.ReminderPills`.
 8. **Profile Selector Container (`quickAddProfileContainer`)**:
    - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-9. **Separator**: Bottom dividing line (`PanelSeparator`).
-10. **Footer Actions Item**:
+9. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
+   - Positioned above actions and divider.
+   - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
+   - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
+10. **Separator**: Bottom dividing line (`PanelSeparator`).
+11. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
     - Right: Action buttons [Cancel] and [Add]:
-      - Both buttons use `bordered: true` and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
-      - When Cancel is navigated to (`actionIndex === 0`), Cancel receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
-      - When Add is navigated to (`actionIndex === 1`), Add receives `hover-cursor` border, selected fill, and an animated 1.05 scale pop.
+      - Both buttons use `bordered: true`, 2px `Color.accent` focus border on navigation, and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
+      - When Cancel is navigated to (`actionIndex === 0`), Cancel receives 2px accent focus border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
+      - When Add is navigated to (`actionIndex === 1`), Add receives 2px accent focus border, selected fill, and an animated 1.05 scale pop.
       - At neutral rest state (e.g. while typing title or notes), neither button is selected, preventing misleading highlights.
-11. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
-    - Positioned at the very end of the modal (last section).
-    - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
-    - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after actions (or <kbd>k</kbd>/<kbd>Up</kbd> backward from title). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to title.
 
 #### Navigation State Flow (`focusSection`)
 ```
-[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [actions] ──Tab/Down──► [(location)]
+[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [(location)] ──Tab/Down──► [actions]
    ▲                                                                                                                                                    │
    └──────────────────────────────────────────────────Tab/Down (Loops around)───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -130,15 +134,15 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 
 #### Visual Hierarchy (Top to Bottom)
 1. **Header Item**:
-   - Left: Ardoise Brand Logo (`InboxIcon`) + Title ("Ardoise") + Pending Task Count badge.
+   - Left: Ardoise Brand Logo (`ui/InboxIcon.qml`) + Title ("Ardoise") + Pending Task Count badge.
      - Brand logo and title form an interactive group: hovering smoothly transitions the icon and text to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser.
    - Right: Shortcuts Help Toggle button (`?`) + Dual Desktop Shortcuts copy pill (`󰌌`, tracking Panel Toggle and Quick Add).
 2. **Top Filter Pills Row (`visibleProfiles`)**:
    - "All" pill + active/pending profile pills sorted by pending count and recency.
-   - Auto-scrollable flickable with left/right fade gradient hints.
+   - Auto-scrollable flickable with clean single-hue alpha edge fade gradients (`Qt.rgba(r, g, b, 0)`).
    - "+" button to quickly create a new profile inline.
 3. **Quick Input Row**:
-   - `newTodoField`: Task title entry with inline placeholder wrapped in `BorderSurface`.
+   - `newTodoField`: Task title entry with high-contrast 2px `Color.accent` focus ring and soft accent tint wrapped in `BorderSurface`.
    - Visual focus outline displayed when focused in normal navigation mode (`focusSection === "input"`).
    - **Universal Escape**: Pressing <kbd>Escape</kbd> while typing blurs the text field into normal motion mode on the `"input"` section without closing the panel or discarding text. In normal mode, pressing <kbd>j</kbd>/<kbd>Down</kbd> moves into `tasks`, <kbd>k</kbd>/<kbd>Up</kbd> moves into `profiles`, and pressing <kbd>Enter</kbd>, <kbd>Space</kbd>, or typing any printable character re-enters edit mode.
    - Profile badge showing currently active filter tag.

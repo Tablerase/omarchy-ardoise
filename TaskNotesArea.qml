@@ -61,12 +61,15 @@ ScrollView {
   clip: true
 
   background: BorderSurface {
-    color: Style.controlFill(textArea.activeFocus || root.isNavFocused, textArea.hovered, root.foreground, root.accentColor)
-    borderSpec: Border.controlSpec(
-      (textArea.activeFocus || root.isNavFocused) ? "focus" : (textArea.hovered ? "hover-cursor" : "normal"),
-      root.foreground,
-      root.accentColor
-    )
+    color: textArea.activeFocus
+      ? Util.alpha(root.accentColor, 0.08)
+      : Style.controlFill(false, textArea.hovered, root.foreground, root.accentColor)
+    borderSpec: textArea.activeFocus
+      ? Border.flat(root.accentColor, 2)
+      : (root.isNavFocused
+          ? Border.flat(root.accentColor, 1)
+          : (textArea.hovered ? Border.controlSpec("hover-cursor", root.foreground, root.accentColor)
+                              : Border.controlSpec("normal", root.foreground, root.accentColor)))
     radius: Style.cornerRadius
   }
 
