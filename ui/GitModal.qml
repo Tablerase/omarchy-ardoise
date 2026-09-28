@@ -630,14 +630,21 @@ Rectangle {
             }
           }
 
+          Keys.priority: Keys.BeforeItem
           Keys.onEscapePressed: function(event) {
             event.accepted = true
-            if (remoteField.text.trim().length === 0) {
-              root.close()
-            } else {
+            remoteField.focus = false
+            root.syncFocusIndex = 0
+            root.forceActiveFocus()
+          }
+
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+              event.accepted = true
               remoteField.focus = false
               root.syncFocusIndex = 0
               root.forceActiveFocus()
+              return
             }
           }
 

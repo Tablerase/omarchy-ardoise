@@ -436,6 +436,12 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
       gitModalContent.includes("hasCursor: (root.activeTab === 1)"),
     "GitModal must support full vim motion navigation and cursor highlighting in Tab 1"
   );
+  assert.ok(
+    gitModalContent.includes("Keys.priority: Keys.BeforeItem") &&
+      gitModalContent.includes("remoteField.focus = false") &&
+      !/if\s*\(\s*remoteField\.text\.trim\(\)\.length\s*===\s*0\s*\)\s*\{\s*root\.close\(\)/.test(gitModalContent),
+    "GitModal remoteField must implement two-stage escape (switch from insert to normal mode) without dismissing the modal on empty text"
+  );
 
   // 4. PanelContent button tooltips using ShortcutToolTip
   const expectedButtons = [
@@ -693,6 +699,33 @@ ShellRoot {
             if (panelContent.cursorIndex < 1) {
                 console.error("[TEST FAIL] Motions failed to work after closing HelpModal");
                 Qt.exit(133);
+                return;
+            }
+
+            // 5b. Git Modal Lifecycle: KeyCatcher MUST BE BLOCKED while open, and UNBLOCKED when closed!
+            panelContent.focusSection = "tasks";
+            panelContent.handleTextKey("u");
+            if (!panelContent.showGitModal) {
+                console.error("[TEST FAIL] handleTextKey('u') failed to open GitModal");
+                Qt.exit(140);
+                return;
+            }
+            if (!panelKeyCatcher.blocked || !panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher must be blocked while GitModal is open");
+                Qt.exit(141);
+                return;
+            }
+
+            // Close GitModal via 'u' toggle
+            panelContent.handleTextKey("u");
+            if (panelContent.showGitModal) {
+                console.error("[TEST FAIL] handleTextKey('u') failed to close GitModal");
+                Qt.exit(142);
+                return;
+            }
+            if (panelKeyCatcher.blocked || panelContent.activeFocusBlocked) {
+                console.error("[TEST FAIL] panelKeyCatcher remained blocked after closing GitModal!");
+                Qt.exit(143);
                 return;
             }
 
