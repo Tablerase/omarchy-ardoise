@@ -26,14 +26,16 @@ Rectangle {
     search = ""
     focusSection = "search"
     isOpen = true
+    if (keySearchField) keySearchField.focus = false
     Qt.callLater(function() {
-      if (keySearchField) keySearchField.forceActiveFocus()
+      root.forceActiveFocus()
     })
   }
 
   function close() {
     isOpen = false
     focusSection = "search"
+    if (keySearchField) keySearchField.focus = false
     root.closeRequested()
   }
 
@@ -46,16 +48,22 @@ Rectangle {
     if (isOpen) {
       search = ""
       focusSection = "search"
+      if (keySearchField) keySearchField.focus = false
       Qt.callLater(function() {
-        if (keySearchField) keySearchField.forceActiveFocus()
+        root.forceActiveFocus()
       })
+    } else {
+      if (keySearchField) keySearchField.focus = false
     }
   }
 
   anchors.fill: parent
   visible: isOpen
   z: 999
-  color: Util.alpha(Color.popups.background, 0.96)
+  color: {
+    var base = (Color.popups && Color.popups.background) ? Color.popups.background : Color.background
+    return Qt.rgba(base.r, base.g, base.b, 1.0)
+  }
   radius: Style.cornerRadius
   focus: true
 
@@ -65,13 +73,13 @@ Rectangle {
   }
 
   Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_Escape) {
+    if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "?") {
       event.accepted = true
       root.close()
       return
     }
     if (root.focusSection === "search") {
-      if (event.key === Qt.Key_I || event.key === Qt.Key_A || (event.text === "i" || event.text === "a")) {
+      if (event.key === Qt.Key_I || event.key === Qt.Key_A || event.text === "i" || event.text === "a" || event.text === "/") {
         event.accepted = true
         keySearchField.forceActiveFocus()
         return
@@ -97,7 +105,6 @@ Rectangle {
       if (event.key === Qt.Key_Backspace) {
         event.accepted = true
         if (keySearchField.text.length > 0) {
-          keySearchField.forceActiveFocus()
           keySearchField.text = keySearchField.text.slice(0, -1)
           keySearchField.cursorPosition = keySearchField.text.length
         } else {
@@ -228,12 +235,15 @@ Rectangle {
 
       background: BorderSurface {
         readonly property bool isNavFocused: (root.focusSection === "search") && !keySearchField.activeFocus
-        color: Style.controlFill(keySearchField.activeFocus || isNavFocused, keySearchField.hovered, root.barForeground, Color.accent)
-        borderSpec: Border.controlSpec(
-          (keySearchField.activeFocus || isNavFocused) ? "focus" : (keySearchField.hovered ? "hover-cursor" : "normal"),
-          root.barForeground,
-          Color.accent
-        )
+        color: keySearchField.activeFocus
+          ? Util.alpha(Color.accent, 0.08)
+          : Style.controlFill(false, keySearchField.hovered, root.barForeground, Color.accent)
+        borderSpec: keySearchField.activeFocus
+          ? Border.flat(Color.accent, 2)
+          : (isNavFocused
+              ? Border.flat(Color.accent, 1)
+              : (keySearchField.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                                      : Border.controlSpec("normal", root.barForeground, Color.accent)))
         radius: Style.cornerRadius
       }
 
@@ -263,13 +273,22 @@ Rectangle {
 
       Keys.onDownPressed: function(event) {
         event.accepted = true
+        keySearchField.focus = false
         root.focusSection = "list"
         helpFlickable.focus = true
         helpFlickable.forceActiveFocus()
       }
 
+      Keys.onUpPressed: function(event) {
+        event.accepted = true
+        keySearchField.focus = false
+        root.focusSection = "close"
+        closeHelpBtn.forceActiveFocus()
+      }
+
       Keys.onTabPressed: function(event) {
         event.accepted = true
+        keySearchField.focus = false
         root.focusSection = "list"
         helpFlickable.focus = true
         helpFlickable.forceActiveFocus()
@@ -277,8 +296,25 @@ Rectangle {
 
       Keys.onBacktabPressed: function(event) {
         event.accepted = true
+        keySearchField.focus = false
         root.focusSection = "close"
         closeHelpBtn.forceActiveFocus()
+      }
+
+      Keys.onReturnPressed: function(event) {
+        event.accepted = true
+        keySearchField.focus = false
+        root.focusSection = "list"
+        helpFlickable.focus = true
+        helpFlickable.forceActiveFocus()
+      }
+
+      Keys.onEnterPressed: function(event) {
+        event.accepted = true
+        keySearchField.focus = false
+        root.focusSection = "list"
+        helpFlickable.focus = true
+        helpFlickable.forceActiveFocus()
       }
     }
 
@@ -358,6 +394,20 @@ Rectangle {
           event.accepted = true
           root.focusSection = "close"
           closeHelpBtn.forceActiveFocus()
+        } else if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
+          event.accepted = true
+          if (root.filteredKeybindings.length > 0) {
+            selectedIndex = root.filteredKeybindings.length - 1
+            ensureItemVisible()
+          }
+        } else if (event.key === Qt.Key_G || event.text === "g") {
+          event.accepted = true
+          selectedIndex = 0
+          ensureItemVisible()
+        } else if (event.text === "/" || event.text === "i" || event.text === "a") {
+          event.accepted = true
+          root.focusSection = "search"
+          keySearchField.forceActiveFocus()
         } else if (event.text && event.text.length === 1 && event.text !== "j" && event.text !== "k") {
           event.accepted = true
           root.focusSection = "search"

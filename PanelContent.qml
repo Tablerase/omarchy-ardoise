@@ -628,6 +628,7 @@ Item {
     id: content
     width: parent.width
     spacing: Style.space(8)
+    opacity: (root.showKeyHelp || root.showGitModal) ? 0 : 1
 
     // Header
     Item {

@@ -56,9 +56,23 @@ Rectangle {
   anchors.fill: parent
   visible: isOpen
   z: 999
-  color: Util.alpha(Color.popups.background, 0.96)
+  color: {
+    var base = (Color.popups && Color.popups.background) ? Color.popups.background : Color.background
+    return Qt.rgba(base.r, base.g, base.b, 1.0)
+  }
   radius: Style.cornerRadius
   focus: true
+
+  function ensureSnapshotVisible() {
+    if (!snapshotFlickable || root.selectedIndex < 0) return
+    var itemHeight = Style.space(42)
+    var itemY = root.selectedIndex * (itemHeight + Style.space(4))
+    if (itemY < snapshotFlickable.contentY) {
+      snapshotFlickable.contentY = itemY
+    } else if (itemY + itemHeight > snapshotFlickable.contentY + snapshotFlickable.height) {
+      snapshotFlickable.contentY = Math.max(0, itemY + itemHeight - snapshotFlickable.height)
+    }
+  }
 
   // Unconditional mouse event blocker — prevents hover/click bleed-through to items below
   MouseArea {
@@ -76,21 +90,26 @@ Rectangle {
   }
 
   Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_Escape) {
+    if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "u") {
       event.accepted = true
       root.close()
       return
     }
 
-    // Tab switching with 1 and 2
-    if (event.key === Qt.Key_1) {
+    // Tab switching with 1, 2, h, l, Tab, Backtab
+    if (event.key === Qt.Key_1 || event.text === "1" || event.text === "h") {
       event.accepted = true
       root.activeTab = 0
       return
     }
-    if (event.key === Qt.Key_2) {
+    if (event.key === Qt.Key_2 || event.text === "2" || event.text === "l") {
       event.accepted = true
       root.activeTab = 1
+      return
+    }
+    if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+      event.accepted = true
+      root.activeTab = (root.activeTab === 0 ? 1 : 0)
       return
     }
 
@@ -99,6 +118,7 @@ Rectangle {
         event.accepted = true
         if (root.snapshots && root.snapshots.length > 0) {
           root.selectedIndex = Math.min(root.snapshots.length - 1, root.selectedIndex + 1)
+          root.ensureSnapshotVisible()
         }
         return
       }
@@ -106,6 +126,23 @@ Rectangle {
         event.accepted = true
         if (root.snapshots && root.snapshots.length > 0) {
           root.selectedIndex = Math.max(0, root.selectedIndex - 1)
+          root.ensureSnapshotVisible()
+        }
+        return
+      }
+      if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
+        event.accepted = true
+        if (root.snapshots && root.snapshots.length > 0) {
+          root.selectedIndex = root.snapshots.length - 1
+          root.ensureSnapshotVisible()
+        }
+        return
+      }
+      if (event.key === Qt.Key_G || event.text === "g") {
+        event.accepted = true
+        if (root.snapshots && root.snapshots.length > 0) {
+          root.selectedIndex = 0
+          root.ensureSnapshotVisible()
         }
         return
       }
@@ -164,7 +201,7 @@ Rectangle {
 
           Text {
             text: "Device: [" + root.deviceName + "] • " + (root.snapshots.length) + " snapshots"
-            color: Color.muted
+            color: Util.alpha(root.barForeground, 0.7)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -497,19 +534,24 @@ Rectangle {
           bottomPadding: Style.space(8)
 
           background: BorderSurface {
-            color: Style.controlFill(remoteField.activeFocus, remoteField.hovered, root.barForeground, Color.accent)
-            borderSpec: Border.controlSpec(
-              remoteField.activeFocus ? "focus" : (remoteField.hovered ? "hover-cursor" : "normal"),
-              root.barForeground,
-              Color.accent
-            )
+            color: remoteField.activeFocus
+              ? Util.alpha(Color.accent, 0.08)
+              : Style.controlFill(false, remoteField.hovered, root.barForeground, Color.accent)
+            borderSpec: remoteField.activeFocus
+              ? Border.flat(Color.accent, 2)
+              : (remoteField.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                                     : Border.controlSpec("normal", root.barForeground, Color.accent))
             radius: Style.cornerRadius
           }
 
           Keys.onEscapePressed: function(event) {
             event.accepted = true
-            remoteField.focus = false
-            root.forceActiveFocus()
+            if (remoteField.text.trim().length === 0) {
+              root.close()
+            } else {
+              remoteField.focus = false
+              root.forceActiveFocus()
+            }
           }
         }
 
