@@ -213,9 +213,38 @@ BarWidget {
   IpcHandler {
     target: "tablerase.ardoise"
 
-    function toggle(): string { root.toggle(); return "ok" }
-    function open(): string { root.open(); return "ok" }
-    function close(): string { root.close(); return "ok" }
+    // Route open/close/toggle through the bar's monitor-aware widget selector
+    // so the panel appears on the screen Hyprland reports as focused, not on
+    // whichever monitor registered this IpcHandler first.
+    // Falls back to direct root.* in preview / test environments where bar is null.
+    function toggle(): string {
+      if (root.bar && typeof root.bar.summonBarWidget === "function") {
+        if (typeof root.bar.isBarWidgetOpen === "function" && root.bar.isBarWidgetOpen(root.moduleName)) {
+          root.bar.hideBarWidget(root.moduleName)
+        } else {
+          root.bar.summonBarWidget(root.moduleName)
+        }
+      } else {
+        root.toggle()
+      }
+      return "ok"
+    }
+    function open(): string {
+      if (root.bar && typeof root.bar.summonBarWidget === "function") {
+        root.bar.summonBarWidget(root.moduleName)
+      } else {
+        root.open()
+      }
+      return "ok"
+    }
+    function close(): string {
+      if (root.bar && typeof root.bar.hideBarWidget === "function") {
+        root.bar.hideBarWidget(root.moduleName)
+      } else {
+        root.close()
+      }
+      return "ok"
+    }
     function add(task: string): string { root.addTodo(task); return "ok" }
     function toggleTodo(idStr: string): string {
       var id = Number(idStr)
