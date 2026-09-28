@@ -152,9 +152,10 @@ ShellRoot {
                         anchors.centerIn: parent
                         spacing: Style.space(6)
 
-                        PluginUi.InboxIcon {
-                            width: Style.space(16); height: Style.space(16)
-                            color: Color.urgent || "#d20f39"
+                        PluginUi.ArdoiseIcon {
+                            iconSize: Style.bar.iconFont
+                            store: null
+                            forcedKey: "overdue"
                             anchors.verticalCenter: parent.verticalCenter
                         }
 

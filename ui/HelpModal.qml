@@ -115,15 +115,22 @@ Rectangle {
     }
   }
 
+  // Unconditional mouse event blocker — prevents hover/click bleed-through to items below
   MouseArea {
     anchors.fill: parent
-    onClicked: {
+    acceptedButtons: Qt.AllButtons
+    hoverEnabled: true
+    z: -1
+    onClicked: function(mouse) {
       if (keySearchField.activeFocus) {
         keySearchField.focus = false
         root.focusSection = "search"
         root.forceActiveFocus()
+      } else {
+        root.forceActiveFocus()
       }
     }
+    onWheel: function(wheel) { wheel.accepted = true }
   }
 
   Column {

@@ -66,9 +66,12 @@ The plugin comprises 3 primary desktop surfaces rendered via Quickshell:
 ### Modular Component Library (`ui/`)
 To preserve long-term maintainability and visual consistency across the main panel and modal surfaces (inspired by OmaTasks), UI widgets are modularized in `ui/`:
 - **`ui/Chip.qml`**: Reusable compact pill/badge component for reminders, repositories, tags, and auto-detected locations. Strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, and optional removal button.
-- **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss.
+- **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss. Mounted as a direct child of `KeyboardPanel` in `Panel.qml` (not inside `PanelContent`) so it always fills the full panel window height regardless of content count. Contains an unconditional full-coverage `MouseArea` (`hoverEnabled: true`, `acceptedButtons: Qt.AllButtons`) that blocks all hover and click events from bleeding through to the task list below.
+- **`ui/GitModal.qml`**: Modal overlay for reviewing local Git commit snapshots, executing point-in-time rollbacks (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and configuring remote synchronization (GitHub / GitLab) with conflict-free 3-way JSON store merging and device tagging (`[hostname]`). Accessible via header action button (`󰊢`) or Vim <kbd>u</kbd>. Mounted as a direct child of `KeyboardPanel` in `Panel.qml` so it fills the full panel window height. Tab navigation uses `KeyBadge` labels with accent underline. Action buttons use `bordered: true` + `ShortcutToolTip`. Remote URL field uses `BorderSurface`. Status area uses `Color.menu.selectedBackground`. Contains an unconditional full-coverage `MouseArea` to block mouse bleed-through.
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary status and urgency indicator (accent border and tint for due today, urgent border and tint for overdue, muted border with checkmark for completed, muted border for normal pending).
-- **`ui/InboxIcon.qml`**: Scalable vector inbox tray icon rendered via Canvas 2D, shared across the status bar widget, panel brand header, and QuickAdd modal.
+- **`ui/ArdoiseIcon.qml`**: The shared task-slate brand mark, rendered as a Nerd Font MD glyph (Private Use Area) rather than a vector. Optically centered with `TextMetrics.tightBoundingRect` horizontal correction — the same technique omarchy's own `Ui/OpticalGlyph.qml` uses — so it sits on the same optical centre as the icons beside it in the bar. The glyph is a **stateful ladder rung** resolved by `TodoStore.getArdoiseIconState()`, and the component is used at all three brand surfaces (status bar widget, panel brand header, QuickAdd header) so the plugin reports load identically everywhere. See §5 *Task-Slate Icon Ladder* for the rung table.
+  - Properties: `store` (drives the ladder), `bar` (optional shell root, supplies `foreground` / `urgent` / `fontFamily`), `iconSize` (defaults to `Style.bar.iconFont` = 13 px), `forcedKey` (pin a rung, used by `tools/preview.qml`), `colorOverride` (flat color override, used for the panel brand-row hover), `foregroundOverride` / `accentOverride` (replace only the base color of the `foreground` / `accent` roles so a host surface can supply its own text color while urgency escalation still reads).
+  - **Replaces** the previous `ui/InboxIcon.qml` (Canvas 2D inbox tray). It was drawn at 16 px as a 1.75/24 stroke while every other Omarchy bar widget paints a 13 px solid font glyph, so it read lighter, wider, and less optically centred than its neighbours.
 - **`ui/ReminderPills.qml`**: Reusable horizontal scrollable reminder preset pill row (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `Clear`) with navigation cursor scaling, dynamic timestamp recalculation at selection time, smooth auto-scroll (`ensureVisible`) keeping the active pill centered in view, single-hue alpha fade gradient overlays (`fadeColor`, `z: 1`, 24 px left / 32 px right) cleanly dissolving overflowing content, and a thin 3 px horizontal `ScrollBar` (`policy: AsNeeded`) for mouse users. `implicitHeight: Style.space(26)` (22 px pills + 4 px scrollbar zone).
 - **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, smooth auto-scroll (`ensureVisible`), single-hue alpha fade gradient overlays (`fadeColor`, `z: 1`, 24 px left / 32 px right), and a thin 3 px horizontal `ScrollBar` (`policy: AsNeeded`) for mouse users. `implicitHeight: Style.space(26)`.
   - In expanded task drawer, `fadeColor` must be the **opaque composite** of `Color.menu.selectedBackground` (8% alpha tint) over `Color.popups.background`, computed as `root.expandedCardColor` in `PanelContent`. Passing the semi-transparent `selectedBackground` directly results in invisible gradients.
@@ -84,7 +87,7 @@ To preserve long-term maintainability and visual consistency across the main pan
 Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card styled with `Color.menu.background`.
 
 #### Visual Hierarchy (Top to Bottom)
-1. **Header Row**: Inbox Icon (`ui/InboxIcon.qml`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
+1. **Header Row**: Ardoise Task-Slate Mark (`ui/ArdoiseIcon.qml`, ladder rung at `Style.font.subtitle`, `foregroundOverride: Color.menu.text`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
 2. **Separator**: Top dividing line (`PanelSeparator`).
 3. **Title Input Field (`taskInput`)**:
    - In **insert mode** (`activeFocus === true`): 2px solid `Color.accent` border + soft accent tint fill (`Util.alpha(Color.accent, 0.08)`) — clear "I am typing" indicator.
@@ -140,8 +143,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 
 #### Visual Hierarchy (Top to Bottom)
 1. **Header Item**:
-   - Left: Ardoise Brand Logo (`ui/InboxIcon.qml`) + Title ("Ardoise") + Pending Task Count badge.
-     - Brand logo and title form an interactive group: hovering smoothly transitions the icon and text to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser.
+   - Left: Ardoise Task-Slate Mark (`ui/ArdoiseIcon.qml` at `Style.font.subtitle`, ladder rung) + Title ("Ardoise") + Pending Task Count badge.
+     - Brand mark and title form an interactive group: hovering smoothly transitions both to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser. The hover accent is applied via the component's `colorOverride`, which suppresses the ladder role for that frame only.
    - Right: Shortcuts Help Toggle button (`?`) + Dual Desktop Shortcuts copy pill (`󰌌`, tracking Panel Toggle and Quick Add).
 2. **Top Filter Pills Row (`visibleProfiles`)**:
    - "All" pill + active/pending profile pills sorted by pending count and recency.
@@ -248,9 +251,8 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 ### C. Bar Widget (`BarWidget.qml`)
 
 Quickshell taskbar widget placed in the status bar.
-- **Urgent Dot**: Flashing accent dot if tasks are overdue.
-- **Icon & Badge**: Ardoise glyph `󰄬` + pending task count.
-- **Due Today Indicator**: Shows `󰥔 <count>` if tasks are due today.
+- **Icon, Color & Badge (one signal)**: The whole readout — glyph, color, and count — is a single `TodoStore.getArdoiseIconState()` resolution. The mark renders at `Style.bar.iconFont` and the badge count takes the *same* rung subset and the *same* color role as the glyph, so the number always answers "how many tasks are in the state this icon depicts". The badge is hidden when the rung count is 0 and on vertical bars. See §5 *Task-Slate Icon Ladder* for the rung table and the invariants.
+  - Total pending is deliberately **not** what the badge shows; it remains available in the tooltip and via the `count` IPC command.
 - **Interactions**:
   - Left click: Toggles main panel (`tablerase.ardoise toggle`).
   - Right click: Opens Quick Add modal (`tablerase.ardoise quickadd`).
@@ -268,6 +270,12 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility. In multi-monitor environments, `open` and `toggle` dynamically discover the `BarWidget` on the compositor-focused output via `root.bar.moduleWidgets()` and `Hyprland.focusedMonitor` to summon the panel on the active monitor, while `close` and `toggle` (when already open) target the currently open instance.
   - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
   - `omarchy-shell tablerase.ardoise archiveCount`: Returns count of archived tasks.
+  - `omarchy-shell tablerase.ardoise gitHistory`: Returns structured JSON array of Git snapshots from `data/`.
+  - `omarchy-shell tablerase.ardoise gitRollback "<hash>"`: Reverts `todos.json` and `todos-archive.json` to the specified commit snapshot.
+  - `omarchy-shell tablerase.ardoise gitRecover "<hash>"`: Selectively recovers missing tasks from snapshot into active store.
+  - `omarchy-shell tablerase.ardoise gitSync`: Fetches remote, performs conflict-free 3-way store merge if diverged, and pushes to remote.
+  - `omarchy-shell tablerase.ardoise gitSetRemote "<url>"`: Configures or removes Git remote URL.
+  - `omarchy-shell tablerase.ardoise gitGetRemote`: Returns configured Git remote URL.
 
 ---
 
@@ -289,6 +297,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Title Editor)** | `Enter` | Commit edited title (trims input; updates profile/tags if hashtag included) |
 | **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
+| **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
 | **Panel** | `c` | Archive and clear completed tasks in current profile |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
@@ -297,6 +306,11 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
+| **Git Modal** | `1` / `2` | Switch between Snapshots (1) and Sync Settings (2) tabs |
+| **Git Modal (Snapshots)** | `j` / `k` / `↓` / `↑` | Navigate snapshot commit list |
+| **Git Modal (Snapshots)** | `r` | Rollback tasks to selected snapshot |
+| **Git Modal (Snapshots)** | `c` | Recover missing/deleted tasks from selected snapshot |
+| **Git Modal** | `Escape` | Dismiss Git modal and restore focus to panel |
 | **Panel (Input)** | `Escape` | Blur text field to normal motion mode on `input` without discarding text |
 | **Panel (Input Normal)** | `i` / `a` / `Enter` / `Space` | Enter text edit mode in input field |
 | **Panel (Input Normal)** | `j` / `↓` | Move down to task list |
@@ -316,7 +330,28 @@ Quickshell taskbar widget placed in the status bar.
 
 ## 5. Design Tokens, Glyphs & Styling Guidelines
 
-### Icon Glyphs (Nerd Font MD)
+### Task-Slate Icon Ladder (the Ardoise brand mark)
+
+The mark is a **stateful** Nerd Font MD glyph (Private Use Area) resolved by `TodoStore.getArdoiseIconState()` from `getTaskUrgencyBreakdown()`. Rungs are driven by **urgency, not raw count** — the same approach omarchy's own battery / wifi / volume widgets take, and the same reason: "5–9 tasks" is not actionable, "nothing is overdue" is.
+
+| Rung | Condition | Glyph | Name | Codepoint | Color role |
+|---|---|---|---|---|---|
+| `clear` | `total === 0` | `󰗠` | `check_circle` | `\U000f05e0` | foreground |
+| `pending` | nothing time-critical | `󰝖` | `format_list_checks` | `\U000f0756` | foreground |
+| `due` | `dueToday > 0`, `overdue === 0` | `󱖫` | `list_status` | `\U000f15ab` | accent |
+| `overdue` | `overdue > 0` | `󰀨` | `alert_circle` | `\U000f0028` | **urgent** |
+
+**Precedence:** `overdue` > `due` > `pending` > `clear`. A store with nothing pending is always `clear`, regardless of reminder history, because completed tasks are excluded from the breakdown.
+
+**Design constraints (guarded by tests in `tests/TodoStore.test.mts`):**
+- Every rung carries a **distinct glyph** — a stateful mark must not silently repeat an icon, or the widget appears to flicker between two meanings.
+- The two extremes deliberately **share a filled-circle silhouette** (`check_circle` ↔ `alert_circle`) so the mark keeps a stable identity while only the interior glyph and color change. The middle rungs are lists.
+- `check_all` (`\U000f012d`) is **rejected** as the `clear` rung: it is a bare diagonal tick with no enclosure and rasterizes to a near-invisible speck at 13 px.
+- Ladder rungs must **not** be built from near-identical gray list glyphs (e.g. `format_list_bulleted` → `playlist_check` → `view_list`). At 13 px those are indistinguishable; escalation has to change shape.
+
+**Consistency contract:** the same ladder renders at the bar (`Style.bar.iconFont` = 13 px), the panel brand header, and the QuickAdd header (`Style.font.subtitle`). Do not pin a static brand glyph at any of the three surfaces.
+
+### Other Icon Glyphs (Nerd Font MD)
 - **Clock / Reminder**: `󰥔` (`\U000f0954`) — *Never use avatar `󰀉` for reminders!*
 - **Pen / Notes**: `󰏫` (`\U000f03eb`)
 - **Personal Profile**: `󰀉` (`\U000f0009`) — *Reserved exclusively for user profile identity.*
@@ -325,8 +360,9 @@ Quickshell taskbar widget placed in the status bar.
 - **Keyboard / Enter**: `󰌑` (`\U000f0311`)
 - **Add / Plus**: `󰐕` (`\U000f0415`)
 - **Remove / Trash**: `󰆴` (`\U000f01b4`)
-- **Check Complete**: `󰄬` (`\U000f012c`)
+- **Check Complete**: `󰄬` (`\U000f012c`) — *Task-row completion indicator only. Not the brand mark; the brand mark is the ladder above.*
 - **Check Empty**: `󰄱` (`\U000f0131`)
+- **Git Branch / Snapshots**: `󰊢` (`\U000f02a2`)
 
 ### Spacing & Metrics
 - Standard padding: `Style.space(8)`, `Style.space(12)`, `Style.space(16)`.

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mts",
     "test:deno": "deno test --no-check --allow-read tests/",
-    "typecheck": "deno check TodoStore.js PanelLogic.js",
+    "typecheck": "deno check TodoStore.js PanelLogic.js GitSync.js",
     "lint:qml": "qmllint *.qml ui/*.qml",
     "validate:plugin": "omarchy plugin validate .",
     "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test",

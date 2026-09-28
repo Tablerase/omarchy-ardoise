@@ -11,7 +11,7 @@ A productivity status bar widget, flyout panel, quick-add modal, and background 
 ## Features
 
 - **Live Bar Widget**:
-  - Displays pending task count badge (`InboxIcon <count>`).
+  - Displays a stateful task-slate mark that escalates with urgency, plus the pending task count badge (`ArdoiseIcon <count>`).
   - Interactive tooltip with profile breakdown: `󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit`.
   - Middle-click directly opens `todos.json` in your default editor via `omarchy-launch-editor`.
 - **Profiles & Categories**:
@@ -322,7 +322,16 @@ omarchy-restart-shell
 ├── QuickAdd.qml          # Fullscreen overlay modal for rapid keyboard capture
 ├── Service.qml           # Headless background service monitoring scheduled reminders
 ├── TodoStore.js          # Fully-typed data store, Schema v1 normalization, and archive logic
-├── InboxIcon.qml         # Vector inbox tray icon rendered via Canvas 2D
+├── ui/                   # Modular component library shared by the panel and modals
+│   ├── ArdoiseIcon.qml   # Stateful task-slate brand mark (Nerd Font MD ladder rung, optically centred)
+│   ├── Chip.qml          # Compact pill/badge for reminders, repos, tags, locations
+│   ├── GitModal.qml      # Git snapshot review, rollback, and remote sync modal
+│   ├── HelpModal.qml     # Searchable keyboard shortcut directory
+│   ├── KeyBadge.qml      # Keyboard shortcut key badge
+│   ├── ProfileSelector.qml # Horizontal scrollable profile pill row
+│   ├── ReminderPills.qml  # Horizontal scrollable reminder preset row
+│   ├── ShortcutToolTip.qml # Action description + shortcut badges tooltip
+│   └── TaskCheck.qml     # Circular checkbox / urgency indicator button
 ├── preview.png           # 1600x900 marketplace artwork & preview banner
 ├── screenshots/          # High-resolution screenshots for documentation
 │   └── panel.png         # Flyout task panel screenshot

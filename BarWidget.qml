@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
+import "./GitSync.js" as GitSync
 import "./ui" as Ui
 
 BarWidget {
@@ -14,55 +15,80 @@ BarWidget {
   property var store: TodoStore.defaultStore()
   readonly property var todos: store.todos || []
   readonly property int pendingCount: TodoStore.getPendingCount(store, "all")
+  // Glyph, color and badge number all come from this one resolution, so the
+  // mark and its count can never describe different states. `pendingCount`
+  // above stays the *total* and is used by the tooltip and the `count` IPC.
+  readonly property var ladderState: TodoStore.getArdoiseIconState(store)
   readonly property string activeProfile: store.activeProfile || "personal"
   readonly property var profiles: store.profiles || ["personal", "work"]
 
-  readonly property string todoFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos.json"
-  readonly property string archiveFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos-archive.json"
+  readonly property string pluginDirPath: (function() {
+    var url = Qt.resolvedUrl(".").toString()
+    var p = url.replace(/^file:\/\//, "").replace(/\/$/, "")
+    return p && p !== "." ? p : (Quickshell.env("HOME") + "/.config/omarchy/plugins/tablerase.ardoise")
+  })()
+  readonly property string dataDirPath: pluginDirPath + "/data"
+  readonly property string todoFilePath: dataDirPath + "/todos.json"
+  readonly property string archiveFilePath: dataDirPath + "/todos-archive.json"
+
+  property string deviceName: Quickshell.env("HOSTNAME") || "omarchy"
+  property string lastCommitAction: "Update tasks"
+  property var gitSnapshots: []
+  property string lastGitLog: "[]"
+  property string remoteUrl: ""
+  property string gitSyncStatus: "idle" // "idle" | "syncing" | "success" | "error"
+  property string gitSyncMessage: ""
+  property string recoveringHash: ""
 
   function loadTodos(raw) {
     root.store = TodoStore.normalize(raw)
   }
 
-  function saveStore(newStore) {
+  function triggerAutoCommit(actionName) {
+    root.lastCommitAction = actionName || "Update tasks"
+    autoCommitTimer.restart()
+  }
+
+  function saveStore(newStore, actionName) {
     root.store = newStore
     todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")
+    root.triggerAutoCommit(actionName)
   }
 
   function addTodo(title, description, profile, reminder) {
-    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder))
+    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task: " + title)
   }
 
   function toggleTodo(id) {
-    saveStore(TodoStore.toggleTodo(root.store, id))
+    saveStore(TodoStore.toggleTodo(root.store, id), "Toggle task")
   }
 
   function removeTodo(id) {
-    saveStore(TodoStore.removeTodo(root.store, id))
+    saveStore(TodoStore.removeTodo(root.store, id), "Delete task")
   }
 
   function updateTodo(id, fields) {
-    saveStore(TodoStore.updateTodo(root.store, id, fields))
+    saveStore(TodoStore.updateTodo(root.store, id, fields), "Update task")
   }
 
   function clearCompleted(profile) {
     var result = TodoStore.archiveCompleted(root.store, profile, archiveFile.text())
-    saveStore(result.updatedStore)
+    saveStore(result.updatedStore, "Clear completed")
     archiveFile.setText(JSON.stringify(result.updatedArchive, null, 2) + "\n")
   }
 
   function setActiveProfile(profile) {
     var s = TodoStore.cloneStore(root.store)
     s.activeProfile = TodoStore.cleanProfileName(profile)
-    saveStore(s)
+    saveStore(s, "Switch profile: " + s.activeProfile)
   }
 
   function addProfile(name) {
-    saveStore(TodoStore.addProfile(root.store, name))
+    saveStore(TodoStore.addProfile(root.store, name), "Add profile: " + name)
   }
 
   function removeProfile(name) {
-    saveStore(TodoStore.removeProfile(root.store, name))
+    saveStore(TodoStore.removeProfile(root.store, name), "Remove profile: " + name)
   }
 
   function getTooltip() {
@@ -168,17 +194,231 @@ BarWidget {
 
   onBarChanged: injectPanel()
 
-  // Ensure config folder, todos.json, and todos-archive.json exist so FileView can watch them
+  // Ensure data folder, todos.json, and todos-archive.json exist, and git repo is initialized
   Process {
     id: initFileProc
-    command: ["bash", "-c", "mkdir -p \"$HOME/.config/omarchy\" && [ -f \"$HOME/.config/omarchy/todos.json\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"$HOME/.config/omarchy/todos.json\"; [ -f \"$HOME/.config/omarchy/todos-archive.json\" ] || echo '{\"version\":1,\"archived\":[]}' > \"$HOME/.config/omarchy/todos-archive.json\""]
+    command: [
+      "bash", "-c",
+      "mkdir -p \"" + root.dataDirPath + "\" && " +
+      "[ -f \"" + root.todoFilePath + "\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"" + root.todoFilePath + "\"; " +
+      "[ -f \"" + root.archiveFilePath + "\" ] || echo '{\"version\":1,\"archived\":[]}' > \"" + root.archiveFilePath + "\"; " +
+      "cd \"" + root.dataDirPath + "\" && " +
+      "if [ ! -d \".git\" ]; then " +
+      "  git init -b main; " +
+      "  git config user.name \"" + root.deviceName + "\"; " +
+      "  git config user.email \"" + Quickshell.env("USER") + "@" + root.deviceName + "\"; " +
+      "  git add todos.json todos-archive.json; " +
+      "  git commit -m \"[" + root.deviceName + "] Initial task repository\"; " +
+      "fi"
+    ]
     onExited: {
       todoFile.reload()
       archiveFile.reload()
+      root.refreshGitHistory()
     }
   }
 
   Component.onCompleted: initFileProc.running = true
+
+  Timer {
+    id: autoCommitTimer
+    interval: 3000
+    repeat: false
+    onTriggered: {
+      commitProcess.running = true
+    }
+  }
+
+  Process {
+    id: commitProcess
+    command: [
+      "bash", "-c",
+      "cd \"" + root.dataDirPath + "\" && " +
+      "git add todos.json todos-archive.json && " +
+      "if ! git diff --cached --quiet; then " +
+      "  git commit -m \"" + GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount) + "\"; " +
+      "fi"
+    ]
+    onExited: root.refreshGitHistory()
+  }
+
+  Process {
+    id: gitLogProc
+    command: ["git", "-C", root.dataDirPath, "log", "-n", "50", "--pretty=format:%H|%an|%ae|%at|%s"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var parsed = GitSync.parseGitLog(text)
+        root.gitSnapshots = parsed
+        root.lastGitLog = JSON.stringify(parsed)
+      }
+    }
+  }
+
+  Process {
+    id: gitRemoteProc
+    command: ["git", "-C", root.dataDirPath, "remote", "get-url", "origin"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.remoteUrl = text.trim()
+      }
+    }
+  }
+
+  Process {
+    id: recoverProc
+    command: ["git", "-C", root.dataDirPath, "show", root.recoveringHash + ":todos.json"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var snapshotStore = JSON.parse(text)
+          var missing = TodoStore.filterMissingTasks(root.store, snapshotStore)
+          if (missing.length > 0) {
+            var updated = TodoStore.cloneStore(root.store)
+            for (var i = 0; i < missing.length; i++) {
+              updated.todos.push(missing[i])
+            }
+            updated.todos.sort(TodoStore.compareTasks)
+            root.saveStore(updated, "Recovered " + missing.length + " missing tasks from " + root.recoveringHash.substring(0, 7))
+          }
+        } catch (_e) {}
+      }
+    }
+  }
+
+  Process {
+    id: syncProcess
+    command: [
+      "bash", "-c",
+      "cd \"" + root.dataDirPath + "\" && " +
+      "if git remote get-url origin >/dev/null 2>&1; then " +
+      "  git fetch origin main 2>&1 || exit 1; " +
+      "  LOCAL_HEAD=$(git rev-parse HEAD); " +
+      "  REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo \"$LOCAL_HEAD\"); " +
+      "  if [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then " +
+      "    git push origin main 2>&1 || exit 2; " +
+      "  elif [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ]; then " +
+      "    echo \"NEEDS_MERGE\"; " +
+      "  else " +
+      "    echo \"UP_TO_DATE\"; " +
+      "  fi; " +
+      "else " +
+      "  echo \"NO_REMOTE\"; " +
+      "fi"
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var out = text.trim()
+        if (out.indexOf("NEEDS_MERGE") !== -1) {
+          mergeRemoteChangesProc.running = true
+        } else if (out.indexOf("UP_TO_DATE") !== -1 || out.indexOf("Everything up-to-date") !== -1) {
+          root.gitSyncStatus = "success"
+          root.gitSyncMessage = "Up to date"
+          root.refreshGitHistory()
+        } else if (out.indexOf("NO_REMOTE") !== -1) {
+          root.gitSyncStatus = "idle"
+          root.gitSyncMessage = "No remote configured"
+        }
+      }
+    }
+    onExited: function(code) {
+      if (code !== 0) {
+        root.gitSyncStatus = "error"
+        root.gitSyncMessage = "Sync failed (check connection/auth)"
+      }
+    }
+  }
+
+  Process {
+    id: mergeRemoteChangesProc
+    command: [
+      "bash", "-c",
+      "cd \"" + root.dataDirPath + "\" && " +
+      "REMOTE_TODOS=$(git show origin/main:todos.json 2>/dev/null || echo '') && " +
+      "REMOTE_ARCHIVE=$(git show origin/main:todos-archive.json 2>/dev/null || echo '') && " +
+      "printf '%s\\n---SPLIT---\\n%s' \"$REMOTE_TODOS\" \"$REMOTE_ARCHIVE\""
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var parts = text.split("\n---SPLIT---\n")
+          if (parts.length >= 2) {
+            var remoteTodos = parts[0].trim()
+            var remoteArchive = parts[1].trim()
+            if (remoteTodos) {
+              var mergedStore = TodoStore.mergeStores(root.store, remoteTodos)
+              var mergedArch = TodoStore.mergeArchives(archiveFile.text(), remoteArchive)
+              root.store = mergedStore
+              todoFile.setText(JSON.stringify(mergedStore, null, 2) + "\n")
+              archiveFile.setText(JSON.stringify(mergedArch, null, 2) + "\n")
+              Quickshell.execDetached([
+                "bash", "-c",
+                "cd \"" + root.dataDirPath + "\" && git add todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Auto-merge remote changes\" && git push origin main"
+              ])
+              root.gitSyncStatus = "success"
+              root.gitSyncMessage = "Merged & synced with remote"
+              root.refreshGitHistory()
+            }
+          }
+        } catch (_e) {
+          root.gitSyncStatus = "error"
+          root.gitSyncMessage = "Merge failed"
+        }
+      }
+    }
+  }
+
+  function refreshGitHistory() {
+    gitLogProc.running = true
+    gitRemoteProc.running = true
+  }
+
+  function setRemoteUrl(urlStr) {
+    var u = (urlStr || "").trim()
+    if (!u) {
+      Quickshell.execDetached(["git", "-C", root.dataDirPath, "remote", "remove", "origin"])
+      root.remoteUrl = ""
+      root.gitSyncStatus = "idle"
+      root.gitSyncMessage = "No remote configured"
+      return "removed"
+    }
+    if (!GitSync.isValidRemoteUrl(u)) {
+      return "invalid_url"
+    }
+    Quickshell.execDetached(["bash", "-c", "cd \"" + root.dataDirPath + "\" && git remote remove origin 2>/dev/null; git remote add origin \"" + u + "\""])
+    root.remoteUrl = u
+    root.gitSyncStatus = "idle"
+    root.gitSyncMessage = "Remote configured"
+    return "ok"
+  }
+
+  function rollbackToCommit(hashStr) {
+    if (!hashStr) return
+    var h = String(hashStr).trim()
+    var cmd = "cd \"" + root.dataDirPath + "\" && git checkout " + h + " -- todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Restored snapshot " + h.substring(0, 7) + "\""
+    Quickshell.execDetached(["bash", "-c", cmd])
+    Qt.callLater(function() {
+      todoFile.reload()
+      archiveFile.reload()
+      root.refreshGitHistory()
+    })
+  }
+
+  function recoverFromCommit(hashStr) {
+    if (!hashStr) return
+    root.recoveringHash = String(hashStr).trim()
+    recoverProc.running = true
+  }
+
+  function syncWithRemote() {
+    root.gitSyncStatus = "syncing"
+    root.gitSyncMessage = "Syncing..."
+    syncProcess.running = true
+  }
 
   FileView {
     id: todoFile
@@ -322,6 +562,12 @@ BarWidget {
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
     function archived(): string { return archiveFile.text() || "{\"version\":1,\"archived\":[]}" }
     function archiveCount(): string { return String(TodoStore.getArchivedCount(archiveFile.text())) }
+    function gitHistory(): string { return root.lastGitLog || "[]" }
+    function gitRollback(hashStr: string): string { root.rollbackToCommit(hashStr); return "ok" }
+    function gitRecover(hashStr: string): string { root.recoverFromCommit(hashStr); return "ok" }
+    function gitSync(): string { root.syncWithRemote(); return "ok" }
+    function gitSetRemote(urlStr: string): string { return root.setRemoteUrl(urlStr) }
+    function gitGetRemote(): string { return root.remoteUrl }
   }
 
   WidgetButton {
@@ -353,21 +599,29 @@ BarWidget {
       anchors.centerIn: parent
       spacing: Style.space(6)
 
-      Ui.InboxIcon {
+      Ui.ArdoiseIcon {
+        id: ardoiseIcon
         anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(16)
-        height: width
-        color: button.foreground
+        store: root.store
+        bar: root.bar
+        iconSize: Style.bar.iconFont
       }
 
+      // Rung-scoped: the number always answers "how many tasks are in the
+      // state the glyph depicts", and takes the glyph's color role. Total
+      // pending stays available in the tooltip.
       Text {
         id: countLabel
         anchors.verticalCenter: parent.verticalCenter
-        visible: !root.vertical && root.pendingCount > 0
-        text: String(root.pendingCount)
+        visible: !root.vertical && root.ladderState.count > 0
+        text: String(root.ladderState.count)
         font.family: button.fontFamily
         font.pixelSize: button.fontSize
-        color: button.foreground
+        color: ardoiseIcon.ladderColor
+
+        Behavior on color {
+          ColorAnimation { duration: 150 }
+        }
       }
     }
   }

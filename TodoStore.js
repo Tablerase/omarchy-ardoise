@@ -1026,6 +1026,86 @@ function getTaskUrgencyBreakdown(store, customNow) {
   return result
 }
 
+// Task-slate ladder. The bar widget, the panel brand header and the quick-add
+// header all share this ladder, so the plugin reports load identically
+// everywhere. Rungs are driven by urgency rather than raw count, matching the
+// way omarchy's own battery/wifi/volume widgets swap on meaningful state.
+//
+// The two extremes deliberately share a silhouette: "clear" and "overdue" are
+// both filled circles, so the widget keeps a stable identity while only the
+// interior mark and the color role change. The middle rungs are lists.
+//
+//   clear    0 pending                      check_circle       foreground
+//   pending  nothing time-critical          format_list_checks foreground
+//   due      due today, nothing overdue     list_status        accent
+//   overdue  anything overdue               alert_circle       urgent
+/** @type {Record<string, {key: string, glyph: string, role: string}>} */
+var ARDOISE_ICON_STATES = {
+  clear: { key: "clear", glyph: "󰗠", role: "foreground" },
+  pending: { key: "pending", glyph: "󰝖", role: "foreground" },
+  due: { key: "due", glyph: "󱖫", role: "accent" },
+  overdue: { key: "overdue", glyph: "󰀨", role: "urgent" }
+}
+
+/**
+ * Looks up a single rung of the task-slate ladder by key.
+ * @param {string} key - "clear" | "pending" | "due" | "overdue"
+ * @returns {{key: string, glyph: string, role: string}|null}
+ */
+function ardoiseIconStateForKey(key) {
+  var state = ARDOISE_ICON_STATES[key]
+  return state ? { key: state.key, glyph: state.glyph, role: state.role } : null
+}
+
+/**
+ * Resolves which rung of the task-slate ladder a store is currently on.
+ *
+ * Overdue wins over due-today, which wins over plain pending; a store with
+ * nothing pending is always "clear" regardless of reminder history.
+ *
+ * `count` is the number of tasks *in the state the glyph depicts*, so the bar
+ * badge, glyph and color can never disagree. Total pending is reported
+ * separately as `total` and is deliberately not what the badge shows.
+ *
+ * @param {TodoStoreData} store
+ * @param {number} [customNow] - Optional timestamp for testing
+ * @returns {{key: string, glyph: string, role: string, count: number,
+ *            total: number, overdue: number, dueToday: number}}
+ */
+function getArdoiseIconState(store, customNow) {
+  var breakdown = getTaskUrgencyBreakdown(store, customNow)
+  var key = "clear"
+  if (breakdown.total > 0) {
+    if (breakdown.overdue > 0) {
+      key = "overdue"
+    } else if (breakdown.dueToday > 0) {
+      key = "due"
+    } else {
+      key = "pending"
+    }
+  }
+
+  var state = ARDOISE_ICON_STATES[key]
+  var count = 0
+  if (key === "pending") {
+    count = breakdown.total
+  } else if (key === "due") {
+    count = breakdown.dueToday
+  } else if (key === "overdue") {
+    count = breakdown.overdue
+  }
+
+  return {
+    key: state.key,
+    glyph: state.glyph,
+    role: state.role,
+    count: count,
+    total: breakdown.total,
+    overdue: breakdown.overdue,
+    dueToday: breakdown.dueToday
+  }
+}
+
 /**
  * Returns all unnotified tasks with reminders due at or before now.
  * @param {TodoStoreData} store
@@ -1289,6 +1369,149 @@ function formatKeybind(modmask, key) {
   return parts.join(" + ")
 }
 
+/**
+ * Intelligently merges two TodoStoreData objects (e.g. from local and remote git branches).
+ * Matches tasks by id, taking the newer version based on updatedAt (or createdAt).
+ * Unions profile lists, preserving unique profiles.
+ * @param {any} localRaw
+ * @param {any} remoteRaw
+ * @returns {TodoStoreData}
+ */
+function mergeStores(localRaw, remoteRaw) {
+  var local = normalize(localRaw)
+  var remote = normalize(remoteRaw)
+
+  // Merge profile lists
+  var mergedProfiles = []
+  var pMap = Object.create(null)
+  var allProfs = (local.profiles || []).concat(remote.profiles || [])
+  for (var pi = 0; pi < allProfs.length; pi++) {
+    var pName = cleanProfileName(allProfs[pi])
+    if (pName && !pMap[pName]) {
+      pMap[pName] = true
+      mergedProfiles.push(pName)
+    }
+  }
+  if (mergedProfiles.length === 0) {
+    mergedProfiles = ["personal", "work"]
+  }
+
+  // Active profile: prefer local if valid
+  var activeProfile = local.activeProfile
+  if (!activeProfile || mergedProfiles.indexOf(activeProfile) === -1) {
+    activeProfile = remote.activeProfile
+    if (!activeProfile || mergedProfiles.indexOf(activeProfile) === -1) {
+      activeProfile = mergedProfiles[0] || "personal"
+    }
+  }
+
+  // Map local tasks by ID
+  /** @type {Record<string, Task>} */
+  var taskMap = Object.create(null)
+  for (var li = 0; li < local.todos.length; li++) {
+    var lt = local.todos[li]
+    taskMap[String(lt.id)] = lt
+  }
+
+  // Compare/merge remote tasks
+  for (var ri = 0; ri < remote.todos.length; ri++) {
+    var rt = remote.todos[ri]
+    var idKey = String(rt.id)
+    if (taskMap[idKey]) {
+      var existing = taskMap[idKey]
+      var existingTime = existing.updatedAt || existing.createdAt || 0
+      var remoteTime = rt.updatedAt || rt.createdAt || 0
+      if (remoteTime > existingTime) {
+        taskMap[idKey] = rt
+      }
+    } else {
+      taskMap[idKey] = rt
+    }
+  }
+
+  /** @type {Task[]} */
+  var mergedTodos = []
+  for (var k in taskMap) {
+    mergedTodos.push(taskMap[k])
+  }
+  mergedTodos.sort(compareTasks)
+
+  return {
+    version: 1,
+    activeProfile: activeProfile,
+    profiles: mergedProfiles,
+    todos: mergedTodos
+  }
+}
+
+/**
+ * Merges two ArchiveData objects, deduplicating by task id and ordering by completedAt desc.
+ * @param {any} localArchiveRaw
+ * @param {any} remoteArchiveRaw
+ * @returns {ArchiveData}
+ */
+function mergeArchives(localArchiveRaw, remoteArchiveRaw) {
+  var local = normalizeArchive(localArchiveRaw)
+  var remote = normalizeArchive(remoteArchiveRaw)
+
+  /** @type {Record<string, ArchivedTask>} */
+  var archMap = Object.create(null)
+  var allArchived = (local.archived || []).concat(remote.archived || [])
+
+  for (var ai = 0; ai < allArchived.length; ai++) {
+    var item = allArchived[ai]
+    var key = String(item.id)
+    if (archMap[key]) {
+      if ((item.completedAt || 0) > (archMap[key].completedAt || 0)) {
+        archMap[key] = item
+      }
+    } else {
+      archMap[key] = item
+    }
+  }
+
+  /** @type {ArchivedTask[]} */
+  var mergedList = []
+  for (var ak in archMap) {
+    mergedList.push(archMap[ak])
+  }
+  mergedList.sort(function(a, b) {
+    return (b.completedAt || 0) - (a.completedAt || 0)
+  })
+
+  return {
+    version: 1,
+    archived: mergedList
+  }
+}
+
+/**
+ * Extracts tasks from a snapshot store that are missing from currentStore.
+ * Useful for selective recovery of deleted tasks.
+ * @param {any} currentRaw
+ * @param {any} snapshotRaw
+ * @returns {Task[]}
+ */
+function filterMissingTasks(currentRaw, snapshotRaw) {
+  var current = normalize(currentRaw)
+  var snapshot = normalize(snapshotRaw)
+
+  var currentIds = Object.create(null)
+  for (var i = 0; i < current.todos.length; i++) {
+    currentIds[String(current.todos[i].id)] = true
+  }
+
+  /** @type {Task[]} */
+  var missing = []
+  for (var j = 0; j < snapshot.todos.length; j++) {
+    var task = snapshot.todos[j]
+    if (!currentIds[String(task.id)]) {
+      missing.push(task)
+    }
+  }
+  return missing
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     defaultStore,
@@ -1322,9 +1545,14 @@ if (typeof module !== "undefined" && module.exports) {
     formatKeybind,
     formatRelativeDiff,
     getTaskUrgencyBreakdown,
+    getArdoiseIconState,
+    ardoiseIconStateForKey,
     makeProgressBar,
     markTasksNotified,
-    capitalizeTitle
+    capitalizeTitle,
+    mergeStores,
+    mergeArchives,
+    filterMissingTasks
   }
 }
 

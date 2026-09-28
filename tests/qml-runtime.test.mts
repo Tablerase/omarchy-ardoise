@@ -177,8 +177,8 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "Panel header brand link must point to Tablerase/omarchy-ardoise"
   );
   assert.ok(
-    panelContent.includes("InboxIcon") && panelContent.includes("id: brandRow"),
-    "Panel header must feature InboxIcon brand logo beside the Ardoise title"
+    panelContent.includes("ArdoiseIcon") && panelContent.includes("id: brandRow"),
+    "Panel header must feature the ArdoiseIcon brand mark beside the Ardoise title"
   );
 
   // 4. Codebase & Multi-Repo Context
@@ -332,8 +332,21 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     barWidgetContent.includes('target: "tablerase.ardoise"') &&
       barWidgetContent.includes("function toggleTodo(") &&
       barWidgetContent.includes("function update(") &&
-      barWidgetContent.includes("function remove("),
-    "BarWidget must declare IpcHandler with target 'tablerase.ardoise' and task mutation methods"
+      barWidgetContent.includes("function remove(") &&
+      barWidgetContent.includes("function gitHistory(") &&
+      barWidgetContent.includes("function gitRollback(") &&
+      barWidgetContent.includes("function gitRecover(") &&
+      barWidgetContent.includes("function gitSync(") &&
+      barWidgetContent.includes("function gitSetRemote("),
+    "BarWidget must declare IpcHandler with target 'tablerase.ardoise' and Git snapshot/sync methods"
+  );
+  const panelQml = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
+  assert.ok(
+    panelContent.includes("id: gitBtn") &&
+      panelContent.includes("property bool showGitModal") &&
+      panelQml.includes("id: gitModal") &&
+      panelQml.includes("id: helpModal"),
+    "PanelContent must implement Git button and showGitModal state; Panel.qml must declare gitModal and helpModal at panel level"
   );
 
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)

@@ -17,7 +17,13 @@ Item {
   property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
 
-  readonly property string todoFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos.json"
+  readonly property string pluginDirPath: (function() {
+    var url = Qt.resolvedUrl(".").toString()
+    var p = url.replace(/^file:\/\//, "").replace(/\/$/, "")
+    return p && p !== "." ? p : (Quickshell.env("HOME") + "/.config/omarchy/plugins/tablerase.ardoise")
+  })()
+  readonly property string dataDirPath: pluginDirPath + "/data"
+  readonly property string todoFilePath: dataDirPath + "/todos.json"
   property var store: TodoStore.defaultStore()
 
   // In-memory deduplication cache: key is taskId + "_" + reminderIso
@@ -105,6 +111,21 @@ Item {
     repeat: true
     triggeredOnStart: false
     onTriggered: root.checkReminders()
+  }
+
+  // Hourly background sync (3600 seconds)
+  Timer {
+    id: hourlySyncTimer
+    interval: 3600000
+    running: true
+    repeat: true
+    triggeredOnStart: false
+    onTriggered: syncProc.running = true
+  }
+
+  Process {
+    id: syncProc
+    command: ["bash", "-c", "omarchy-shell tablerase.ardoise gitSync 2>/dev/null || true"]
   }
 
   Component.onCompleted: {

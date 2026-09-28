@@ -74,6 +74,7 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut) {
     { key: "x", desc: "Delete selected task", category: "Task Actions" },
     { key: "r / F2", desc: "Edit title of selected task", category: "Task Actions" },
     { key: "e", desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
+    { key: "u", desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
     { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
     { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
     { key: "i / a / <slash>", desc: "Focus new task input field", category: "Input & Create" },
@@ -151,6 +152,10 @@ function getPrevSubSection(current) {
  * @returns {boolean} true if the escape was consumed
  */
 function handleEscape(root) {
+  if (root.showGitModal) {
+    root.showGitModal = false;
+    return true;
+  }
   if (root.showKeyHelp) {
     root.showKeyHelp = false;
     return true;
@@ -447,6 +452,10 @@ function handleTextKey(root, text, TodoStore) {
 
   if (text === "?") {
     root.showKeyHelp = !root.showKeyHelp;
+    return;
+  }
+  if (text === "u" || text === "U") {
+    root.showGitModal = !root.showGitModal;
     return;
   }
   if ((text === "r" || text === "R") && root.focusSection === "tasks") {

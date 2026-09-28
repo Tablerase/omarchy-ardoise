@@ -49,6 +49,7 @@ Item {
   property bool cursorActive: false
   property int footerButtonIndex: 0
   property bool showKeyHelp: false
+  property bool showGitModal: false
   property string keyHelpSearch: ""
   property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
   property int expandedReminderIndex: 0
@@ -147,6 +148,7 @@ Item {
       cursorActive = false
       focusSection = "tasks"
       showKeyHelp = false
+      showGitModal = false
       expandedSubSection = "header"
       expandedReminderIndex = 0
       expandedProfileIndex = 0
@@ -157,15 +159,11 @@ Item {
   }
 
   onShowKeyHelpChanged: {
-    if (showKeyHelp) {
-      if (typeof helpModal !== "undefined" && helpModal) {
-        helpModal.open()
-      }
-    } else {
-      if (typeof helpModal !== "undefined" && helpModal) {
-        helpModal.close()
-      }
-    }
+    // HelpModal in Panel.qml responds reactively via isOpen: panelContent.showKeyHelp
+  }
+
+  onShowGitModalChanged: {
+    // GitModal in Panel.qml responds reactively via isOpen: panelContent.showGitModal
   }
 
   onExpandedTaskIdChanged: {
@@ -375,8 +373,8 @@ Item {
     (descArea && descArea.editorActiveFocus) ||
     addingProfile ||
     root.showKeyHelp ||
-    (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
-    (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus))
+    root.showGitModal ||
+    (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1)
   )
 
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
@@ -634,12 +632,12 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(6)
 
-            Ui.InboxIcon {
+            Ui.ArdoiseIcon {
               anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(16)
-              height: width
-              color: brandMouse.containsMouse ? Color.accent : (root.barForeground || Color.foreground)
-              Behavior on color { ColorAnimation { duration: 120 } }
+              store: root.store
+              bar: root.bar
+              iconSize: Style.font.subtitle
+              colorOverride: brandMouse.containsMouse ? Color.accent : undefined
             }
 
             Text {
@@ -704,6 +702,31 @@ Item {
             visible: helpBtnHover.hovered
             description: "Shortcuts & Vim motions"
             shortcut: "?"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
+        }
+
+        PanelActionButton {
+          id: gitBtn
+          size: Style.space(26)
+          iconText: "󰊢"
+          fontSize: Style.font.subtitle
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: root.showGitModal ? Color.accent : Color.muted
+          hoverColor: Color.accent
+          tooltipText: ""
+          onClicked: {
+            root.showGitModal = !root.showGitModal
+            if (!root.showGitModal) {
+              root.releaseFocus()
+            }
+          }
+
+          HoverHandler { id: gitBtnHover }
+          Ui.ShortcutToolTip {
+            visible: gitBtnHover.hovered
+            description: "Git Snapshots & Undo"
+            shortcut: "u"
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
         }
@@ -2399,21 +2422,6 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         }
       }
-    }
-  }
-
-  // Keybindings & Vim motions search / cheat-sheet overlay
-  Ui.HelpModal {
-    id: helpModal
-    isOpen: root.showKeyHelp
-    bar: root.bar
-    barForeground: root.barForeground
-    detectedShortcut: root.detectedPanelShortcut
-    detectedPanelShortcut: root.detectedPanelShortcut
-    detectedQuickAddShortcut: root.detectedQuickAddShortcut
-    onCloseRequested: {
-      root.showKeyHelp = false
-      root.releaseFocus()
     }
   }
 }

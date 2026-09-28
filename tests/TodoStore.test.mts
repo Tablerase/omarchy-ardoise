@@ -37,9 +37,14 @@ const {
   formatKeybind,
   formatRelativeDiff,
   getTaskUrgencyBreakdown,
+  getArdoiseIconState,
+  ardoiseIconStateForKey,
   makeProgressBar,
   markTasksNotified,
-  capitalizeTitle
+  capitalizeTitle,
+  mergeStores,
+  mergeArchives,
+  filterMissingTasks
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -539,6 +544,165 @@ test("getTaskUrgencyBreakdown: categorizes tasks by urgency and extracts closest
   assert.equal(breakdown.nextDueDiff, "in 1h");
 });
 
+test("getArdoiseIconState: climbs the ladder clear -> pending -> due -> overdue", () => {
+  const now = new Date("2026-09-21T12:00:00.000Z").getTime();
+  const at = (offsetMs) => new Date(now + offsetMs).toISOString();
+
+  // Invalid/empty store sits on the bottom rung.
+  const empty = getArdoiseIconState(null, now);
+  assert.equal(empty.key, "clear");
+  assert.equal(empty.role, "foreground");
+  assert.equal(empty.total, 0);
+  assert.equal(empty.count, 0);
+
+  // Nothing pending but stale reminder history must still read as clear:
+  // completed tasks are excluded from the breakdown.
+  const doneOnly = {
+    version: 1,
+    todos: [{ id: 1, title: "T1", done: true, reminder: at(-3600 * 1000) }]
+  };
+  assert.equal(getArdoiseIconState(doneOnly, now).key, "clear");
+  assert.equal(getArdoiseIconState(doneOnly, now).count, 0);
+
+  // Pending with nothing time-critical.
+  const pending = {
+    version: 1,
+    todos: [
+      { id: 1, title: "T1", done: false, reminder: null },
+      { id: 2, title: "T2", done: false, reminder: at(30 * 3600 * 1000) }
+    ]
+  };
+  const pendingState = getArdoiseIconState(pending, now);
+  assert.equal(pendingState.key, "pending");
+  assert.equal(pendingState.role, "foreground");
+  assert.equal(pendingState.total, 2);
+  // On the pending rung the badge count IS the total.
+  assert.equal(pendingState.count, 2);
+
+  // Due today (and later) but nothing overdue yet.
+  const due = {
+    version: 1,
+    todos: [
+      { id: 1, title: "T1", done: false, reminder: at(1 * 3600 * 1000) },
+      { id: 2, title: "T2", done: false, reminder: at(30 * 3600 * 1000) }
+    ]
+  };
+  const dueState = getArdoiseIconState(due, now);
+  assert.equal(dueState.key, "due");
+  assert.equal(dueState.role, "accent");
+  assert.equal(dueState.dueToday, 1);
+  // The badge shows the due-today subset, not the total.
+  assert.equal(dueState.count, 1);
+  // The due rung is only reachable with nothing overdue, so the number is
+  // never ambiguous ("2 due today" cannot hide a 3rd overdue task).
+  assert.equal(dueState.overdue, 0);
+
+  // Overdue outranks due-today regardless of volume.
+  const overdue = {
+    version: 1,
+    todos: [
+      { id: 1, title: "T1", done: false, reminder: at(-30 * 60 * 1000) },
+      { id: 2, title: "T2", done: false, reminder: at(1 * 3600 * 1000) },
+      { id: 3, title: "T3", done: false, reminder: at(2 * 3600 * 1000) }
+    ]
+  };
+  const overdueState = getArdoiseIconState(overdue, now);
+  assert.equal(overdueState.key, "overdue");
+  assert.equal(overdueState.role, "urgent");
+  assert.equal(overdueState.overdue, 1);
+  assert.equal(overdueState.dueToday, 2);
+  // The badge shows only the overdue subset, even though 3 tasks are pending
+  // and 2 of them are due today.
+  assert.equal(overdueState.count, 1);
+  assert.equal(overdueState.total, 3);
+});
+
+test("getArdoiseIconState: badge count is always the rung subset, never the total", () => {
+  const now = new Date("2026-09-21T12:00:00.000Z").getTime();
+  const at = (offsetMs) => new Date(now + offsetMs).toISOString();
+
+  // A store shaped so every rung is reachable with a strict subset present.
+  const scenarios = [
+    {
+      name: "clear",
+      todos: [],
+      expect: { count: 0, total: 0 }
+    },
+    {
+      name: "pending",
+      todos: [
+        { id: 1, title: "T1", done: false, reminder: null },
+        { id: 2, title: "T2", done: false, reminder: at(40 * 3600 * 1000) }
+      ],
+      expect: { count: 2, total: 2 }
+    },
+    {
+      name: "due",
+      todos: [
+        { id: 1, title: "T1", done: false, reminder: null },
+        { id: 2, title: "T2", done: false, reminder: at(2 * 3600 * 1000) },
+        { id: 3, title: "T3", done: false, reminder: at(3 * 3600 * 1000) }
+      ],
+      expect: { count: 2, total: 3 }
+    },
+    {
+      name: "overdue",
+      todos: [
+        { id: 1, title: "T1", done: false, reminder: at(-30 * 60 * 1000) },
+        { id: 2, title: "T2", done: false, reminder: at(2 * 3600 * 1000) },
+        { id: 3, title: "T3", done: false, reminder: at(3 * 3600 * 1000) }
+      ],
+      expect: { count: 1, total: 3 }
+    }
+  ];
+
+  for (const scenario of scenarios) {
+    const state = getArdoiseIconState(
+      { version: 1, todos: scenario.todos },
+      now
+    );
+    assert.equal(state.key, scenario.name, `rung for ${scenario.name}`);
+    assert.equal(state.count, scenario.expect.count, `count for ${scenario.name}`);
+    assert.equal(state.total, scenario.expect.total, `total for ${scenario.name}`);
+
+    // Invariant: the badge is a subset of what is pending, never more.
+    assert.ok(
+      state.count <= state.total,
+      `count (${state.count}) must not exceed total (${state.total}) on ${scenario.name}`
+    );
+    // A non-clear rung always has something to report.
+    if (state.key !== "clear") {
+      assert.ok(
+        state.count > 0,
+        `${state.key} rung must have a non-zero badge count`
+      );
+    }
+  }
+});
+
+test("getArdoiseIconState: every rung has a distinct Nerd Font glyph and a color role", () => {
+  const rungs = ["clear", "pending", "due", "overdue"].map(
+    (key) => ardoiseIconStateForKey(key)
+  );
+  assert.equal(rungs.filter(Boolean).length, 4);
+
+  // A stateful mark must not change identity silently: no glyph repeats.
+  const glyphs = new Set(rungs.map((r) => r.glyph));
+  assert.equal(glyphs.size, 4, "each ladder rung needs its own glyph");
+
+  // The two extremes share a filled-circle silhouette by design; the middle
+  // rungs are lists. Guard both so the family cannot silently drift.
+  assert.notEqual(rungs[0].glyph, rungs[1].glyph);
+  assert.notEqual(rungs[2].glyph, rungs[3].glyph);
+  assert.deepEqual(
+    rungs.map((r) => r.role),
+    ["foreground", "foreground", "accent", "urgent"]
+  );
+
+  // Unknown keys are rejected rather than silently rendering a wrong rung.
+  assert.equal(ardoiseIconStateForKey("nope"), null);
+});
+
 test("makeProgressBar: renders visual progress block bars", () => {
   assert.equal(makeProgressBar(0, 0), "[░░░░░░░░]");
   assert.equal(makeProgressBar(0, 10), "[░░░░░░░░]");
@@ -849,6 +1013,123 @@ test("addTodo & updateTodo: stores repo, tags, and location, and supports tag/re
     subpath: null,
     localPath: "~/Custom/Path"
   });
+});
+
+test("mergeStores: 3-way conflict-free store merging", () => {
+  const localStore = {
+    version: 1,
+    activeProfile: "work",
+    profiles: ["personal", "work", "project-a"],
+    todos: [
+      {
+        id: 101,
+        title: "Task 1 local update",
+        description: "",
+        profile: "work",
+        done: true,
+        createdAt: 1000,
+        updatedAt: 5000
+      },
+      {
+        id: 102,
+        title: "Local only task",
+        description: "",
+        profile: "personal",
+        done: false,
+        createdAt: 2000,
+        updatedAt: 2000
+      }
+    ]
+  };
+
+  const remoteStore = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "project-b"],
+    todos: [
+      {
+        id: 101,
+        title: "Task 1 older remote",
+        description: "remote note",
+        profile: "work",
+        done: false,
+        createdAt: 1000,
+        updatedAt: 4000
+      },
+      {
+        id: 103,
+        title: "Remote only task",
+        description: "from laptop",
+        profile: "project-b",
+        done: false,
+        createdAt: 3000,
+        updatedAt: 3000
+      }
+    ]
+  };
+
+  const merged = mergeStores(localStore, remoteStore);
+
+  // Profiles unioned
+  assert.deepEqual(merged.profiles, ["personal", "work", "project-a", "project-b"]);
+  assert.equal(merged.activeProfile, "work");
+
+  // Todos: 3 total
+  assert.equal(merged.todos.length, 3);
+
+  // Task 101 took local because updatedAt 5000 > 4000
+  const t101 = merged.todos.find((t: any) => t.id === 101);
+  assert.equal(t101?.title, "Task 1 local update");
+  assert.equal(t101?.done, true);
+
+  // Both local-only and remote-only tasks preserved
+  assert.ok(merged.todos.some((t: any) => t.id === 102));
+  assert.ok(merged.todos.some((t: any) => t.id === 103));
+});
+
+test("mergeArchives: deduplicates by id and takes latest completedAt", () => {
+  const localArchive = {
+    version: 1,
+    archived: [
+      { id: 1, title: "Old task", completedAt: 1000 },
+      { id: 2, title: "Shared task", completedAt: 2000 }
+    ]
+  };
+  const remoteArchive = {
+    version: 1,
+    archived: [
+      { id: 2, title: "Shared task re-completed", completedAt: 3000 },
+      { id: 3, title: "Remote archived task", completedAt: 2500 }
+    ]
+  };
+
+  const merged = mergeArchives(localArchive, remoteArchive);
+  assert.equal(merged.archived.length, 3);
+  // Sorted by completedAt descending
+  assert.equal(merged.archived[0].id, 2);
+  assert.equal(merged.archived[0].completedAt, 3000);
+  assert.equal(merged.archived[1].id, 3);
+  assert.equal(merged.archived[2].id, 1);
+});
+
+test("filterMissingTasks: finds tasks present in snapshot but absent currently", () => {
+  const current = {
+    version: 1,
+    todos: [{ id: 10, title: "Existing" }]
+  };
+  const snapshot = {
+    version: 1,
+    todos: [
+      { id: 10, title: "Existing" },
+      { id: 20, title: "Deleted task" },
+      { id: 30, title: "Another deleted task" }
+    ]
+  };
+
+  const missing = filterMissingTasks(current, snapshot);
+  assert.equal(missing.length, 2);
+  assert.equal(missing[0].id, 20);
+  assert.equal(missing[1].id, 30);
 });
 
 

@@ -23,7 +23,13 @@ Item {
   property var manifest: null
   property bool opened: false
 
-  readonly property string todoFilePath: Quickshell.env("HOME") + "/.config/omarchy/todos.json"
+  readonly property string pluginDirPath: (function() {
+    var url = Qt.resolvedUrl(".").toString()
+    var p = url.replace(/^file:\/\//, "").replace(/\/$/, "")
+    return p && p !== "." ? p : (Quickshell.env("HOME") + "/.config/omarchy/plugins/tablerase.ardoise")
+  })()
+  readonly property string dataDirPath: pluginDirPath + "/data"
+  readonly property string todoFilePath: dataDirPath + "/todos.json"
 
   property var store: TodoStore.defaultStore()
   property string selectedProfile: "personal"
@@ -494,11 +500,11 @@ Item {
           width: parent.width
           spacing: Style.space(8)
 
-          Ui.InboxIcon {
+          Ui.ArdoiseIcon {
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(18)
-            height: width
-            color: Color.menu.text || Color.foreground
+            store: root.store
+            iconSize: Style.font.subtitle
+            foregroundOverride: Color.menu.text || Color.foreground
           }
 
           Text {

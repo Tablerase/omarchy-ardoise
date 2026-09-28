@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
+import "./ui" as Ui
 
 Panel {
   id: root
@@ -206,6 +207,36 @@ Panel {
         onSwitchPanelRequested: function(direction) {
           root.switchPanel(direction)
         }
+      }
+    }
+
+    // Modals as direct children of KeyboardPanel so they fill the full panel
+    // window height regardless of how many tasks are in PanelContent.
+    Ui.HelpModal {
+      id: helpModal
+      anchors.fill: parent
+      isOpen: panelContent.showKeyHelp
+      bar: root.bar
+      barForeground: panelContent.barForeground
+      detectedShortcut: root.detectedPanelShortcut
+      detectedPanelShortcut: root.detectedPanelShortcut
+      detectedQuickAddShortcut: root.detectedQuickAddShortcut
+      onCloseRequested: {
+        panelContent.showKeyHelp = false
+        panelContent.releaseFocus()
+      }
+    }
+
+    Ui.GitModal {
+      id: gitModal
+      anchors.fill: parent
+      isOpen: panelContent.showGitModal
+      bar: root.bar
+      barWidget: root.barWidget
+      barForeground: panelContent.barForeground
+      onCloseRequested: {
+        panelContent.showGitModal = false
+        panelContent.returnFocusRequested()
       }
     }
   }
