@@ -23,7 +23,7 @@
 - **Preview Tool Conservation**: Do not execute `./tools/render-preview.sh` during development unless specifically requested by the user.
 
 ## Task & Shell IPC Standards
-- **Use `omarchy-shell` for Task State**: Never use ad-hoc Python, node, or bash scripts to inspect or mutate `~/.config/omarchy/todos.json`. Instead, interact directly through the plugin's native IPC handler via `omarchy-shell`:
+- **Use `omarchy-shell` for Task State**: Never use ad-hoc Python, node, or bash scripts to inspect or mutate `~/.config/omarchy/tablerase.ardoise/todos.json`. Instead, interact directly through the plugin's native IPC handler via `omarchy-shell`:
   - List tasks: `omarchy-shell tablerase.ardoise list`
   - Get count: `omarchy-shell tablerase.ardoise count`
   - Add task: `omarchy-shell tablerase.ardoise add "<title> [#profile]"`

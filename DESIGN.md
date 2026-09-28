@@ -270,7 +270,7 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility. In multi-monitor environments, `open` and `toggle` dynamically discover the `BarWidget` on the compositor-focused output via `root.bar.moduleWidgets()` and `Hyprland.focusedMonitor` to summon the panel on the active monitor, while `close` and `toggle` (when already open) target the currently open instance.
   - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
   - `omarchy-shell tablerase.ardoise archiveCount`: Returns count of archived tasks.
-  - `omarchy-shell tablerase.ardoise gitHistory`: Returns structured JSON array of Git snapshots from `data/`.
+  - `omarchy-shell tablerase.ardoise gitHistory`: Returns structured JSON array of Git snapshots from `~/.config/omarchy/tablerase.ardoise/`.
   - `omarchy-shell tablerase.ardoise gitRollback "<hash>"`: Reverts `todos.json` and `todos-archive.json` to the specified commit snapshot.
   - `omarchy-shell tablerase.ardoise gitRecover "<hash>"`: Selectively recovers missing tasks from snapshot into active store.
   - `omarchy-shell tablerase.ardoise gitSync`: Fetches remote, performs conflict-free 3-way store merge if diverged, and pushes to remote.

@@ -38,7 +38,7 @@ A productivity status bar widget, flyout panel, quick-add modal, and background 
   - 1-second capture: type task and hit `Enter` to add instantly.
   - Optional expandable note and reminder preset selector.
 - **Cloud & AI-Ready Reactive Storage**:
-  - Pure Schema v1 in `~/.config/omarchy/todos.json`.
+  - Pure Schema v1 in `~/.config/omarchy/tablerase.ardoise/todos.json`.
   - Zero-latency inotify updates (`FileView` with `watchChanges: true`) — sync via Git, Nextcloud, Syncthing, or write via AI agents and CLI scripts.
 - **Shell IPC Integration**:
   - Full IPC interface for scripting and AI assistants.
@@ -47,7 +47,7 @@ A productivity status bar widget, flyout panel, quick-add modal, and background 
 
 ## Data Schema (Version 1)
 
-Stored at `~/.config/omarchy/todos.json`:
+Stored at `~/.config/omarchy/tablerase.ardoise/todos.json`:
 
 ```json
 {
@@ -94,7 +94,7 @@ Stored at `~/.config/omarchy/todos.json`:
 
 ## Archive Schema (`todos-archive.json`)
 
-Stored at `~/.config/omarchy/todos-archive.json`. When tasks are marked as done and cleared, they are moved to this dedicated archive with completion timestamps for productivity tracking and analytics:
+Stored at `~/.config/omarchy/tablerase.ardoise/todos-archive.json`. When tasks are marked as done and cleared, they are moved to this dedicated archive with completion timestamps for productivity tracking and analytics:
 
 ```json
 {
@@ -176,7 +176,7 @@ Add tasks directly via CLI or agy skill:
 omarchy-shell tablerase.ardoise add "#project1 Implement user authentication"
 ```
 
-Because the plugin monitors `~/.config/omarchy/todos.json` with inotify (`watchChanges: true`), external programs, git hooks, and synchronization clients (Nextcloud, Syncthing) can write directly to the JSON file, and changes will reflect across the bar widget and panel in real-time.
+Because the plugin monitors `~/.config/omarchy/tablerase.ardoise/todos.json` with inotify (`watchChanges: true`), external programs, git hooks, and synchronization clients (Nextcloud, Syncthing) can write directly to the JSON file, and changes will reflect across the bar widget and panel in real-time.
 
 ---
 
@@ -213,7 +213,7 @@ hyprctl reload
 ### Bar Mouse Shortcuts
 - **󰍽 [L] Left Click**: Toggles the task list flyout panel.
 - **󰍽 [R] Right Click**: Directly summons the Quick Add modal.
-- **󰍽 [M] Middle Click**: Opens `~/.config/omarchy/todos.json` in your default terminal editor via `omarchy-launch-editor`.
+- **󰍽 [M] Middle Click**: Opens `~/.config/omarchy/tablerase.ardoise/todos.json` in your default terminal editor via `omarchy-launch-editor`.
 
 ---
 

@@ -28,7 +28,13 @@ Item {
     var p = url.replace(/^file:\/\//, "").replace(/\/$/, "")
     return p && p !== "." ? p : (Quickshell.env("HOME") + "/.config/omarchy/plugins/tablerase.ardoise")
   })()
-  readonly property string dataDirPath: pluginDirPath + "/data"
+  readonly property string dataDirPath: (function() {
+    var custom = Quickshell.env("ARDOISE_DATA_DIR")
+    if (custom && custom.length > 0) return custom
+    var home = Quickshell.env("HOME")
+    if (home && home.length > 0) return home + "/.config/omarchy/tablerase.ardoise"
+    return pluginDirPath + "/data"
+  })()
   readonly property string todoFilePath: dataDirPath + "/todos.json"
 
   property var store: TodoStore.defaultStore()

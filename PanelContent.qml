@@ -570,14 +570,14 @@ Item {
 
   function openArchive() {
     savePendingNotes()
-    var p = barWidget ? barWidget.archiveFilePath : Quickshell.env("HOME") + "/.config/omarchy/todos-archive.json"
+    var p = barWidget ? barWidget.archiveFilePath : (Quickshell.env("HOME") + "/.config/omarchy/tablerase.ardoise/todos-archive.json")
     if (bar) bar.run("omarchy-launch-editor " + p)
     root.closeRequested()
   }
 
   function openEditor(taskId) {
     savePendingNotes()
-    var p = barWidget ? barWidget.todoFilePath : Quickshell.env("HOME") + "/.config/omarchy/todos.json"
+    var p = barWidget ? barWidget.todoFilePath : (Quickshell.env("HOME") + "/.config/omarchy/tablerase.ardoise/todos.json")
     if (bar) {
       bar.run(Logic.buildEditorCommand(p, taskId))
     }

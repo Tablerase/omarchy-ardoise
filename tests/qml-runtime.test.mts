@@ -992,9 +992,10 @@ ShellRoot {
 
     fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
 
-    const testConfigDir = path.join(tmpDir, ".config", "omarchy");
+    const testConfigDir = path.join(tmpDir, ".config", "omarchy", "tablerase.ardoise");
     fs.mkdirSync(testConfigDir, { recursive: true });
     fs.writeFileSync(path.join(testConfigDir, "todos.json"), JSON.stringify({ version: 1, activeProfile: "personal", profiles: ["personal", "work"], todos: [] }), "utf8");
+    fs.writeFileSync(path.join(testConfigDir, "todos-archive.json"), JSON.stringify({ version: 1, archived: [] }), "utf8");
 
     const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
       encoding: "utf8",
@@ -1002,6 +1003,7 @@ ShellRoot {
       env: {
         ...process.env,
         HOME: tmpDir,
+        ARDOISE_DATA_DIR: testConfigDir,
         // If Wayland is not active, let Quickshell use minimal platform
         QT_QPA_PLATFORM: process.env.WAYLAND_DISPLAY ? undefined : "offscreen"
       }
@@ -1029,6 +1031,15 @@ ShellRoot {
         0,
         "Quickshell harness failed with exit code " + qsResult.status + ":\n" + output
       );
+
+      // Verify that the sandboxed todos file received the runtime edits
+      if (fs.existsSync(path.join(testConfigDir, "todos.json"))) {
+        const sandboxedRaw = fs.readFileSync(path.join(testConfigDir, "todos.json"), "utf8");
+        assert.ok(
+          sandboxedRaw.includes("Renamed through runtime test"),
+          "Expected runtime test write to be sandboxed in temporary testConfigDir"
+        );
+      }
     }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
