@@ -214,7 +214,12 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        4. `"profiles"`: Profile reassignment row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles profiles (with smooth auto-scroll into view via `ensureVisible`); <kbd>Space</kbd> / <kbd>Enter</kbd> reassigns task profile.
        5. `"codebase"` (conditional on location): Codebase launch button is focused. <kbd>Enter</kbd> / <kbd>Space</kbd> opens editor.
      - Navigating with <kbd>Tab</kbd> / <kbd>j</kbd> / <kbd>↓</kbd> steps sequentially through sub-sections, then continues to the next task in the list.
-     - Navigating with <kbd>Shift+Tab</kbd> / <kbd>k</kbd> / <kbd>↑</kbd> steps backward through sub-sections, returning to `"header"`.
+     - **Inline Title Editor (`titleEditor`)**:
+       - Initiated by pressing <kbd>r</kbd> or <kbd>F2</kbd> while focused on a task (or the `"header"` sub-section of an expanded task), double-clicking the title text (`titleClickArea`), or clicking the dedicated edit button (`rowEditBtn` `󰏫`) in `rowActions`.
+       - Text field replaces static `titleLabel` in-place, styled with 1.5px accent `BorderSurface`, auto-focused, and text pre-selected.
+       - While editing, `activeFocusBlocked` sets `PanelKeyCatcher.blocked = true` to allow freeform text entry without triggering vim motion keys.
+       - Committing (<kbd>Enter</kbd> or blur) trims input and saves via `updateTodo`. If hashtags are embedded (e.g. `#work Title` or `#repo/tag Title`), `parseTaskInput` updates the profile, repository, and tags simultaneously. Empty titles are rejected, preserving the existing title.
+       - Two-Stage Escape: pressing <kbd>Escape</kbd> while editing cancels editing, restores the original title, clears `editingTaskId`, unblocks `PanelKeyCatcher`, and returns focus to the task row in normal motion mode without closing the drawer or dismissing the panel.
      - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
@@ -280,6 +285,9 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Drawer)** | `h` / `l` / `←` / `→` | Cycle reminder presets or profile reassignments |
 | **Panel (Drawer)** | `i` / `Enter` | Enter notes text editor (insert mode) |
 | **Panel (Drawer)** | `Escape` | Return from sub-section to task header, or collapse drawer |
+| **Panel** | `r` / `F2` | Edit title of selected task in-place |
+| **Panel (Title Editor)** | `Enter` | Commit edited title (trims input; updates profile/tags if hashtag included) |
+| **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `c` | Archive and clear completed tasks in current profile |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |

@@ -53,6 +53,7 @@ Item {
   property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
   property int expandedReminderIndex: 0
   property int expandedProfileIndex: 0
+  property var editingTaskId: -1
 
   onExpandedSubSectionChanged: {
     if (root.expandedSubSection === "reminders") {
@@ -137,6 +138,7 @@ Item {
 
   onVisibleChanged: {
     if (!visible) {
+      cancelEditingTask()
       flushPendingCompletions()
       savePendingNotes()
       expandedTaskId = -1
@@ -373,6 +375,7 @@ Item {
     (descArea && descArea.editorActiveFocus) ||
     addingProfile ||
     root.showKeyHelp ||
+    (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
     (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus))
   )
 
@@ -496,9 +499,37 @@ Item {
   function updateTodo(id, fields) {
     if (barWidget) {
       barWidget.updateTodo(id, fields)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       root.store = TodoStore.updateTodo(root.store, id, fields)
     }
+  }
+
+  function startEditingTask(id) {
+    savePendingNotes()
+    root.editingTaskId = id
+    root.focusSection = "tasks"
+    root.cursorActive = true
+  }
+
+  function cancelEditingTask() {
+    root.editingTaskId = -1
+    root.focusSection = "tasks"
+    root.cursorActive = true
+    root.releaseFocus()
+  }
+
+  function commitEditingTask(id, newTitle) {
+    if (root.editingTaskId === id) {
+      root.editingTaskId = -1
+    }
+    var trimmed = (newTitle || "").trim()
+    if (trimmed.length > 0) {
+      root.updateTodo(id, { title: trimmed })
+    }
+    root.focusSection = "tasks"
+    root.cursorActive = true
+    root.releaseFocus()
   }
 
   function clearCompleted(profile) {
@@ -1375,8 +1406,9 @@ Item {
               readonly property bool hasNotes: Boolean(itemRow.modelData.description && itemRow.modelData.description.trim().length > 0)
               readonly property bool hasChips: Boolean(itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0) || itemRow.modelData.reminder)
               readonly property bool hasBadges: hasChips
+              readonly property bool isEditing: root.editingTaskId === itemRow.modelData.id
               readonly property bool isCursorSelected: root.cursorActive && (root.focusSection === "tasks") && (delegateRoot.index === root.cursorIndex)
-              readonly property bool isHeaderFocused: isCursorSelected && (!isExpanded || root.expandedSubSection === "header")
+              readonly property bool isHeaderFocused: isEditing || (isCursorSelected && (!isExpanded || root.expandedSubSection === "header"))
               readonly property bool isExpanded: root.expandedTaskId === itemRow.modelData.id
               readonly property bool isDone: delegateRoot.isDone
               readonly property bool isOverdueTask: !isDone && TodoStore.isOverdue(itemRow.modelData)
@@ -1577,7 +1609,7 @@ Item {
                   Item {
                     id: titleRowItem
                     width: parent.width
-                    implicitHeight: Math.max(Style.space(22), Math.max(checkBtn.implicitHeight, Math.max(titleLabel.implicitHeight, rowActions.implicitHeight)))
+                    implicitHeight: Math.max(Style.space(22), Math.max(checkBtn.implicitHeight, Math.max(titleLabel.implicitHeight, Math.max(titleEditor.implicitHeight, rowActions.implicitHeight))))
                     height: implicitHeight
 
                     // Checkbox on the left
@@ -1638,6 +1670,33 @@ Item {
                         }
                       }
 
+                      // Edit title button
+                      PanelActionButton {
+                        id: rowEditBtn
+                        anchors.verticalCenter: parent.verticalCenter
+                        size: Style.space(22)
+                        iconText: "󰏫"
+                        fontSize: Style.font.caption
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                        foreground: Color.muted
+                        hoverColor: Color.accent
+                        tooltipText: ""
+                        onClicked: {
+                          root.cursorIndex = delegateRoot.index
+                          root.focusSection = "tasks"
+                          root.cursorActive = true
+                          root.startEditingTask(itemRow.modelData.id)
+                        }
+
+                        HoverHandler { id: rowEditHover }
+                        Ui.ShortcutToolTip {
+                          visible: rowEditHover.hovered
+                          description: "Edit title"
+                          shortcut: "r / F2"
+                          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                        }
+                      }
+
                       // Remove button
                       PanelActionButton {
                         id: rowDeleteBtn
@@ -1691,6 +1750,7 @@ Item {
                     // Title text (stretches cleanly between checkBtn and profInlineLabel/rowActions)
                     Text {
                       id: titleLabel
+                      visible: root.editingTaskId !== itemRow.modelData.id
                       anchors.left: checkBtn.right
                       anchors.leftMargin: Style.space(8)
                       anchors.right: profInlineLabel.visible ? profInlineLabel.left : rowActions.left
@@ -1713,14 +1773,75 @@ Item {
                         ColorAnimation { duration: 180 }
                       }
 
+                      MouseArea {
+                        id: titleClickArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onDoubleClicked: {
+                          root.cursorIndex = delegateRoot.index
+                          root.focusSection = "tasks"
+                          root.cursorActive = true
+                          root.startEditingTask(itemRow.modelData.id)
+                        }
+                        onClicked: {
+                          root.cursorIndex = delegateRoot.index
+                          root.focusSection = "tasks"
+                          root.cursorActive = true
+                        }
+                      }
+
                       HoverHandler {
                         id: titleHover
                       }
 
                       PanelToolTip {
-                        visible: titleHover.hovered && titleLabel.truncated
+                        visible: (titleHover.hovered || titleClickArea.containsMouse) && titleLabel.truncated
                         text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
+                    }
+
+                    // Inline Title Editor (shown when editingTaskId matches)
+                    TextField {
+                      id: titleEditor
+                      visible: root.editingTaskId === itemRow.modelData.id
+                      anchors.left: checkBtn.right
+                      anchors.leftMargin: Style.space(8)
+                      anchors.right: profInlineLabel.visible ? profInlineLabel.left : rowActions.left
+                      anchors.rightMargin: Style.space(6)
+                      anchors.verticalCenter: parent.verticalCenter
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption
+                      color: root.barForeground
+                      topPadding: Style.space(2)
+                      bottomPadding: Style.space(2)
+                      leftPadding: Style.space(6)
+                      rightPadding: Style.space(6)
+                      verticalAlignment: Text.AlignVCenter
+                      background: BorderSurface {
+                        color: Util.alpha(Color.accent, 0.08)
+                        borderSpec: Border.flat(Color.accent, 1.5)
+                        radius: Style.cornerRadius
+                      }
+                      onVisibleChanged: {
+                        if (visible) {
+                          text = itemRow.modelData.title || ""
+                          forceActiveFocus()
+                          selectAll()
+                        }
+                      }
+                      onAccepted: {
+                        root.commitEditingTask(itemRow.modelData.id, text)
+                      }
+                      Keys.onEscapePressed: function(event) {
+                        event.accepted = true
+                        root.cancelEditingTask()
+                      }
+                      onActiveFocusChanged: {
+                        if (!activeFocus && root.editingTaskId === itemRow.modelData.id) {
+                          root.commitEditingTask(itemRow.modelData.id, text)
+                        }
                       }
                     }
 
@@ -1732,7 +1853,7 @@ Item {
                       height: Style.space(1.5)
                       radius: height / 2
                       color: itemRow.isDone ? Color.muted : "transparent"
-                      visible: opacity > 0.01
+                      visible: opacity > 0.01 && root.editingTaskId !== itemRow.modelData.id
                       opacity: itemRow.isDone ? 0.8 : 0.0
                       width: itemRow.isDone ? Math.min(titleLabel.contentWidth, titleLabel.width) : 0
 

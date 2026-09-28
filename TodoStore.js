@@ -575,8 +575,28 @@ function updateTodo(store, id, fields) {
     if (String(s.todos[i].id) === String(id)) {
       var t = s.todos[i]
       t.updatedAt = (fields.updatedAt !== undefined) ? Number(fields.updatedAt) : now
-      if (fields.title !== undefined) t.title = capitalizeTitle(String(fields.title).trim())
       if (fields.description !== undefined) t.description = String(fields.description)
+      if (fields.title !== undefined) {
+        var rawTitle = String(fields.title).trim()
+        if (rawTitle.length > 0) {
+          var parsedTitle = parseTaskInput(rawTitle, t.profile)
+          if (parsedTitle.title && parsedTitle.title.trim().length > 0) {
+            t.title = capitalizeTitle(parsedTitle.title)
+            if (rawTitle.indexOf("#") !== -1) {
+              if (parsedTitle.profile && fields.profile === undefined) {
+                t.profile = parsedTitle.profile
+                if (s.profiles.indexOf(parsedTitle.profile) === -1) s.profiles.push(parsedTitle.profile)
+              }
+              if (parsedTitle.repo && fields.repo === undefined) {
+                t.repo = parsedTitle.repo
+              }
+              if (parsedTitle.tags && parsedTitle.tags.length > 0 && fields.tags === undefined) {
+                t.tags = parsedTitle.tags
+              }
+            }
+          }
+        }
+      }
       if (fields.profile !== undefined) {
         var p = cleanProfileName(fields.profile)
         t.profile = p

@@ -151,6 +151,12 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: panelContent.activeFocusBlocked
+      Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_F2) {
+          event.accepted = true
+          panelContent.handleTextKey("r")
+        }
+      }
       onCloseRequested: {
         if (panelContent.handleEscape && panelContent.handleEscape()) return
         root.close()

@@ -57,6 +57,7 @@ test("getKeybindingsList & filterKeybindings: lists and filters shortcuts", () =
   assert.ok(defaultList.length >= 15, "contains full list of shortcuts");
   assert.ok(defaultList.some((item: any) => item.key === "SUPER + ALT + T" && item.desc.includes("toggle Ardoise panel")), "includes default panel toggle shortcut");
   assert.ok(defaultList.some((item: any) => item.key === "SUPER + SHIFT + T" && item.desc.includes("Quick Add")), "includes default quick add shortcut");
+  assert.ok(defaultList.some((item: any) => item.key === "r / F2" && item.desc.includes("Edit title")), "includes r / F2 title edit shortcut");
 
   const customList = getKeybindingsList("SUPER + T");
   assert.ok(customList.some((item: any) => item.key === "SUPER + T"), "includes custom detected shortcut");
@@ -139,6 +140,18 @@ test("handleEscape: handles two-stage escape state machine", () => {
   const handledHelp = handleEscape(mockRoot);
   assert.equal(handledHelp, true);
   assert.equal(mockRoot.showKeyHelp, false);
+
+  // 5. While editing title: Esc cancels editing without closing drawer or panel
+  let editingCancelled = false;
+  mockRoot.editingTaskId = 101;
+  mockRoot.cancelEditingTask = () => {
+    editingCancelled = true;
+    mockRoot.editingTaskId = -1;
+  };
+  const handledEditCancel = handleEscape(mockRoot);
+  assert.equal(handledEditCancel, true);
+  assert.equal(editingCancelled, true);
+  assert.equal(mockRoot.editingTaskId, -1);
 });
 
 test("handleMove: 2D navigation across tasks, sub-sections, and sections", () => {
@@ -326,6 +339,45 @@ test("handleTextKey: focuses notes and inserts character when on notes subsectio
   handleTextKey(mockRoot, "H");
   assert.equal(notesFocused, true);
   assert.equal(insertedText, "H");
+});
+
+test("handleTextKey: 'r' / 'F2' triggers title editing on focused task", () => {
+  let startedEditingTaskId: any = null;
+
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cursorIndex: 0,
+    cursorActive: true,
+    filteredTodos: [{ id: 42, title: "Sample task", done: false }],
+    expandedTaskId: -1,
+    expandedSubSection: "header",
+    startEditingTask: (id: any) => {
+      startedEditingTaskId = id;
+    }
+  };
+
+  // 1. Pressing 'r' on collapsed task triggers editing
+  handleTextKey(mockRoot, "r", TodoStore);
+  assert.equal(startedEditingTaskId, 42);
+
+  // 2. While editing, other text keys are ignored
+  startedEditingTaskId = null;
+  mockRoot.editingTaskId = 42;
+  handleTextKey(mockRoot, "j", TodoStore);
+  assert.equal(startedEditingTaskId, null);
+
+  // 3. Pressing 'r' while expanded on header triggers editing
+  mockRoot.editingTaskId = -1;
+  mockRoot.expandedTaskId = 42;
+  mockRoot.expandedSubSection = "header";
+  handleTextKey(mockRoot, "r", TodoStore);
+  assert.equal(startedEditingTaskId, 42);
+
+  // 4. Pressing 'r' while on reminders does not trigger editing
+  startedEditingTaskId = null;
+  mockRoot.expandedSubSection = "reminders";
+  handleTextKey(mockRoot, "r", TodoStore);
+  assert.equal(startedEditingTaskId, null);
 });
 
 test("handleMove & handleTextKey: navigation respects completed fold collapse", () => {

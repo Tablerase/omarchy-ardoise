@@ -72,6 +72,7 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut) {
     { key: "Space", desc: "Toggle completed status of selected task", category: "Task Actions" },
     { key: "Enter / Return", desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
     { key: "x", desc: "Delete selected task", category: "Task Actions" },
+    { key: "r / F2", desc: "Edit title of selected task", category: "Task Actions" },
     { key: "e", desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
     { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
@@ -152,6 +153,14 @@ function getPrevSubSection(current) {
 function handleEscape(root) {
   if (root.showKeyHelp) {
     root.showKeyHelp = false;
+    return true;
+  }
+  if (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) {
+    if (typeof root.cancelEditingTask === "function") {
+      root.cancelEditingTask();
+    } else {
+      root.editingTaskId = -1;
+    }
     return true;
   }
   if (root.focusSection === "tasks" && root.expandedSubSection !== "header") {
@@ -432,9 +441,24 @@ function handleTextKey(root, text, TodoStore) {
   root.cursorActive = true;
   root.mouseMovementDetected = false;
 
+  if (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) {
+    return;
+  }
+
   if (text === "?") {
     root.showKeyHelp = !root.showKeyHelp;
     return;
+  }
+  if ((text === "r" || text === "R") && root.focusSection === "tasks") {
+    if (root.expandedTaskId === -1 || root.expandedTaskId === null || root.expandedSubSection === "header" || !root.expandedTaskId) {
+      if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var currentTask = root.filteredTodos[root.cursorIndex];
+        if (currentTask && typeof root.startEditingTask === "function") {
+          root.startEditingTask(currentTask.id);
+          return;
+        }
+      }
+    }
   }
   if (text === "A") {
     if (typeof root.openQuickAdd === "function") root.openQuickAdd();

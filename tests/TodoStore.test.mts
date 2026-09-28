@@ -154,6 +154,32 @@ test("updateTodo: edits task properties and updates profile if changed", () => {
   assert.equal(updated.notified, false);
 });
 
+test("updateTodo: title editing validates non-empty and parses embedded hashtags", () => {
+  let store = defaultStore();
+  store = addTodo(store, "Original title", "Notes", "personal", null);
+  const taskId = store.todos[0].id;
+
+  // 1. Empty or whitespace title is rejected (preserves existing title)
+  store = updateTodo(store, taskId, { title: "   " });
+  assert.equal(store.todos[0].title, "Original title");
+
+  // 2. Simple title rename with trimming and capitalization
+  store = updateTodo(store, taskId, { title: "  renamed task title  " });
+  assert.equal(store.todos[0].title, "Renamed task title");
+
+  // 3. Embedded hashtag in title renames title and updates profile
+  store = updateTodo(store, taskId, { title: "#projects Build widget" });
+  assert.equal(store.todos[0].title, "Build widget");
+  assert.equal(store.todos[0].profile, "projects");
+  assert.ok(store.profiles.includes("projects"));
+
+  // 4. Embedded repo and tags in title
+  store = updateTodo(store, taskId, { title: "#projects/my-repo Fix bug" });
+  assert.equal(store.todos[0].title, "Fix bug");
+  assert.equal(store.todos[0].profile, "projects");
+  assert.equal(store.todos[0].repo, "my-repo");
+});
+
 test("addProfile & removeProfile: profile lifecycle and protected personal default", () => {
   let store = defaultStore();
   store = addProfile(store, "travel");

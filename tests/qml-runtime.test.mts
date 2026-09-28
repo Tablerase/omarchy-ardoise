@@ -303,6 +303,18 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "expandedDetailsCol must smoothly fade in with opacity transition"
   );
 
+  // 4d. Inline Task Title Editing
+  assert.ok(
+    panelContent.includes("id: titleEditor") &&
+      panelContent.includes("id: rowEditBtn") &&
+      panelContent.includes("id: titleClickArea") &&
+      panelContent.includes("property var editingTaskId: -1") &&
+      panelContent.includes("startEditingTask(") &&
+      panelContent.includes("commitEditingTask(") &&
+      panelContent.includes("cancelEditingTask("),
+    "PanelContent must implement inline title editor (titleEditor, rowEditBtn, titleClickArea, and editingTaskId state)"
+  );
+
   // 4d. Dynamic Reminder Presets (Real-time recalculation)
   assert.ok(
     quickAddContent.includes("refreshReminderPresets") &&
@@ -546,7 +558,7 @@ ShellRoot {
 
             // 2. Normal tasks navigation: panelKeyCatcher must remain unblocked
             panelContent.currentFilter = "all";
-            panelContent.store = {
+            var testStore = {
                 version: 1,
                 activeProfile: "personal",
                 profiles: ["personal", "work"],
@@ -555,6 +567,8 @@ ShellRoot {
                     { id: 2, title: "Automated task 2", profile: "personal", done: false }
                 ]
             };
+            barWidget.store = testStore;
+            panelContent.store = testStore;
             panelContent.focusSection = "tasks";
             panelContent.cursorActive = true;
             panelContent.cursorIndex = 0;
@@ -807,6 +821,40 @@ ShellRoot {
                     Qt.exit(123);
                     return;
                 }
+
+                // Test inline title editing lifecycle
+                panelContent.cursorIndex = 0;
+                panelContent.focusSection = "tasks";
+                panelContent.handleTextKey("r");
+                if (panelContent.editingTaskId !== testTask.id || !panelContent.activeFocusBlocked) {
+                    console.error("[TEST FAIL] handleTextKey('r') failed to initiate title editing on focused task");
+                    Qt.exit(134);
+                    return;
+                }
+                // Two-stage escape from title editing cancels editing without closing panel
+                if (!panelContent.handleEscape()) {
+                    console.error("[TEST FAIL] handleEscape() did not consume escape during title editing");
+                    Qt.exit(135);
+                    return;
+                }
+                if (panelContent.editingTaskId !== -1 || panelContent.activeFocusBlocked) {
+                    console.error("[TEST FAIL] handleEscape() failed to cancel editingTaskId or unblock activeFocus");
+                    Qt.exit(136);
+                    return;
+                }
+                // Commit title edit
+                panelContent.startEditingTask(testTask.id);
+                panelContent.commitEditingTask(testTask.id, "Renamed through runtime test");
+                if (panelContent.editingTaskId !== -1 || panelContent.activeFocusBlocked) {
+                    console.error("[TEST FAIL] commitEditingTask failed to reset editingTaskId or activeFocusBlocked");
+                    Qt.exit(137);
+                    return;
+                }
+                if (panelContent.store.todos[0].title !== "Renamed through runtime test") {
+                    console.error("[TEST FAIL] commitEditingTask did not update task title in store (got: " + panelContent.store.todos[0].title + ")");
+                    Qt.exit(138);
+                    return;
+                }
             }
 
             // Test QuickAdd advanceSection and cycleProfileSelection
@@ -870,11 +918,16 @@ ShellRoot {
 
     fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
 
+    const testConfigDir = path.join(tmpDir, ".config", "omarchy");
+    fs.mkdirSync(testConfigDir, { recursive: true });
+    fs.writeFileSync(path.join(testConfigDir, "todos.json"), JSON.stringify({ version: 1, activeProfile: "personal", profiles: ["personal", "work"], todos: [] }), "utf8");
+
     const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
       encoding: "utf8",
       timeout: 6000,
       env: {
         ...process.env,
+        HOME: tmpDir,
         // If Wayland is not active, let Quickshell use minimal platform
         QT_QPA_PLATFORM: process.env.WAYLAND_DISPLAY ? undefined : "offscreen"
       }
