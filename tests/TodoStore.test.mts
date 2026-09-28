@@ -709,6 +709,33 @@ test("parseTaskInput: parses leading #project/repo, #tags, and preserves title",
   assert.equal(res5.title, "Simple standalone task");
 });
 
+test("parseTaskInput & addTodo: input containing only hashtags yields empty title and prevents task creation", () => {
+  // Only project/repo
+  const res1 = parseTaskInput("#ardoise/widget", "personal");
+  assert.equal(res1.profile, "ardoise");
+  assert.equal(res1.repo, "widget");
+  assert.deepEqual(res1.tags, []);
+  assert.equal(res1.title, "");
+
+  // Multiple hashtags only
+  const res2 = parseTaskInput("#ardoise #widget #urgent", "personal");
+  assert.equal(res2.profile, "ardoise");
+  assert.equal(res2.repo, null);
+  assert.deepEqual(res2.tags, ["widget", "urgent"]);
+  assert.equal(res2.title, "");
+
+  // Single hashtag
+  const res3 = parseTaskInput("#work", "personal");
+  assert.equal(res3.profile, "work");
+  assert.equal(res3.title, "");
+
+  // Attempting addTodo with only hashtags and a description must return store unmodified
+  const initial = defaultStore();
+  const result = addTodo(initial, "#ardoise/widget", "Detailed notes about widget layout");
+  assert.equal(result.todos.length, 0, "addTodo must not create a task when title is missing");
+  assert.deepEqual(result, initial, "Store must remain untouched when title is missing");
+});
+
 test("normalizeLocation: normalizes string, object, and path formats", () => {
   // String shorthand
   assert.deepEqual(normalizeLocation("~/Work/omarchy-ardoise"), {

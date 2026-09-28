@@ -1079,7 +1079,8 @@ Item {
           }
         }
         onAccepted: {
-          if (text.trim() !== "") {
+          var parsed = TodoStore.parseTaskInput(text)
+          if (parsed.title && parsed.title.trim().length > 0) {
             var prof = (root.currentFilter !== "all") ? root.currentFilter : null
             root.addTodo(text, "", prof, null)
             text = ""
@@ -1146,7 +1147,8 @@ Item {
         hoverColor: Color.accent
         tooltipText: ""
         onClicked: {
-          if (newTodoField.text.trim() !== "") {
+          var parsed = TodoStore.parseTaskInput(newTodoField.text)
+          if (parsed.title && parsed.title.trim().length > 0) {
             var prof = (root.currentFilter !== "all") ? root.currentFilter : null
             root.addTodo(newTodoField.text, "", prof, null)
             newTodoField.text = ""

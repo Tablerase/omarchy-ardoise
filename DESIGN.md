@@ -91,34 +91,39 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
    - In **nav/normal mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid `Color.accent` border, no fill tint — field is selected in keyboard nav but not being edited.
    - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
    - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
-4. **Draft Notice Banner** (Conditional: `hasDraft === true`):
+   - **Title Validation & Error State**: When input contains only hashtags/profile/repo (e.g. `#ardoise/widget`) or when submission is attempted without an actual title, `taskInput` displays a high-contrast `Color.urgent` warning border (`Border.flat(Color.urgent, 2)` when focused, 1px when blurred) and a soft urgent background tint.
+4. **Inline Validation Cue (`titleErrorRow`)**:
+   - Displayed immediately below `taskInput` whenever the title is missing while hashtags/tags are present, or when submission is attempted with an empty title.
+   - Renders an error icon (`󰅚`) and clear actionable message in `Color.urgent`: `"Title required: add task name after hashtag (e.g. #ardoise/widget My task)"` or `"Task title is required"`. Automatically hides as soon as a non-empty title is typed.
+5. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
-5. **Option Toggles Row**:
+6. **Option Toggles Row**:
    - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When active, displays clean accent tint (`Util.alpha(Color.accent, 0.12)`), 1px accent border, and accent text/icon. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring and prominent focus fill. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
    - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`. When active with a chosen reminder, displays accent tint, 1px accent border, and formatted reminder string. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring.
    - Both buttons use `bordered: true`, scale popping, and explicit accent focus rings, ensuring navigation focus is always noticeably brighter and higher-contrast than resting active states.
-6. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
+7. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
    - **Insert mode** (`activeFocus === true`): 2px solid accent border + accent tint fill — clear editing indicator.
    - **Nav mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid accent border, no tint — field is selected in keyboard nav but not being edited.
    - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
-7. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
+8. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
    - Presets: `+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, plus "Clear". Presets and selected timestamps are dynamically recomputed at open and click/selection time relative to current local execution time rather than startup time. Bordered focus styling via `Ui.ReminderPills`.
-8. **Profile Selector Container (`quickAddProfileContainer`)**:
+9. **Profile Selector Container (`quickAddProfileContainer`)**:
    - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-9. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
-   - Positioned above actions and divider.
-   - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
-   - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
-10. **Separator**: Bottom dividing line (`PanelSeparator`).
-11. **Footer Actions Item**:
-    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision.
+10. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
+    - Positioned above actions and divider.
+    - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
+    - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
+11. **Separator**: Bottom dividing line (`PanelSeparator`).
+12. **Footer Actions Item**:
+    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision. When title is missing or error state is active, hints update to `"⚠ Title required before sending • Esc Cancel"`.
     - Right: Action buttons [Cancel] and [Add]:
       - Both buttons use `bordered: true`, 2px `Color.accent` focus border on navigation, and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
       - When Cancel is navigated to (`actionIndex === 0`), Cancel receives 2px accent focus border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
       - When Add is navigated to (`actionIndex === 1`), Add receives 2px accent focus border, selected fill, and an animated 1.05 scale pop.
       - At neutral rest state (e.g. while typing title or notes), neither button is selected, preventing misleading highlights.
+      - **Add Button Disabled State**: When the task title is missing (`canSubmit === false`), the [Add] button is visibly disabled (`enabled: false`, `opacity: 0.4`), preventing accidental submission. Clicking or pressing <kbd>Enter</kbd> on a disabled Add button blocks creation, sets `showTitleError: true`, and refocuses `taskInput`.
 
 #### Navigation State Flow (`focusSection`)
 ```

@@ -118,6 +118,33 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "addBtn must bind selected state to actionIndex === 1"
   );
 
+  // 1b. Title validation & disabled state when title is missing
+  assert.ok(
+    quickAddContent.includes("readonly property bool hasValidTitle:") &&
+      quickAddContent.includes("readonly property bool canSubmit: hasValidTitle"),
+    "QuickAdd must declare hasValidTitle and canSubmit properties"
+  );
+  assert.ok(
+    quickAddContent.includes("enabled: root.canSubmit") &&
+      quickAddContent.includes("opacity: root.canSubmit ? 1.0 : 0.4"),
+    "addBtn must visibly disable with opacity 0.4 when title is missing"
+  );
+  assert.ok(
+    quickAddContent.includes("id: titleErrorRow") &&
+      quickAddContent.includes("visible: root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)"),
+    "QuickAdd must display inline titleErrorRow cue when title is missing"
+  );
+  assert.ok(
+    quickAddContent.includes("if (!root.canSubmit)") &&
+      quickAddContent.includes("root.showTitleError = true"),
+    "QuickAdd submit must block execution and focus title field when canSubmit is false"
+  );
+  assert.ok(
+    panelContent.includes("var parsed = TodoStore.parseTaskInput(text)") &&
+      panelContent.includes("if (parsed.title && parsed.title.trim().length > 0)"),
+    "PanelContent onAccepted must validate parsed title before adding"
+  );
+
   // 2. Help search & shortcuts: Backspace on empty text dismisses modal
   assert.ok(
     allUiContent.includes("event.key === Qt.Key_Backspace && keySearchField.text.length === 0"),

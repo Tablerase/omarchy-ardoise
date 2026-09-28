@@ -39,6 +39,11 @@ Item {
   property bool attachLocation: true
   readonly property bool hasDraft: draftTitle.trim().length > 0 || draftDescription.trim().length > 0
 
+  property bool showTitleError: false
+  readonly property var parsedInput: TodoStore.parseTaskInput(taskInput.text, root.selectedProfile)
+  readonly property bool hasValidTitle: Boolean(parsedInput && parsedInput.title && parsedInput.title.trim().length > 0)
+  readonly property bool canSubmit: hasValidTitle
+
   property var reminderPresets: TodoStore.getReminderPresets()
 
   function refreshReminderPresets() {
@@ -198,6 +203,7 @@ Item {
 
   onOpenedChanged: {
     if (root.opened) {
+      root.showTitleError = false
       root.refreshReminderPresets()
     }
   }
@@ -209,12 +215,14 @@ Item {
   }
 
   function submit() {
-    var rawText = taskInput.text.trim()
-    if (!rawText) {
-      root.dismiss()
+    if (!root.canSubmit) {
+      root.showTitleError = true
+      root.focusSection = "title"
+      taskInput.forceActiveFocus()
       return
     }
 
+    var rawText = taskInput.text.trim()
     var desc = (showNote && descNotesArea) ? descNotesArea.text.trim() : ""
     var rem = selectedReminder || null
     var loc = (root.attachLocation && root.detectedContext) ? root.detectedContext : null
@@ -520,15 +528,18 @@ Item {
           bottomPadding: Style.space(8)
           background: BorderSurface {
             readonly property bool isNavFocused: (root.focusSection === "title") && !taskInput.activeFocus
+            readonly property bool hasError: root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)
             color: taskInput.activeFocus
-              ? Util.alpha(Color.accent, 0.08)
+              ? Util.alpha(hasError ? (Color.urgent || "#d20f39") : Color.accent, 0.08)
               : Style.controlFill(false, taskInput.hovered, Color.foreground, Color.accent)
-            borderSpec: taskInput.activeFocus
-              ? Border.flat(Color.accent, 2)
-              : (isNavFocused
-                  ? Border.flat(Color.accent, 1)
-                  : (taskInput.hovered ? Border.controlSpec("hover-cursor", Color.foreground, Color.accent)
-                                       : Border.controlSpec("normal", Color.foreground, Color.accent)))
+            borderSpec: hasError
+              ? Border.flat(Color.urgent || "#d20f39", taskInput.activeFocus ? 2 : 1)
+              : (taskInput.activeFocus
+                  ? Border.flat(Color.accent, 2)
+                  : (isNavFocused
+                      ? Border.flat(Color.accent, 1)
+                      : (taskInput.hovered ? Border.controlSpec("hover-cursor", Color.foreground, Color.accent)
+                                           : Border.controlSpec("normal", Color.foreground, Color.accent))))
             radius: Style.cornerRadius
           }
           onAccepted: root.submit()
@@ -568,10 +579,40 @@ Item {
           }
           onTextChanged: {
             root.draftTitle = text
+            if (root.hasValidTitle) {
+              root.showTitleError = false
+            }
             var match = text.match(/#\s*([a-zA-Z0-9_-]+)/)
             if (match) {
               root.selectedProfile = TodoStore.cleanProfileName(match[1])
             }
+          }
+        }
+
+        // Inline validation cue when task title is missing
+        Row {
+          id: titleErrorRow
+          width: parent.width
+          visible: root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)
+          spacing: Style.space(6)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰅚"
+            color: Color.urgent || "#d20f39"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: taskInput.text.trim().length > 0
+              ? ("Title required: add task name after hashtag (e.g. " + taskInput.text.trim() + " My task)")
+              : "Task title is required"
+            color: Color.urgent || "#d20f39"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
           }
         }
 
@@ -852,6 +893,7 @@ Item {
             anchors.rightMargin: Style.space(12)
             anchors.verticalCenter: parent.verticalCenter
             text: {
+              if (root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)) return "⚠ Title required before sending  •  Esc Cancel"
               if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
               return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
@@ -892,14 +934,25 @@ Item {
               fontSize: Style.font.caption
               fontFamily: Style.font.family
               bordered: true
+              enabled: root.canSubmit
+              opacity: root.canSubmit ? 1.0 : 0.4
+              Behavior on opacity { NumberAnimation { duration: 120 } }
               hasCursor: (root.focusSection === "actions") && (root.actionIndex === 1)
               selected: (root.focusSection === "actions") && (root.actionIndex === 1)
               borderSpec: hasCursor
-                ? Border.flat(Color.accent, 2)
+                ? (root.canSubmit ? Border.flat(Color.accent, 2) : Border.flat(Color.muted, 1))
                 : Border.controlSpec("normal", Color.foreground, Color.accent)
-              scale: hasCursor ? 1.05 : 1.0
+              scale: (hasCursor && root.canSubmit) ? 1.05 : 1.0
               Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-              onClicked: root.submit()
+              onClicked: {
+                if (root.canSubmit) {
+                  root.submit()
+                } else {
+                  root.showTitleError = true
+                  root.focusSection = "title"
+                  taskInput.forceActiveFocus()
+                }
+              }
             }
           }
         }
