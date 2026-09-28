@@ -292,25 +292,55 @@ test("detect-context.sh: Script execution & JSON output schema", () => {
 // 8. Active Window Precedence: Focused Zed vs Background VS Code
 // -----------------------------------------------------------------------------
 test("Active Window Precedence: Focused Zed resolves Zed workspace over background VS Code", () => {
-  const home = getHomedir();
-  if (home && fs.existsSync(path.join(home, ".local/share/zed/db/0-stable/db.sqlite"))) {
-    try {
-      const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"dev.zed.zed\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
-      const out = execSync(simCmd, { encoding: "utf8" }).trim();
-      const res = JSON.parse(out);
-      if (res && res.localPath) {
-        assert.ok(
-          !res.localPath.includes("OffBoardingOrga"),
-          "Active window Zed must not be overridden by background VS Code workspace"
-        );
-        assert.ok(
-          res.localPath.includes("42_Projects") || res.localPath.includes("ReadmeSVGJourney"),
-          "Active window Zed must resolve to a Zed workspace"
-        );
-      }
-    } catch {
-      // Execution restricted
-    }
+  if (!canExec("sqlite3") || !canExec("jq") || !canExec("bash")) {
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zed-precedence-test-"));
+  try {
+    // Setup background VS Code workspace
+    const vscodeWs = path.join(tmpDir, "vscode-bg-project");
+    fs.mkdirSync(vscodeWs, { recursive: true });
+    const codeDir = path.join(tmpDir, ".config/Code/User/globalStorage");
+    fs.mkdirSync(codeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(codeDir, "storage.json"),
+      JSON.stringify({
+        windowsState: {
+          lastActiveWindow: {
+            folder: `file://${vscodeWs}`,
+          },
+        },
+      }),
+      "utf8"
+    );
+
+    // Setup active Zed workspace in SQLite DB
+    const zedWs = path.join(tmpDir, "zed-active-project");
+    fs.mkdirSync(zedWs, { recursive: true });
+    const zedDir = path.join(tmpDir, ".local/share/zed/db/0-stable");
+    fs.mkdirSync(zedDir, { recursive: true });
+    const zedDb = path.join(zedDir, "db.sqlite");
+    execSync(
+      `sqlite3 "${zedDb}" "CREATE TABLE workspaces (workspace_id INTEGER PRIMARY KEY, paths TEXT, timestamp TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO workspaces (paths) VALUES ('${zedWs}');"`
+    );
+
+    // Simulate active window being Zed while VS Code is present in background
+    const simCmd = `HOME="${tmpDir}" bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"dev.zed.zed\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+    const out = execSync(simCmd, { encoding: "utf8" }).trim();
+    const res = JSON.parse(out);
+
+    assert.ok(res && res.localPath, "Zed workspace must resolve to a valid localPath");
+    assert.ok(
+      res.localPath.includes("zed-active-project"),
+      "Active window Zed must resolve to the active Zed workspace"
+    );
+    assert.ok(
+      !res.localPath.includes("vscode-bg-project"),
+      "Active window Zed must not be overridden by background VS Code workspace"
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
@@ -318,21 +348,39 @@ test("Active Window Precedence: Focused Zed resolves Zed workspace over backgrou
 // 9. Active Window Precedence: Focused VS Code resolves VS Code workspace
 // -----------------------------------------------------------------------------
 test("Active Window Precedence: Focused VS Code resolves VS Code workspace", () => {
-  const home = getHomedir();
-  if (home && fs.existsSync(path.join(home, ".config/Code/User/globalStorage/storage.json"))) {
-    try {
-      const simCmd = `bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"code\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
-      const out = execSync(simCmd, { encoding: "utf8" }).trim();
-      const res = JSON.parse(out);
-      if (res && res.localPath) {
-        assert.ok(
-          res.localPath.includes("OffBoardingOrga"),
-          "Active window VS Code must resolve to VS Code workspace"
-        );
-      }
-    } catch {
-      // Execution restricted
-    }
+  if (!canExec("jq") || !canExec("bash")) {
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-precedence-test-"));
+  try {
+    const vscodeWs = path.join(tmpDir, "vscode-active-project");
+    fs.mkdirSync(vscodeWs, { recursive: true });
+    const codeDir = path.join(tmpDir, ".config/Code/User/globalStorage");
+    fs.mkdirSync(codeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(codeDir, "storage.json"),
+      JSON.stringify({
+        windowsState: {
+          lastActiveWindow: {
+            folder: `file://${vscodeWs}`,
+          },
+        },
+      }),
+      "utf8"
+    );
+
+    const simCmd = `HOME="${tmpDir}" bash -c 'code=$(sed "s/win_class=\\$(echo.*)/win_class=\\"code\\"/; s/is_terminal_win=true/is_terminal_win=false/" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+    const out = execSync(simCmd, { encoding: "utf8" }).trim();
+    const res = JSON.parse(out);
+
+    assert.ok(res && res.localPath, "VS Code must resolve to a valid localPath");
+    assert.ok(
+      res.localPath.includes("vscode-active-project"),
+      "Active window VS Code must resolve to the active VS Code workspace"
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
@@ -365,9 +413,10 @@ test("Focused Terminal Resolution: Terminal window resolves active terminal work
     const out = execSync(simCmd, { encoding: "utf8" }).trim();
     const res = JSON.parse(out);
     if (res && res.localPath) {
+      const repoName = path.basename(PROJECT_ROOT);
       assert.ok(
-        res.localPath.includes("omarchy-todo-plugin"),
-        "Active terminal window must resolve the active terminal workspace"
+        res.localPath.includes(repoName),
+        `Active terminal window must resolve the active terminal workspace containing ${repoName}`
       );
     }
   } catch {
