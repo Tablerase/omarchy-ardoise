@@ -17,6 +17,7 @@ Rectangle {
   property var snapshots: (root.barWidget && root.barWidget.gitSnapshots) ? root.barWidget.gitSnapshots : []
   property int selectedIndex: 0
   property int activeTab: 0 // 0: Snapshots & Rollback, 1: Sync Settings
+  property int syncFocusIndex: 0 // 0: remoteField, 1: saveRemoteBtn, 2: syncNowBtn
 
   readonly property var selectedSnapshot: (root.snapshots && root.snapshots.length > root.selectedIndex)
     ? root.snapshots[root.selectedIndex]
@@ -24,12 +25,22 @@ Rectangle {
 
   signal closeRequested()
 
+  onActiveTabChanged: {
+    if (activeTab === 0) {
+      root.ensureSnapshotVisible()
+    } else {
+      root.syncFocusIndex = 0
+    }
+    root.forceActiveFocus()
+  }
+
   function open() {
     isOpen = true
     activeTab = 0
     selectedIndex = 0
+    syncFocusIndex = 0
     if (root.barWidget && typeof root.barWidget.refreshGitHistory === "function") {
-      root.barWidget.refreshGitHistory()
+      root.barWidget.refreshGitHistory(true)
     }
     Qt.callLater(function() { root.forceActiveFocus() })
   }
@@ -47,7 +58,7 @@ Rectangle {
   onIsOpenChanged: {
     if (isOpen) {
       if (root.barWidget && typeof root.barWidget.refreshGitHistory === "function") {
-        root.barWidget.refreshGitHistory()
+        root.barWidget.refreshGitHistory(true)
       }
       Qt.callLater(function() { root.forceActiveFocus() })
     }
@@ -64,13 +75,13 @@ Rectangle {
   focus: true
 
   function ensureSnapshotVisible() {
-    if (!snapshotFlickable || root.selectedIndex < 0) return
-    var itemHeight = Style.space(42)
-    var itemY = root.selectedIndex * (itemHeight + Style.space(4))
-    if (itemY < snapshotFlickable.contentY) {
-      snapshotFlickable.contentY = itemY
-    } else if (itemY + itemHeight > snapshotFlickable.contentY + snapshotFlickable.height) {
-      snapshotFlickable.contentY = Math.max(0, itemY + itemHeight - snapshotFlickable.height)
+    if (snapshotList && root.selectedIndex >= 0 && root.selectedIndex < snapshotList.count) {
+      snapshotList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
+    }
+    if (root.snapshots && root.selectedIndex >= root.snapshots.length - 5) {
+      if (root.barWidget && typeof root.barWidget.loadMoreGitHistory === "function") {
+        root.barWidget.loadMoreGitHistory()
+      }
     }
   }
 
@@ -96,13 +107,13 @@ Rectangle {
       return
     }
 
-    // Tab switching with 1, 2, h, l, Tab, Backtab
-    if (event.key === Qt.Key_1 || event.text === "1" || event.text === "h") {
+    // Tab switching with 1, 2, Tab, Backtab
+    if (event.key === Qt.Key_1 || event.text === "1") {
       event.accepted = true
       root.activeTab = 0
       return
     }
-    if (event.key === Qt.Key_2 || event.text === "2" || event.text === "l") {
+    if (event.key === Qt.Key_2 || event.text === "2") {
       event.accepted = true
       root.activeTab = 1
       return
@@ -128,6 +139,11 @@ Rectangle {
           root.selectedIndex = Math.max(0, root.selectedIndex - 1)
           root.ensureSnapshotVisible()
         }
+        return
+      }
+      if (event.key === Qt.Key_L || event.text === "l") {
+        event.accepted = true
+        root.activeTab = 1
         return
       }
       if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
@@ -158,6 +174,67 @@ Rectangle {
         if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
           root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)
         }
+        return
+      }
+    } else if (root.activeTab === 1) {
+      if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
+        event.accepted = true
+        if (root.syncFocusIndex === 0) {
+          root.syncFocusIndex = 1
+        }
+        return
+      }
+      if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+        event.accepted = true
+        if (root.syncFocusIndex > 0) {
+          root.syncFocusIndex = 0
+        }
+        return
+      }
+      if (event.key === Qt.Key_L || event.key === Qt.Key_Right || event.text === "l") {
+        event.accepted = true
+        if (root.syncFocusIndex === 1) {
+          root.syncFocusIndex = 2
+        }
+        return
+      }
+      if (event.key === Qt.Key_H || event.key === Qt.Key_Left || event.text === "h") {
+        event.accepted = true
+        if (root.syncFocusIndex === 2) {
+          root.syncFocusIndex = 1
+        } else {
+          root.activeTab = 0
+        }
+        return
+      }
+      if (event.key === Qt.Key_I || event.key === Qt.Key_A || event.text === "i" || event.text === "a" || event.text === "/") {
+        if (root.syncFocusIndex === 0) {
+          event.accepted = true
+          remoteField.forceActiveFocus()
+          return
+        }
+      }
+      if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+        event.accepted = true
+        if (root.syncFocusIndex === 0) {
+          remoteField.forceActiveFocus()
+        } else if (root.syncFocusIndex === 1) {
+          saveRemoteBtn.clicked()
+        } else if (root.syncFocusIndex === 2) {
+          syncNowBtn.clicked()
+        }
+        return
+      }
+      if (event.text === "s" || event.key === Qt.Key_S) {
+        event.accepted = true
+        syncNowBtn.clicked()
+        return
+      }
+      if (root.syncFocusIndex === 0 && event.text && event.text.length === 1 && !event.modifiers && event.text !== "j" && event.text !== "k" && event.text !== "h" && event.text !== "l") {
+        event.accepted = true
+        remoteField.forceActiveFocus()
+        remoteField.text += event.text
+        remoteField.cursorPosition = remoteField.text.length
         return
       }
     }
@@ -304,146 +381,146 @@ Rectangle {
         anchors.fill: parent
         spacing: Style.space(6)
 
-        // Snapshot Flickable List
-        Flickable {
-          id: snapshotFlickable
+        // Snapshot Virtualized List
+        Item {
+          id: listContainer
           width: parent.width
           height: parent.height - actionRow.implicitHeight - Style.space(10)
-          contentWidth: width
-          contentHeight: snapshotCol.implicitHeight
-          clip: true
-          boundsBehavior: Flickable.StopAtBounds
 
-          ScrollBar.vertical: ScrollBar {
-            policy: snapshotCol.implicitHeight > snapshotFlickable.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-          }
-
-          Column {
-            id: snapshotCol
-            width: parent.width
+          ListView {
+            id: snapshotList
+            anchors.fill: parent
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
             spacing: Style.space(4)
+            model: root.snapshots
+            currentIndex: root.selectedIndex
 
-            Repeater {
-              model: root.snapshots
+            ScrollBar.vertical: ScrollBar {
+              policy: snapshotList.contentHeight > snapshotList.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+            }
 
-              Rectangle {
-                id: snapshotItem
-                required property var modelData
-                required property int index
+            onAtYEndChanged: {
+              if (atYEnd && root.barWidget && typeof root.barWidget.loadMoreGitHistory === "function") {
+                root.barWidget.loadMoreGitHistory()
+              }
+            }
 
-                readonly property bool isSelected: root.selectedIndex === index
-                readonly property bool isLocalDevice: String(modelData.deviceName || "").toLowerCase() === String(root.deviceName).toLowerCase()
+            delegate: Rectangle {
+              id: snapshotItem
+              required property var modelData
+              required property int index
 
-                width: snapshotCol.width
-                implicitHeight: itemLayout.implicitHeight + Style.space(8)
-                radius: Style.cornerRadius
-                color: isSelected
-                  ? Util.alpha(Color.accent, 0.14)
-                  : (itemHover.containsMouse ? Color.menu.selectedBackground : Color.menu.selectedBackground)
-                border.color: isSelected ? Color.accent : Color.menu.border
-                border.width: isSelected ? 1.5 : 1
+              readonly property bool isSelected: root.selectedIndex === index
+              readonly property bool isLocalDevice: String(modelData.deviceName || "").toLowerCase() === String(root.deviceName).toLowerCase()
 
-                MouseArea {
-                  id: itemHover
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  onClicked: {
-                    root.selectedIndex = snapshotItem.index
-                    root.forceActiveFocus()
+              width: snapshotList.width
+              implicitHeight: itemLayout.implicitHeight + Style.space(8)
+              radius: Style.cornerRadius
+              color: isSelected
+                ? Util.alpha(Color.accent, 0.14)
+                : (itemHover.containsMouse ? Color.menu.selectedBackground : Color.menu.selectedBackground)
+              border.color: isSelected ? Color.accent : Color.menu.border
+              border.width: isSelected ? 1.5 : 1
+
+              MouseArea {
+                id: itemHover
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                  root.selectedIndex = snapshotItem.index
+                  root.forceActiveFocus()
+                }
+              }
+
+              Row {
+                id: itemLayout
+                anchors.fill: parent
+                anchors.margins: Style.space(6)
+                spacing: Style.space(8)
+
+                // Device Tag Badge
+                Rectangle {
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: devLabel.implicitWidth + Style.space(8)
+                  implicitHeight: devLabel.implicitHeight + Style.space(4)
+                  radius: Style.cornerRadius * 0.5
+                  color: snapshotItem.isLocalDevice ? Util.alpha(Color.accent, 0.25) : Util.alpha(Color.muted, 0.2)
+
+                  Text {
+                    id: devLabel
+                    anchors.centerIn: parent
+                    text: snapshotItem.modelData.deviceName || "unknown"
+                    color: snapshotItem.isLocalDevice ? Color.accent : Color.muted
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.85
+                    font.bold: true
                   }
                 }
 
-                Row {
-                  id: itemLayout
-                  anchors.fill: parent
-                  anchors.margins: Style.space(6)
-                  spacing: Style.space(8)
+                // Message and relative date
+                Column {
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - devLabel.parent.width - countBadge.width - Style.space(24)
+                  spacing: Style.space(2)
 
-                  // Device Tag Badge
-                  Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    implicitWidth: devLabel.implicitWidth + Style.space(8)
-                    implicitHeight: devLabel.implicitHeight + Style.space(4)
-                    radius: Style.cornerRadius * 0.5
-                    color: snapshotItem.isLocalDevice ? Util.alpha(Color.accent, 0.25) : Util.alpha(Color.muted, 0.2)
-
-                    Text {
-                      id: devLabel
-                      anchors.centerIn: parent
-                      text: snapshotItem.modelData.deviceName || "unknown"
-                      color: snapshotItem.isLocalDevice ? Color.accent : Color.muted
-                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                      font.pixelSize: Style.font.caption * 0.85
-                      font.bold: true
-                    }
+                  Text {
+                    width: parent.width
+                    text: snapshotItem.modelData.cleanMessage || snapshotItem.modelData.message || ""
+                    color: root.barForeground
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
                   }
 
-                  // Message and relative date
-                  Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - devLabel.parent.width - countBadge.width - Style.space(24)
-                    spacing: Style.space(2)
-
+                  Row {
+                    spacing: Style.space(6)
                     Text {
-                      width: parent.width
-                      text: snapshotItem.modelData.cleanMessage || snapshotItem.modelData.message || ""
-                      color: root.barForeground
-                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                      font.pixelSize: Style.font.caption
-                      elide: Text.ElideRight
+                      text: snapshotItem.modelData.shortHash
+                      color: Color.muted
+                      font.family: Style.font.monospace
+                      font.pixelSize: Style.font.caption * 0.8
                     }
-
-                    Row {
-                      spacing: Style.space(6)
-                      Text {
-                        text: snapshotItem.modelData.shortHash
-                        color: Color.muted
-                        font.family: Style.font.monospace
-                        font.pixelSize: Style.font.caption * 0.8
-                      }
-                      Text {
-                        text: "• " + GitSync.formatRelativeTime(snapshotItem.modelData.timestamp)
-                        color: Color.muted
-                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                        font.pixelSize: Style.font.caption * 0.8
-                      }
-                    }
-                  }
-
-                  // Task Count Badge
-                  Rectangle {
-                    id: countBadge
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: snapshotItem.modelData.pendingCount !== undefined
-                    implicitWidth: countText.implicitWidth + Style.space(6)
-                    implicitHeight: countText.implicitHeight + Style.space(2)
-                    radius: Style.cornerRadius * 0.4
-                    color: Util.alpha(Color.muted, 0.15)
-
                     Text {
-                      id: countText
-                      anchors.centerIn: parent
-                      text: (snapshotItem.modelData.pendingCount !== undefined ? snapshotItem.modelData.pendingCount : "") + " pending"
+                      text: "• " + GitSync.formatRelativeTime(snapshotItem.modelData.timestamp)
                       color: Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption * 0.8
                     }
                   }
                 }
+
+                // Task Count Badge
+                Rectangle {
+                  id: countBadge
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: snapshotItem.modelData.pendingCount !== undefined
+                  implicitWidth: countText.implicitWidth + Style.space(6)
+                  implicitHeight: countText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.4
+                  color: Util.alpha(Color.muted, 0.15)
+
+                  Text {
+                    id: countText
+                    anchors.centerIn: parent
+                    text: (snapshotItem.modelData.pendingCount !== undefined ? snapshotItem.modelData.pendingCount : "") + " pending"
+                    color: Color.muted
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.8
+                  }
+                }
               }
             }
+          }
 
-            // Empty state
-            Text {
-              visible: !root.snapshots || root.snapshots.length === 0
-              width: parent.width
-              horizontalAlignment: Text.AlignHCenter
-              text: "No git snapshots found. Add or edit tasks to create snapshots."
-              color: Color.muted
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.caption
-              topPadding: Style.space(20)
-            }
+          // Empty state
+          Text {
+            anchors.centerIn: parent
+            visible: !root.snapshots || root.snapshots.length === 0
+            text: "No git snapshots found. Add or edit tasks to create snapshots."
+            color: Color.muted
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
           }
         }
 
@@ -534,14 +611,23 @@ Rectangle {
           bottomPadding: Style.space(8)
 
           background: BorderSurface {
+            readonly property bool isNavFocused: (root.activeTab === 1) && (root.syncFocusIndex === 0) && !remoteField.activeFocus
             color: remoteField.activeFocus
               ? Util.alpha(Color.accent, 0.08)
               : Style.controlFill(false, remoteField.hovered, root.barForeground, Color.accent)
             borderSpec: remoteField.activeFocus
               ? Border.flat(Color.accent, 2)
-              : (remoteField.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
-                                     : Border.controlSpec("normal", root.barForeground, Color.accent))
+              : (isNavFocused
+                  ? Border.flat(Color.accent, 1)
+                  : (remoteField.hovered ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                                         : Border.controlSpec("normal", root.barForeground, Color.accent)))
             radius: Style.cornerRadius
+          }
+
+          onActiveFocusChanged: {
+            if (activeFocus) {
+              root.syncFocusIndex = 0
+            }
           }
 
           Keys.onEscapePressed: function(event) {
@@ -550,8 +636,42 @@ Rectangle {
               root.close()
             } else {
               remoteField.focus = false
+              root.syncFocusIndex = 0
               root.forceActiveFocus()
             }
+          }
+
+          Keys.onDownPressed: function(event) {
+            event.accepted = true
+            remoteField.focus = false
+            root.syncFocusIndex = 1
+            root.forceActiveFocus()
+          }
+
+          Keys.onTabPressed: function(event) {
+            event.accepted = true
+            remoteField.focus = false
+            root.syncFocusIndex = 1
+            root.forceActiveFocus()
+          }
+
+          Keys.onReturnPressed: function(event) {
+            event.accepted = true
+            if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
+              root.barWidget.setRemoteUrl(remoteField.text)
+            }
+            remoteField.focus = false
+            root.syncFocusIndex = 1
+            root.forceActiveFocus()
+          }
+          Keys.onEnterPressed: function(event) {
+            event.accepted = true
+            if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
+              root.barWidget.setRemoteUrl(remoteField.text)
+            }
+            remoteField.focus = false
+            root.syncFocusIndex = 1
+            root.forceActiveFocus()
           }
         }
 
@@ -563,10 +683,20 @@ Rectangle {
             text: "Save Remote"
             fontSize: Style.font.caption
             bordered: true
+            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 1)
             onClicked: {
               if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
                 root.barWidget.setRemoteUrl(remoteField.text)
               }
+              root.forceActiveFocus()
+            }
+
+            HoverHandler { id: saveRemoteHover }
+            ShortcutToolTip {
+              visible: saveRemoteHover.hovered
+              description: "Save remote repository URL"
+              shortcut: "Enter"
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             }
           }
 
@@ -575,10 +705,20 @@ Rectangle {
             text: "Sync Now"
             fontSize: Style.font.caption
             bordered: true
+            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 2)
             onClicked: {
               if (root.barWidget && typeof root.barWidget.syncWithRemote === "function") {
                 root.barWidget.syncWithRemote()
               }
+              root.forceActiveFocus()
+            }
+
+            HoverHandler { id: syncNowHover }
+            ShortcutToolTip {
+              visible: syncNowHover.hovered
+              description: "Synchronize with remote repository"
+              shortcut: "Enter / s"
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             }
           }
         }

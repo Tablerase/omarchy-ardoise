@@ -242,15 +242,19 @@ BarWidget {
     onExited: root.refreshGitHistory()
   }
 
+  property int gitLogLimit: 30
+  property bool gitLogHasMore: true
+
   Process {
     id: gitLogProc
-    command: ["git", "-C", root.dataDirPath, "log", "-n", "50", "--pretty=format:%H|%an|%ae|%at|%s"]
+    command: ["git", "-C", root.dataDirPath, "log", "-n", String(root.gitLogLimit), "--pretty=format:%H|%an|%ae|%at|%s"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         var parsed = GitSync.parseGitLog(text)
         root.gitSnapshots = parsed
         root.lastGitLog = JSON.stringify(parsed)
+        root.gitLogHasMore = (parsed.length >= root.gitLogLimit)
       }
     }
   }
@@ -372,9 +376,19 @@ BarWidget {
     }
   }
 
-  function refreshGitHistory() {
+  function refreshGitHistory(resetLimit) {
+    if (resetLimit !== false) {
+      root.gitLogLimit = 30
+    }
     gitLogProc.running = true
     gitRemoteProc.running = true
+  }
+
+  function loadMoreGitHistory() {
+    if (!gitLogProc.running && root.gitLogHasMore) {
+      root.gitLogLimit += 30
+      gitLogProc.running = true
+    }
   }
 
   function setRemoteUrl(urlStr) {

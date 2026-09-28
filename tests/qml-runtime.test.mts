@@ -407,6 +407,35 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   // 3. HelpModal parity
   assert.ok(helpModalContent.includes("KeyBadge {"), "HelpModal must render shortcut items using KeyBadge");
   assert.ok(helpModalContent.includes("ShortcutToolTip {"), "HelpModal closeHelpBtn must use ShortcutToolTip");
+  assert.ok(
+    helpModalContent.includes("Keys.onPressed: function(event) {") &&
+      helpModalContent.includes('event.key === Qt.Key_J || event.text === "j"') &&
+      helpModalContent.includes('root.focusSection = "search"'),
+    "HelpModal closeHelpBtn must support vim motion navigation down to search"
+  );
+
+  const gitModalPath = path.join(repoDir, "ui", "GitModal.qml");
+  const gitModalContent = fs.readFileSync(gitModalPath, "utf8");
+  const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  assert.ok(
+    gitModalContent.includes("ListView {") &&
+      gitModalContent.includes("id: snapshotList") &&
+      gitModalContent.includes("loadMoreGitHistory") &&
+      gitModalContent.includes("positionViewAtIndex"),
+    "GitModal must use virtualized ListView with lazy-loaded pagination and positionViewAtIndex"
+  );
+  assert.ok(
+    barWidgetContent.includes("function loadMoreGitHistory(") &&
+      barWidgetContent.includes("property int gitLogLimit:"),
+    "BarWidget must declare gitLogLimit and loadMoreGitHistory for lazy-loading snapshots"
+  );
+  assert.ok(
+    gitModalContent.includes("syncFocusIndex") &&
+      gitModalContent.includes("saveRemoteBtn") &&
+      gitModalContent.includes("syncNowBtn") &&
+      gitModalContent.includes("hasCursor: (root.activeTab === 1)"),
+    "GitModal must support full vim motion navigation and cursor highlighting in Tab 1"
+  );
 
   // 4. PanelContent button tooltips using ShortcutToolTip
   const expectedButtons = [

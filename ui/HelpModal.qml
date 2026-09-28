@@ -213,6 +213,31 @@ Rectangle {
           helpFlickable.focus = true
           helpFlickable.forceActiveFocus()
         }
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_J || event.text === "j") {
+            event.accepted = true
+            root.focusSection = "search"
+            root.forceActiveFocus()
+            return
+          }
+          if (event.key === Qt.Key_K || event.text === "k") {
+            event.accepted = true
+            root.focusSection = "list"
+            helpFlickable.focus = true
+            helpFlickable.forceActiveFocus()
+            return
+          }
+          if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "?") {
+            event.accepted = true
+            root.close()
+            return
+          }
+          if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+            event.accepted = true
+            root.close()
+            return
+          }
+        }
       }
     }
 
