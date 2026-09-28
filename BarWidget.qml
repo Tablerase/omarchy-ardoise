@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -210,39 +211,86 @@ BarWidget {
     }
   }
 
+  function widgetScreenName(w) {
+    if (!w) return ""
+    var win = null
+    if (w.button && w.button.QsWindow) win = w.button.QsWindow.window
+    if (!win && w.QsWindow) win = w.QsWindow.window
+    if (!win && w.parent && w.parent.QsWindow) win = w.parent.QsWindow.window
+    return (win && win.screen) ? String(win.screen.name || "") : ""
+  }
+
+  readonly property string screenName: root.widgetScreenName(root)
+
+  function allWidgets() {
+    var items = (root.bar && typeof root.bar.moduleWidgets === "function")
+      ? root.bar.moduleWidgets(root.moduleName)
+      : []
+    return (items && items.length > 0) ? items : [root]
+  }
+
+  function findTargetWidget() {
+    var widgets = root.allWidgets()
+    if (widgets.length <= 1) return widgets[0] || root
+
+    // If any widget's panel is currently open, target that one so toggle/close acts on it
+    for (var i = 0; i < widgets.length; i++) {
+      if (widgets[i] && widgets[i].opened) return widgets[i]
+    }
+
+    // Otherwise find the widget on the currently focused monitor
+    var focusedName = (typeof Hyprland !== "undefined" && Hyprland && Hyprland.focusedMonitor)
+      ? String(Hyprland.focusedMonitor.name || "")
+      : ""
+
+    if (focusedName) {
+      for (var j = 0; j < widgets.length; j++) {
+        var w = widgets[j]
+        if (w && root.widgetScreenName(w) === focusedName) return w
+      }
+    }
+
+    return widgets[0] || root
+  }
+
   IpcHandler {
     target: "tablerase.ardoise"
 
-    // Route open/close/toggle through the bar's monitor-aware widget selector
-    // so the panel appears on the screen Hyprland reports as focused, not on
-    // whichever monitor registered this IpcHandler first.
-    // Falls back to direct root.* in preview / test environments where bar is null.
+    // Route open/close/toggle to the BarWidget on the focused monitor via
+    // root.bar.moduleWidgets() and Hyprland.focusedMonitor.
     function toggle(): string {
-      if (root.bar && typeof root.bar.summonBarWidget === "function") {
-        if (typeof root.bar.isBarWidgetOpen === "function" && root.bar.isBarWidgetOpen(root.moduleName)) {
-          root.bar.hideBarWidget(root.moduleName)
-        } else {
-          root.bar.summonBarWidget(root.moduleName)
-        }
+      var target = root.findTargetWidget()
+      if (target && typeof target.toggle === "function") {
+        target.toggle()
       } else {
         root.toggle()
       }
       return "ok"
     }
     function open(): string {
-      if (root.bar && typeof root.bar.summonBarWidget === "function") {
-        root.bar.summonBarWidget(root.moduleName)
+      var widgets = root.allWidgets()
+      var target = root.findTargetWidget()
+      // Close other open panels so only the focused monitor panel is shown
+      for (var i = 0; i < widgets.length; i++) {
+        if (widgets[i] && widgets[i] !== target && widgets[i].opened && typeof widgets[i].close === "function") {
+          widgets[i].close()
+        }
+      }
+      if (target && typeof target.open === "function") {
+        target.open()
       } else {
         root.open()
       }
       return "ok"
     }
     function close(): string {
-      if (root.bar && typeof root.bar.hideBarWidget === "function") {
-        root.bar.hideBarWidget(root.moduleName)
-      } else {
-        root.close()
+      var widgets = root.allWidgets()
+      for (var i = 0; i < widgets.length; i++) {
+        if (widgets[i] && widgets[i].opened && typeof widgets[i].close === "function") {
+          widgets[i].close()
+        }
       }
+      root.close()
       return "ok"
     }
     function add(task: string): string { root.addTodo(task); return "ok" }

@@ -255,7 +255,7 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise clear`: Archives and clears completed tasks.
   - `omarchy-shell tablerase.ardoise profiles`: Returns array of available profiles.
   - `omarchy-shell tablerase.ardoise setProfile "<profile>"`: Sets active profile filter.
-  - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility.
+  - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility. In multi-monitor environments, `open` and `toggle` dynamically discover the `BarWidget` on the compositor-focused output via `root.bar.moduleWidgets()` and `Hyprland.focusedMonitor` to summon the panel on the active monitor, while `close` and `toggle` (when already open) target the currently open instance.
   - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
   - `omarchy-shell tablerase.ardoise archiveCount`: Returns count of archived tasks.
 
