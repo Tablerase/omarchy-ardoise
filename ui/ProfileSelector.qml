@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "../TodoStore.js" as TodoStore
@@ -17,7 +18,7 @@ Item {
 
   signal profileSelected(string profileName, int index)
 
-  implicitHeight: Style.space(22)
+  implicitHeight: Style.space(26)
 
   function ensureVisible(idx) {
     if (!profileRepeater || idx < 0 || idx >= profileRepeater.count) return
@@ -48,6 +49,7 @@ Item {
   Flickable {
     id: profileFlickable
     anchors.fill: parent
+    anchors.bottomMargin: Style.space(4)
     contentWidth: profileRow.implicitWidth
     contentHeight: height
     clip: true
@@ -55,6 +57,18 @@ Item {
 
     Behavior on contentX {
       NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+    }
+
+    ScrollBar.horizontal: ScrollBar {
+      id: hScrollBar
+      policy: profileFlickable.contentWidth > profileFlickable.width ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+      implicitHeight: Style.space(3)
+      contentItem: Rectangle {
+        radius: height / 2
+        color: Util.alpha(Color.foreground, hScrollBar.pressed ? 0.5 : (hScrollBar.hovered ? 0.35 : 0.2))
+        Behavior on color { ColorAnimation { duration: 100 } }
+      }
+      background: Item {}
     }
 
     Row {

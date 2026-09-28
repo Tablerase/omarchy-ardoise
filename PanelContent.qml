@@ -20,6 +20,14 @@ Item {
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   readonly property color cardBackground: Color.popups.background
+  // Opaque composite of selectedBackground tint over the solid card base — used as
+  // fadeColor for pill rows inside expanded task drawers so the gradient has real contrast.
+  readonly property color expandedCardColor: Qt.rgba(
+    Color.popups.background.r * (1 - Color.menu.selectedBackground.a) + Color.menu.selectedBackground.r * Color.menu.selectedBackground.a,
+    Color.popups.background.g * (1 - Color.menu.selectedBackground.a) + Color.menu.selectedBackground.g * Color.menu.selectedBackground.a,
+    Color.popups.background.b * (1 - Color.menu.selectedBackground.a) + Color.menu.selectedBackground.b * Color.menu.selectedBackground.a,
+    1.0
+  )
 
   property string currentFilter: "all"
   property var expandedTaskId: -1
@@ -1971,12 +1979,13 @@ Item {
                 Item {
                   id: reminderContainer
                   width: parent.width
-                  implicitHeight: Style.space(22)
+                  implicitHeight: Style.space(26)
 
                   Row {
                     id: reminderLabelRow
                     anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: (Style.space(22) - implicitHeight) / 2
                     spacing: Style.space(4)
 
                     Text {
@@ -1996,7 +2005,7 @@ Item {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
-                    fadeColor: Color.menu.selectedBackground
+                    fadeColor: root.expandedCardColor
                     presets: root.reminderPresets
                     selectedValue: (itemRow.modelData.reminder && itemRow.modelData.reminder.preset) ? itemRow.modelData.reminder.preset : (itemRow.modelData.reminder || "")
                     hasReminder: Boolean(itemRow.modelData.reminder)
@@ -2024,12 +2033,13 @@ Item {
                 Item {
                   id: profReassignContainer
                   width: parent.width
-                  implicitHeight: Style.space(22)
+                  implicitHeight: Style.space(26)
 
                   Row {
                     id: profLabelRow
                     anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: (Style.space(22) - implicitHeight) / 2
                     spacing: Style.space(4)
 
                     Text {
@@ -2049,7 +2059,7 @@ Item {
                     anchors.right: parent.right
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
-                    fadeColor: Color.menu.selectedBackground
+                    fadeColor: root.expandedCardColor
                     profiles: TodoStore.getSortedProfiles(root.store, false, "")
                     selectedProfile: itemRow.modelData.profile || ""
                     focusedIndex: root.expandedProfileIndex
