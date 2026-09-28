@@ -159,11 +159,27 @@ Item {
   }
 
   onShowKeyHelpChanged: {
-    // HelpModal in Panel.qml responds reactively via isOpen: panelContent.showKeyHelp
+    if (showKeyHelp) {
+      if (typeof helpModal !== "undefined" && helpModal) {
+        helpModal.open()
+      }
+    } else {
+      if (typeof helpModal !== "undefined" && helpModal) {
+        helpModal.close()
+      }
+    }
   }
 
   onShowGitModalChanged: {
-    // GitModal in Panel.qml responds reactively via isOpen: panelContent.showGitModal
+    if (showGitModal) {
+      if (typeof gitModal !== "undefined" && gitModal) {
+        gitModal.open()
+      }
+    } else {
+      if (typeof gitModal !== "undefined" && gitModal) {
+        gitModal.close()
+      }
+    }
   }
 
   onExpandedTaskIdChanged: {
@@ -374,7 +390,9 @@ Item {
     addingProfile ||
     root.showKeyHelp ||
     root.showGitModal ||
-    (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1)
+    (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
+    (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus)) ||
+    (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen)
   )
 
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
@@ -2422,6 +2440,34 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         }
       }
+    }
+  }
+
+  // Keybindings & Vim motions search / cheat-sheet overlay
+  Ui.HelpModal {
+    id: helpModal
+    isOpen: root.showKeyHelp
+    bar: root.bar
+    barForeground: root.barForeground
+    detectedShortcut: root.detectedPanelShortcut
+    detectedPanelShortcut: root.detectedPanelShortcut
+    detectedQuickAddShortcut: root.detectedQuickAddShortcut
+    onCloseRequested: {
+      root.showKeyHelp = false
+      root.releaseFocus()
+    }
+  }
+
+  // Git Snapshots & Undo overlay modal
+  Ui.GitModal {
+    id: gitModal
+    isOpen: root.showGitModal
+    bar: root.bar
+    barWidget: root.barWidget
+    barForeground: root.barForeground
+    onCloseRequested: {
+      root.showGitModal = false
+      root.returnFocusRequested()
     }
   }
 }

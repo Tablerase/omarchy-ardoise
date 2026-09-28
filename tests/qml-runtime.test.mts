@@ -340,13 +340,12 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       barWidgetContent.includes("function gitSetRemote("),
     "BarWidget must declare IpcHandler with target 'tablerase.ardoise' and Git snapshot/sync methods"
   );
-  const panelQml = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
   assert.ok(
     panelContent.includes("id: gitBtn") &&
-      panelContent.includes("property bool showGitModal") &&
-      panelQml.includes("id: gitModal") &&
-      panelQml.includes("id: helpModal"),
-    "PanelContent must implement Git button and showGitModal state; Panel.qml must declare gitModal and helpModal at panel level"
+      panelContent.includes("id: gitModal") &&
+      panelContent.includes("id: helpModal") &&
+      panelContent.includes("property bool showGitModal"),
+    "PanelContent must implement Git button, GitModal, HelpModal, and showGitModal state"
   );
 
   // 5. Multi-Engine Context Detection Tool (Prioritizing VS Code)

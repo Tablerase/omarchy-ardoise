@@ -5,7 +5,6 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
-import "./ui" as Ui
 
 Panel {
   id: root
@@ -119,7 +118,7 @@ Panel {
     command: [
       "bash",
       "-c",
-      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + ALT + T\\\", \\\"Ardoise Panel Toggle\\\", \\\"omarchy-shell tablerase.ardoise toggle\\\")\no.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle\nbindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybindings Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
+      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + ALT + T\\\", \\\"Ardoise Panel Toggle\\\", \\\"omarchy-shell tablerase.ardoise toggle\\\")\\no.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle\\nbindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybindings Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
     ]
     onExited: function(exitCode) {
       checkShortcutProc.running = true
@@ -144,7 +143,13 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
-    contentHeight: panel.fittedContentHeight(panelContent.implicitHeight)
+    // When a modal is open, enforce a minimum panel height so the modal
+    // always has enough room to render — independent of task-list content count.
+    contentHeight: panel.fittedContentHeight(
+      (panelContent.showKeyHelp || panelContent.showGitModal)
+        ? Math.max(panelContent.implicitHeight, Style.space(380))
+        : panelContent.implicitHeight
+    )
 
     property bool _returnHandledThisFrame: false
 
@@ -207,36 +212,6 @@ Panel {
         onSwitchPanelRequested: function(direction) {
           root.switchPanel(direction)
         }
-      }
-    }
-
-    // Modals as direct children of KeyboardPanel so they fill the full panel
-    // window height regardless of how many tasks are in PanelContent.
-    Ui.HelpModal {
-      id: helpModal
-      anchors.fill: parent
-      isOpen: panelContent.showKeyHelp
-      bar: root.bar
-      barForeground: panelContent.barForeground
-      detectedShortcut: root.detectedPanelShortcut
-      detectedPanelShortcut: root.detectedPanelShortcut
-      detectedQuickAddShortcut: root.detectedQuickAddShortcut
-      onCloseRequested: {
-        panelContent.showKeyHelp = false
-        panelContent.releaseFocus()
-      }
-    }
-
-    Ui.GitModal {
-      id: gitModal
-      anchors.fill: parent
-      isOpen: panelContent.showGitModal
-      bar: root.bar
-      barWidget: root.barWidget
-      barForeground: panelContent.barForeground
-      onCloseRequested: {
-        panelContent.showGitModal = false
-        panelContent.returnFocusRequested()
       }
     }
   }

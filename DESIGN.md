@@ -259,7 +259,7 @@ Quickshell taskbar widget placed in the status bar.
   - Scroll: Cycles active profile filter.
 - **Shell IPC Contract (`IpcHandler: tablerase.ardoise`)**:
   - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
-  - `omarchy-shell tablerase.ardoise count`: Returns pending task count string.
+  - `omarchy-shell tablerase.ardoise count`: Returns **total** pending task count string. Deliberately *not* rung-scoped: it is a data/scripting contract, whereas the bar badge is a display signal. Do not "fix" this to match the badge — `list` already exposes the full breakdown if a script needs urgency detail.
   - `omarchy-shell tablerase.ardoise add "<title> [#profile]"`: Adds task with optional `#profile`.
   - `omarchy-shell tablerase.ardoise toggleTodo "<id>"`: Toggles task completion (`done`).
   - `omarchy-shell tablerase.ardoise update "<id>" '<fieldsJson>'`: Updates task properties (e.g. reminder, notes, profile).
@@ -334,22 +334,27 @@ Quickshell taskbar widget placed in the status bar.
 
 The mark is a **stateful** Nerd Font MD glyph (Private Use Area) resolved by `TodoStore.getArdoiseIconState()` from `getTaskUrgencyBreakdown()`. Rungs are driven by **urgency, not raw count** — the same approach omarchy's own battery / wifi / volume widgets take, and the same reason: "5–9 tasks" is not actionable, "nothing is overdue" is.
 
-| Rung | Condition | Glyph | Name | Codepoint | Color role |
-|---|---|---|---|---|---|
-| `clear` | `total === 0` | `󰗠` | `check_circle` | `\U000f05e0` | foreground |
-| `pending` | nothing time-critical | `󰝖` | `format_list_checks` | `\U000f0756` | foreground |
-| `due` | `dueToday > 0`, `overdue === 0` | `󱖫` | `list_status` | `\U000f15ab` | accent |
-| `overdue` | `overdue > 0` | `󰀨` | `alert_circle` | `\U000f0028` | **urgent** |
+| Rung | Condition | Glyph | Name | Codepoint | Color role | Badge count |
+|---|---|---|---|---|---|---|
+| `clear` | `total === 0` | `󰗠` | `check_circle` | `\U000f05e0` | foreground | hidden (0) |
+| `pending` | nothing time-critical | `󰝖` | `format_list_checks` | `\U000f0756` | foreground | `total` |
+| `due` | `dueToday > 0`, `overdue === 0` | `󱖫` | `list_status` | `\U000f15ab` | accent | `dueToday` |
+| `overdue` | `overdue > 0` | `󰀨` | `alert_circle` | `\U000f0028` | **urgent** | `overdue` |
 
 **Precedence:** `overdue` > `due` > `pending` > `clear`. A store with nothing pending is always `clear`, regardless of reminder history, because completed tasks are excluded from the breakdown.
 
 **Design constraints (guarded by tests in `tests/TodoStore.test.mts`):**
+- **Glyph, color, and badge number are one resolution.** All three come from a single `getArdoiseIconState()` call, so the mark and its count cannot describe different states. Never derive the badge from a separate count call — that is exactly the drift the rung-scoped `count` field exists to prevent.
+- The badge count is always the **rung's own subset**, never the total pending. A reader glancing at the bar sees "3 overdue", not "12 tasks with 3 overdue"; total pending is one hover away in the tooltip. Because the `due` rung is only reachable when `overdue === 0`, and `overdue` outranks `due`, the count is never ambiguous at any rung.
+- `count <= total` always, and `count > 0` on every non-`clear` rung.
 - Every rung carries a **distinct glyph** — a stateful mark must not silently repeat an icon, or the widget appears to flicker between two meanings.
 - The two extremes deliberately **share a filled-circle silhouette** (`check_circle` ↔ `alert_circle`) so the mark keeps a stable identity while only the interior glyph and color change. The middle rungs are lists.
 - `check_all` (`\U000f012d`) is **rejected** as the `clear` rung: it is a bare diagonal tick with no enclosure and rasterizes to a near-invisible speck at 13 px.
 - Ladder rungs must **not** be built from near-identical gray list glyphs (e.g. `format_list_bulleted` → `playlist_check` → `view_list`). At 13 px those are indistinguishable; escalation has to change shape.
 
 **Consistency contract:** the same ladder renders at the bar (`Style.bar.iconFont` = 13 px), the panel brand header, and the QuickAdd header (`Style.font.subtitle`). Do not pin a static brand glyph at any of the three surfaces.
+
+**Scope boundary:** the ladder governs the *brand mark and the bar badge only*. The panel's "All" filter-pill count and its `"N pending"` header label stay total/filter-scoped, because they describe the active filter rather than the urgency state. The panel brand mark may still turn urgent while its header reads "12 pending"; that is acceptable because the panel body renders per-task urgency stripes and due markers.
 
 ### Other Icon Glyphs (Nerd Font MD)
 - **Clock / Reminder**: `󰥔` (`\U000f0954`) — *Never use avatar `󰀉` for reminders!*
