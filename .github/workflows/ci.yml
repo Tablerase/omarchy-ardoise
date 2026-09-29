@@ -7,6 +7,16 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  # Omarchy commit providing the shell modules the QML tests mount
+  # (shell/Commons, shell/Ui) and the manifest validator.
+  #
+  # Pinned deliberately: tracking a branch means any upstream commit can turn
+  # this repo's CI red for reasons unrelated to the change under test. Bump
+  # this when you want to re-test against a newer Omarchy — see
+  # AGENTS.md "Test Tiers" for the procedure.
+  OMARCHY_REF: b421b1b479ee9ea0863792282eee4ffeb50923dc
+
 jobs:
   test:
     name: Lint, Typecheck & Test (Arch Linux)
@@ -18,28 +28,53 @@ jobs:
         run: echo "/usr/lib/qt6/bin" >> "$GITHUB_PATH"
 
       - name: Install Dependencies
-        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno jq
+        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs jq
 
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      # The QML tests mount Omarchy's shell modules so `import qs.Commons`
+      # and `import qs.Ui` resolve. Fetch only what is needed, at a fixed
+      # commit, so the run is reproducible.
+      - name: Fetch Omarchy Shell Modules
+        run: |
+          set -euo pipefail
+          git init -q /tmp/omarchy
+          cd /tmp/omarchy
+          git remote add origin https://github.com/omacom/omarchy.git
+          git sparse-checkout init --cone
+          git sparse-checkout set shell/Commons shell/Ui bin
+          git fetch -q --depth 1 origin "$OMARCHY_REF"
+          git checkout -q FETCH_HEAD
+          echo "export OMARCHY_PATH=/tmp/omarchy" >> "$GITHUB_ENV"
+          test -d /tmp/omarchy/shell/Commons
+          test -d /tmp/omarchy/shell/Ui
+          test -f /tmp/omarchy/bin/omarchy-plugin-validate
+          echo "OMARCHY $(git rev-parse --short FETCH_HEAD) ready"
+
       - name: Lint QML Files
-        run: qmllint *.qml
+        run: qmllint *.qml ui/*.qml
 
       - name: Typecheck Store Logic
-        run: deno check TodoStore.js
+        run: deno check TodoStore.js PanelLogic.js GitSync.js
 
-      - name: Run Unit Tests
-        run: deno test --no-check --allow-read tests/
-
+      # Real validator from the pinned Omarchy checkout, not hand-rolled jq
+      # field checks: it also enforces entry-point existence per kind, safe
+      # relative paths, and absence of symlinks in the plugin folder.
       - name: Validate Plugin Manifest
-        run: |
-          jq -e . manifest.json
-          jq -e '.schemaVersion == 1' manifest.json
-          jq -e '.id == "tablerase.ardoise"' manifest.json
-          test -f BarWidget.qml
-          test -f QuickAdd.qml
-          test -f Service.qml
+        run: bash /tmp/omarchy/bin/omarchy-plugin-validate .
+
+      # Node, not Deno, for the test run - matching `npm run test` locally.
+      # Deno's permission model makes every `execSync` in a guard throw, and
+      # those guards call t.skip(), so a Deno run silently reported "83
+      # passed" while skipping every subprocess-backed test.
+      - name: Run Unit Tests
+        env:
+          # Guards throw instead of skipping for prerequisites CI must provide,
+          # so a missing dependency is a red build rather than a green lie.
+          CI: "1"
+          QT_QPA_PLATFORM: offscreen
+        run: node --experimental-strip-types --test tests/*.test.mts
 
   release:
     name: GitHub Release

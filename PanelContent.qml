@@ -1316,26 +1316,6 @@ Item {
         onHoveredChanged: {
           if (!hovered) {
             root.mouseMovementDetected = false
-            if (root.expandedTaskId !== -1 && !root.expandedViaKeyboard) {
-              listFoldTimer.restart()
-            }
-          } else {
-            listFoldTimer.stop()
-          }
-        }
-      }
-
-      Timer {
-        id: listFoldTimer
-        interval: 350
-        repeat: false
-        onTriggered: {
-          if (root.expandedTaskId !== -1 && !root.expandedViaKeyboard) {
-            if (root.descArea && root.descArea.editorActiveFocus) {
-              return
-            }
-            root.savePendingNotes()
-            root.expandedTaskId = -1
           }
         }
       }
@@ -1582,54 +1562,9 @@ Item {
 
               HoverHandler {
                 id: rowHoverHandler
-                onHoveredChanged: {
-                  if (hovered) {
-                    if (!root.mouseMovementDetected) return
-                    hoverFoldTimer.stop()
-                    if (!itemRow.isExpanded) {
-                      hoverExpandTimer.restart()
-                    }
-                  } else {
-                    hoverExpandTimer.stop()
-                    if (itemRow.isExpanded && !root.expandedViaKeyboard) {
-                      hoverFoldTimer.restart()
-                    }
-                  }
-                }
-              }
-
-              Timer {
-                id: hoverExpandTimer
-                interval: 1500
-                repeat: false
-                onTriggered: {
-                  if (rowHoverHandler.hovered && !itemRow.isExpanded && root.mouseMovementDetected) {
-                    root.savePendingNotes()
-                    root.cursorIndex = delegateRoot.index
-                    root.expandedTaskId = itemRow.modelData.id
-                    root.expandedViaKeyboard = false
-                  }
-                }
-              }
-
-              Timer {
-                id: hoverFoldTimer
-                interval: 350
-                repeat: false
-                onTriggered: {
-                  if (itemRow.isExpanded && !rowHoverHandler.hovered && !root.expandedViaKeyboard) {
-                    if (root.descArea && root.descArea.editorActiveFocus) {
-                      return
-                    }
-                    root.savePendingNotes()
-                    root.expandedTaskId = -1
-                  }
-                }
               }
 
               onIsExpandedChanged: {
-                hoverExpandTimer.stop()
-                hoverFoldTimer.stop()
                 if (itemRow.isExpanded) {
                   root.descArea = descArea
                   var profs = TodoStore.getSortedProfiles(root.store, false, "")
@@ -1655,14 +1590,9 @@ Item {
                 onPositionChanged: {
                   if (!root.mouseMovementDetected) {
                     root.mouseMovementDetected = true
-                    if (rowHoverHandler.hovered && !itemRow.isExpanded) {
-                      hoverExpandTimer.restart()
-                    }
                   }
                 }
                 onClicked: {
-                  hoverExpandTimer.stop()
-                  hoverFoldTimer.stop()
                   root.cursorIndex = delegateRoot.index
                   root.focusSection = "tasks"
                   root.cursorActive = true
@@ -2144,14 +2074,9 @@ Item {
                     if (editorActiveFocus) {
                       root.descArea = descArea
                       root.expandedSubSection = "notes"
-                    } else if (root.descArea === descArea && !editorActiveFocus) {
-                      if (itemRow.isExpanded && !rowHoverHandler.hovered && !root.expandedViaKeyboard) {
-                        hoverFoldTimer.restart()
-                      }
                     }
                   }
                   onEscapePressed: {
-                    hoverFoldTimer.stop()
                     root.focusSection = "tasks"
                     root.cursorActive = true
                     root.expandedViaKeyboard = true
@@ -2168,7 +2093,6 @@ Item {
                     root.savePendingNotes()
                   }
                   onSubmitted: {
-                    hoverFoldTimer.stop()
                     root.focusSection = "tasks"
                     root.cursorActive = true
                     root.expandedViaKeyboard = true
@@ -2185,7 +2109,6 @@ Item {
                     root.savePendingNotes()
                   }
                   onTabPressed: function(direction) {
-                    hoverFoldTimer.stop()
                     root.focusSection = "tasks"
                     root.cursorActive = true
                     root.expandedViaKeyboard = true

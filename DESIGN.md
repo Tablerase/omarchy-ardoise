@@ -25,10 +25,10 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
    - Unsaved Quick Add modal drafts (title, description, profile, reminder) are automatically retained in state and restored if the modal is dismissed accidentally. Drafts can be cleared via <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> or the "Clear" action.
 5. **No Layout Overflow**:
    - Profile names, tags, and titles must gracefully wrap (`Flow`) or elide (`Text.ElideRight`) to prevent pushing buttons or cards outside visible geometry.
-6. **Separation of Mouse Hover Preview vs. Keyboard Expansion**:
-   - **Keyboard Navigation (<kbd>Enter</kbd> / <kbd>e</kbd>)**: Explicit toggle. Opening an item via keyboard marks it `expandedViaKeyboard = true`, preventing mouse hover fold timers (`hoverFoldTimer`, `listFoldTimer`) from collapsing the drawer when the mouse rests elsewhere. Navigating with <kbd>j</kbd>/<kbd>k</kbd> does not auto-expand items.
-   - **Mouse Hover Preview**: Hovering over a task row for 1500ms auto-expands the drawer only after actual mouse movement has been detected (`mouseMovementDetected`). When the panel opens under a stationary mouse cursor, auto-expansion is suppressed to prevent center/random tasks from opening over keyboard selection. Leaving the row folds the preview after 350ms (unless notes editor is focused). Starting keyboard motion (<kbd>j</kbd>/<kbd>k</kbd>/<kbd>Tab</kbd>) immediately collapses temporary hover previews.
-   - **Mouse Click Expansion**: Clicking the chevron expand button on a row explicitly expands it (`expandedViaKeyboard = true`), keeping it open while interacting with notes and controls.
+6. **Strictly Explicit Drawer Expansion (No Hover Auto-Expand)**:
+   - **Keyboard Navigation (<kbd>Enter</kbd> / <kbd>e</kbd>)**: Explicit toggle. Opening an item via keyboard marks it `expandedViaKeyboard = true`. Navigating with <kbd>j</kbd>/<kbd>k</kbd> does not auto-expand items.
+   - **Mouse Click Expansion**: Clicking the chevron expand button on a row (`rowExpandBtn`), or clicking the time/due chip (`remBadge`), explicitly expands it (`expandedViaKeyboard = true`), keeping it open while interacting with notes and controls.
+   - **No Hover Auto-Expansion**: Hovering over a task row or chips never auto-expands the drawer. This guarantees that inspecting tooltips (due dates, git repository paths) and resting the mouse cursor never cause accidental accordion bouncing or layout shifting.
 7. **Multi-Repo & Codebase Context Integrity**:
    - Tasks support prefix-only multi-repo hashtag syntax: `#project/repo #tag1 #tag2 Title`.
    - Projects represent high-level conceptual umbrellas (e.g. `#omarchy`), while repositories represent physical codebases (e.g. `ardoise`, `shell`).
@@ -207,7 +207,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        2. **Active Incomplete Tasks (Middle Tier)**: Incomplete tasks without reminders, sorted by recency descending (newest tasks appear first).
        3. **Completed Tasks (Bottom Tier / Fold)**: Completed tasks sink into the completed fold, sorted by "last completed" descending (most recently completed tasks appear at the top of the completed section).
    - **Expanded Task Drawer (`itemRow.isExpanded`)**:
-     - Auto-expand via mouse hover (1500ms) only active when mouse movement is detected; auto-folds 350ms after leave or instantly on keyboard motion.
+     - Strictly explicit expansion via keyboard (<kbd>Enter</kbd>), clicking the expand chevron button (`󰅀`), or clicking the time/due chip (`remBadge`) to open reminders. The legacy hover-to-expand timer mechanic has been removed entirely, ensuring that moving the mouse across tasks, reading chip tooltips, or resting the cursor never causes unexpected drawer expansion, layout shifts, or accordion bouncing.
      - Explicit keyboard expansion (<kbd>Enter</kbd>) keeps drawer open until explicitly toggled or closed, auto-aligning item to the top of the viewport.
      - **Synchronized Row Expansion & Fluid Motion**: Expanding/collapsing a task drawer (`itemRowHeightAnim`, 200ms `OutCubic`) strictly clips the row (`clip: true`) and fades in drawer details (`expandedDetailsCol`, 180ms `OutCubic`). The outer delegate wrapper height updates in the exact same frame (bypassing secondary filters during expand/collapse), ensuring tasks below translate down synchronously in lockstep without visual overlap or delay.
      - Separator.
