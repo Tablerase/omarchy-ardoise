@@ -1580,6 +1580,23 @@ Item {
                 }
               }
 
+              function toggleExpand() {
+                root.savePendingNotes()
+                root.cursorIndex = delegateRoot.index
+                root.focusSection = "tasks"
+                root.cursorActive = true
+                if (itemRow.isExpanded) {
+                  root.expandedTaskId = -1
+                  root.expandedViaKeyboard = false
+                  root.expandedSubSection = "header"
+                } else {
+                  root.expandedTaskId = itemRow.modelData.id
+                  root.expandedViaKeyboard = true
+                  root.expandedSubSection = "header"
+                  root.ensureTaskVisible(delegateRoot.index, true)
+                }
+              }
+
               MouseArea {
                 id: rowMouseArea
                 anchors.left: parent.left
@@ -1587,16 +1604,14 @@ Item {
                 anchors.top: parent.top
                 height: itemRow.isExpanded ? (itemHeaderCol.height + Style.space(16)) : parent.height
                 hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
                 onPositionChanged: {
                   if (!root.mouseMovementDetected) {
                     root.mouseMovementDetected = true
                   }
                 }
                 onClicked: {
-                  root.cursorIndex = delegateRoot.index
-                  root.focusSection = "tasks"
-                  root.cursorActive = true
-                  root.toggleTodo(itemRow.modelData.id)
+                  itemRow.toggleExpand()
                 }
               }
 
@@ -1663,17 +1678,7 @@ Item {
                         hoverColor: Color.accent
                         tooltipText: ""
                         onClicked: {
-                          root.savePendingNotes()
-                          root.cursorIndex = delegateRoot.index
-                          if (itemRow.isExpanded) {
-                            root.expandedTaskId = -1
-                            root.expandedViaKeyboard = false
-                            root.expandedSubSection = "header"
-                          } else {
-                            root.expandedTaskId = itemRow.modelData.id
-                            root.expandedViaKeyboard = true
-                            root.expandedSubSection = "header"
-                          }
+                          itemRow.toggleExpand()
                         }
 
                         HoverHandler { id: rowExpandHover }
@@ -1800,9 +1805,7 @@ Item {
                           root.startEditingTask(itemRow.modelData.id)
                         }
                         onClicked: {
-                          root.cursorIndex = delegateRoot.index
-                          root.focusSection = "tasks"
-                          root.cursorActive = true
+                          itemRow.toggleExpand()
                         }
                       }
 

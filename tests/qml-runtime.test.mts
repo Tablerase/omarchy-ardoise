@@ -5,7 +5,91 @@ import path from "node:path";
 import os from "node:os";
 import { execSync, spawn, spawnSync } from "node:child_process";
 
+/**
+ * Extract the brace-balanced body of a named QML handler on the element
+ * identified by `anchor`.
+ *
+ * Braces inside line comments and quoted strings are ignored so the match does
+ * not terminate early. A plain non-greedy regex cannot do this: in a handler
+ * like
+ *
+ *   onPositionChanged: { if (!x) { x = true } }
+ *   onClicked: { doThing() }
+ *
+ * the first `}` closes an inner block, not the element.
+ */
+function extractHandler(source: string, anchor: string, handler: string): string | null {
+  const anchorAt = source.indexOf(anchor);
+  if (anchorAt === -1) return null;
+  const handlerAt = source.indexOf(handler, anchorAt);
+  if (handlerAt === -1) return null;
+
+  const open = source.indexOf("{", handlerAt);
+  if (open === -1) return null;
+
+  let depth = 0;
+  let inLine = false;
+  let inDouble = false;
+  let inSingle = false;
+
+  for (let i = open; i < source.length; i++) {
+    const c = source[i];
+    const next = source[i + 1];
+
+    if (inLine) {
+      if (c === "\n") inLine = false;
+      continue;
+    }
+    if (inDouble) {
+      if (c === "\\") i++;
+      else if (c === '"') inDouble = false;
+      continue;
+    }
+    if (inSingle) {
+      if (c === "\\") i++;
+      else if (c === "'") inSingle = false;
+      continue;
+    }
+
+    if (c === "/" && next === "/") {
+      inLine = true;
+      i++;
+      continue;
+    }
+    if (c === '"') { inDouble = true; continue; }
+    if (c === "'") { inSingle = true; continue; }
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) return source.slice(open + 1, i);
+    }
+  }
+  return null;
+}
+
 const repoDir = path.resolve(import.meta.dirname, "..");
+
+/**
+ * Resolve a binary on PATH without shelling out.
+ *
+ * `which` is a separate package on Arch and is absent from a bare container,
+ * so `execSync("which ...")` fails there for the wrong reason - it looks like
+ * the target is missing rather than the lookup tool. Scanning PATH directly
+ * is dependency-free and correct in any minimal environment.
+ */
+function findOnPath(bin: string): string | null {
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, bin);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // not here; keep looking
+    }
+  }
+  return null;
+}
 
 test("Static QML Analysis: All QQC2 and custom UI components have required imports", () => {
   const rootFiles = fs
@@ -525,6 +609,23 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   assert.ok(!panelContent.includes("hoverExpandTimer"), "PanelContent must not contain hoverExpandTimer");
   assert.ok(!panelContent.includes("hoverFoldTimer"), "PanelContent must not contain hoverFoldTimer");
   assert.ok(!panelContent.includes("listFoldTimer"), "PanelContent must not contain listFoldTimer");
+
+  // Row click-to-expand and checkbox-to-complete separation
+  assert.ok(panelContent.includes("function toggleExpand()"), "itemRow must implement toggleExpand()");
+
+  // Locate rowMouseArea's onClicked handler by brace matching. A non-greedy
+  // regex would stop at the first `}`, which is an inner block (e.g. the
+  // `onPositionChanged` guard) rather than the handler's own closing brace.
+  const rowClick = extractHandler(panelContent, "id: rowMouseArea", "onClicked");
+  assert.ok(rowClick, "PanelContent must define an onClicked handler on rowMouseArea");
+  assert.ok(
+    rowClick.includes("itemRow.toggleExpand()"),
+    "rowMouseArea.onClicked must invoke itemRow.toggleExpand()"
+  );
+  assert.ok(
+    !rowClick.includes("root.toggleTodo"),
+    "rowMouseArea.onClicked must not call root.toggleTodo (that is the checkbox's job)"
+  );
 });
 
 test("IPC Contract: every documented omarchy-shell command has a matching IpcHandler function", () => {
@@ -541,11 +642,21 @@ test("IPC Contract: every documented omarchy-shell command has a matching IpcHan
   const implemented = new Set(
     [...handlerBlock.matchAll(/^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm)].map((m) => m[1])
   );
-  const documented = new Set(
-    [...designDoc.matchAll(/omarchy-shell tablerase\.ardoise ([A-Za-z_][A-Za-z0-9_]*)/g)].map(
-      (m) => m[1]
-    )
-  );
+
+  // Documentation references commands two ways: directly after the plugin
+  // prefix (`... ardoise toggleTodo "<id>"`) and as a slash list
+  // (`... ardoise open` / `close` / `toggle`). Match only those two shapes so
+  // payload values in the same sentence - e.g. the `done` field of
+  // toggleTodo - are not mistaken for commands.
+  const documented = new Set<string>();
+  for (const line of designDoc.split("\n")) {
+    if (!line.includes("tablerase.ardoise")) continue;
+    const direct = /tablerase\.ardoise\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line);
+    if (direct) documented.add(direct[1]);
+    for (const cont of line.matchAll(/\/\s*`([A-Za-z_][A-Za-z0-9_]*)`/g)) {
+      documented.add(cont[1]);
+    }
+  }
 
   assert.ok(documented.size > 0, "DESIGN.md must document the IPC command surface");
 
@@ -575,10 +686,8 @@ test("Quickshell Core (no compositor): BarWidget, PanelContent and Service mount
   // QuickAdd.qml needs a compositor (it is a WlrLayer.Overlay), so this
   // harness mounts the window-free components and asserts real resolved
   // state. The windowed lifecycle is covered by the local-only test below.
-  let quickshellPath = "";
-  try {
-    quickshellPath = execSync("which quickshell 2>/dev/null", { encoding: "utf8" }).trim();
-  } catch {
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
     if (process.env.CI) throw new Error("quickshell must be installed in CI");
     t.skip("quickshell binary not found on system PATH");
     return;
@@ -652,7 +761,7 @@ ShellRoot {
             console.log("[TEST] count=" + barWidget.ladderState.count);
             console.log("[TEST] role=" + barWidget.ladderState.role);
             console.log("[TEST] panelTasks=" + (panelContent.store.todos ? panelContent.store.todos.length : -1));
-            console.log("[TEST] done");
+            console.log("[TEST] done=1");
             Qt.exit(0);
         }
     }
@@ -676,12 +785,39 @@ ShellRoot {
 
     const output = (qsResult.stdout || "") + "\n" + (qsResult.stderr || "");
 
+    // BarWidget lazily Loads Panel.qml, a wlr-layer-shell surface built on
+    // Ui.KeyboardPanel. With no compositor it can only warn - it cannot
+    // resolve the PanelWindow backend or the KeyboardPanel type. That is a
+    // property of running without a display, not a defect, and the
+    // windowed path is covered by the local-only lifecycle test.
+    //
+    // Isolate exactly those known-benign lines. Anything else complaining
+    // about a backend or an unresolved type is still a failure.
+    const isCompositorOnly = (line: string) =>
+      /PanelWindow backend/i.test(line) || /KeyboardPanel/.test(line) || /@plugin\/Panel\.qml/.test(line);
+
+    const unexpectedBackend = output
+      .split("\n")
+      .filter((line) => /PanelWindow backend/i.test(line))
+      .filter((line) => !/KeyboardPanel|@plugin\/Panel\.qml/.test(line))
+      .join("\n");
+    assert.equal(
+      unexpectedBackend.trim(),
+      "",
+      "Unexpected PanelWindow backend errors outside the known Panel.qml path:\n" + unexpectedBackend
+    );
+
+    const sanitized = output
+      .split("\n")
+      .filter((line) => !isCompositorOnly(line))
+      .join("\n");
+
     assert.ok(
-      !/is not a type|ReferenceError|Type .* unavailable|Cannot read property|PanelWindow backend/i.test(output),
+      !/is not a type|ReferenceError|Type .* unavailable|Cannot read property/i.test(sanitized),
       "Core harness reported QML errors:\n" + output
     );
     assert.ok(
-      !/Binding loop detected for property/i.test(output),
+      !/Binding loop detected for property/i.test(sanitized),
       "Core harness reported a binding loop:\n" + output
     );
     // Unconditional: a failed load must never be able to pass quietly.
@@ -693,7 +829,7 @@ ShellRoot {
 
     const pick = (k: string) => new RegExp("\\[TEST\\] " + k + "=(\\S+)").exec(output)?.[1];
 
-    assert.equal(pick("done"), "done", "core harness did not run to completion:\n" + output);
+    assert.equal(pick("done"), "1", "core harness did not run to completion:\n" + output);
     assert.equal(pick("pending"), "3", "bar should report total pending tasks");
     assert.equal(pick("panelTasks"), "3", "PanelContent should load the seeded store");
 
@@ -708,12 +844,24 @@ ShellRoot {
   }
 });
 
-test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {
+test("Quickshell Headless Lifecycle [local-only]: QuickAdd, PanelContent, BarWidget, and Service instantiate and toggle without errors", (t) => {
+  // LOCAL-ONLY BY DESIGN. QuickAdd.qml is a WlrLayer.Overlay, so mounting it
+  // requires a wlr-layer-shell compositor; `offscreen` has no PanelWindow
+  // backend and the config fails to load. CI therefore covers the window-free
+  // components via the "Quickshell Core (no compositor)" test above, and this
+  // test adds the windowed lifecycle on a real desktop session.
+  if (process.env.CI) {
+    t.skip("local-only: QuickAdd needs a wlr-layer-shell compositor; CI covers the core harness instead");
+    return;
+  }
+  if (!process.env.WAYLAND_DISPLAY) {
+    t.skip("local-only: no Wayland display, so a WlrLayer.Overlay cannot be mounted");
+    return;
+  }
+
   // Check if quickshell is installed and accessible
-  let quickshellPath = "";
-  try {
-    quickshellPath = execSync("which quickshell 2>/dev/null", { encoding: "utf8" }).trim();
-  } catch {
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
     t.skip("quickshell binary not found on system PATH; skipping runtime instantiation test");
     return;
   }
@@ -724,6 +872,9 @@ test("Quickshell Headless Lifecycle: QuickAdd, PanelContent, BarWidget, and Serv
   const uiDir = path.join(omarchyPath, "shell", "Ui");
 
   if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
+    if (process.env.CI) {
+      throw new Error("Omarchy shell Commons/Ui modules must be provided in CI (OMARCHY_PATH=" + omarchyPath + ")");
+    }
     t.skip("Omarchy shell Commons/Ui modules not found at " + omarchyPath + "; skipping runtime instantiation test");
     return;
   }
@@ -1465,11 +1616,18 @@ ShellRoot {
   }
 });
 
-test("Live Shell IPC: Omarchy shell responds to summon, hide, and toggle", (t) => {
+test("Live Shell IPC [local-only]: Omarchy shell responds to summon, hide, and toggle", (t) => {
+  // LOCAL-ONLY BY DESIGN. This needs a live omarchy-shell on a compositor,
+  // which a CI container cannot provide. Cross-platform coverage of the same
+  // contract lives in the "IPC Contract" static test above, which checks the
+  // documented command surface against the IpcHandler on every platform.
+  if (process.env.CI) {
+    t.skip("local-only: requires a live omarchy-shell; the static IPC Contract test covers this in CI");
+    return;
+  }
+
   // Check if omarchy-shell is installed
-  try {
-    execSync("which omarchy-shell 2>/dev/null", { encoding: "utf8" });
-  } catch {
+  if (!findOnPath("omarchy-shell")) {
     t.skip("omarchy-shell binary not found; skipping live shell IPC test");
     return;
   }
@@ -1501,10 +1659,9 @@ test("Live Shell IPC: Omarchy shell responds to summon, hide, and toggle", (t) =
 });
 
 test("ArdoiseIcon: warning color reads the theme's yellow and follows a live theme switch", async (t) => {
-  let quickshellPath = "";
-  try {
-    quickshellPath = execSync("which quickshell 2>/dev/null", { encoding: "utf8" }).trim();
-  } catch {
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
+    if (process.env.CI) throw new Error("quickshell must be installed in CI");
     t.skip("quickshell binary not found on system PATH; skipping warning-color runtime test");
     return;
   }
@@ -1512,6 +1669,9 @@ test("ArdoiseIcon: warning color reads the theme's yellow and follows a live the
   const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
   const commonsDir = path.join(omarchyPath, "shell", "Commons");
   if (!fs.existsSync(commonsDir)) {
+    if (process.env.CI) {
+      throw new Error("Omarchy shell Commons module must be provided in CI (OMARCHY_PATH=" + omarchyPath + ")");
+    }
     t.skip("Omarchy shell Commons module not found; skipping warning-color runtime test");
     return;
   }

@@ -17,9 +17,9 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
      - If empty: <kbd>Escape</kbd> immediately dismisses the modal / panel.
      - If non-empty: <kbd>Escape</kbd> **leaves insert mode** and enters normal (motion) mode on the container without closing the window or discarding text.
    - When in normal / motion mode: <kbd>Escape</kbd> **dismisses** the modal / panel.
-3. **Action Key Separation (<kbd>Enter</kbd> vs. <kbd>Space</kbd>)**:
-   - In the task list, <kbd>Enter</kbd> strictly **expands or collapses** task details (notes, reminders, profile reassignment).
-   - <kbd>Space</kbd> strictly **toggles completion** (`done`).
+3. **Action Separation (Expand vs. Complete)**:
+   - **Expand / Collapse**: In the task list, pressing <kbd>Enter</kbd> or clicking anywhere on the item row (or title text, or the chevron button `rowExpandBtn`) strictly **expands or collapses** task details (notes, reminders, profile reassignment).
+   - **Toggle Completion (`done`)**: Pressing <kbd>Space</kbd> or clicking the checkbox icon (`Ui.TaskCheck`) strictly **toggles completion**. Clicking the item row will never toggle completion.
    - In input fields, <kbd>Enter</kbd> commits / submits. In multi-line notes, <kbd>Shift+Enter</kbd> inserts a newline while <kbd>Enter</kbd> commits.
 4. **Non-Destructive Draft Retention**:
    - Unsaved Quick Add modal drafts (title, description, profile, reminder) are automatically retained in state and restored if the modal is dismissed accidentally. Drafts can be cleared via <kbd>Ctrl</kbd>+<kbd>Backspace</kbd> or the "Clear" action.
@@ -27,7 +27,8 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
    - Profile names, tags, and titles must gracefully wrap (`Flow`) or elide (`Text.ElideRight`) to prevent pushing buttons or cards outside visible geometry.
 6. **Strictly Explicit Drawer Expansion (No Hover Auto-Expand)**:
    - **Keyboard Navigation (<kbd>Enter</kbd> / <kbd>e</kbd>)**: Explicit toggle. Opening an item via keyboard marks it `expandedViaKeyboard = true`. Navigating with <kbd>j</kbd>/<kbd>k</kbd> does not auto-expand items.
-   - **Mouse Click Expansion**: Clicking the chevron expand button on a row (`rowExpandBtn`), or clicking the time/due chip (`remBadge`), explicitly expands it (`expandedViaKeyboard = true`), keeping it open while interacting with notes and controls.
+   - **Mouse Click Expansion**: Clicking anywhere on the item row (`rowMouseArea`), the title text (`titleClickArea`), or the chevron expand button (`rowExpandBtn`) explicitly expands/collapses task details without toggling completion. Clicking the time/due chip (`remBadge`) explicitly expands directly to the reminder presets row.
+   - **Task Completion Boundary**: To mark a task done or undone with the mouse, the user must explicitly click the check icon (`Ui.TaskCheck`).
    - **No Hover Auto-Expansion**: Hovering over a task row or chips never auto-expands the drawer. This guarantees that inspecting tooltips (due dates, git repository paths) and resting the mouse cursor never cause accidental accordion bouncing or layout shifting.
 7. **Multi-Repo & Codebase Context Integrity**:
    - Tasks support prefix-only multi-repo hashtag syntax: `#project/repo #tag1 #tag2 Title`.
@@ -188,7 +189,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        - Target codebase context chip remains strictly located within the expanded drawer to avoid crowding the collapsed task list.
    - **Item Ordering Algorithm & Satisfying Task Completion Flow**:
      - **Micro-Animation & Dwell Time (Satisfying Completion)**:
-       - Toggling an active task via <kbd>Space</kbd> or click triggers an immediate, rewarding micro-interaction:
+       - Toggling an active task via <kbd>Space</kbd> or clicking the checkbox icon (`Ui.TaskCheck`) triggers an immediate, rewarding micro-interaction:
          - Checkbox (`Ui.TaskCheck`): Plays a bouncy pop scale animation (`1.0 -> 1.25 -> 1.0` with `Easing.OutBack`), checkmark spring scales in from `0.2` to `1.0`, and background/border smoothly transition to accent colors.
          - Animated Strikethrough (`strikeLine`): Rather than abruptly flashing on, a custom strikethrough line sweeps smoothly from **left to right** across the task title text (`0 -> Math.min(contentWidth, width)` in 260ms with `Easing.OutCubic`). Undoing within the grace period smoothly retracts the line from right to left.
          - Task Title & Background: Title dims to `0.55` opacity with an animated transition, and row background gains a subtle accent completion tint (`alpha(Color.accent, 0.08)`).
@@ -264,7 +265,7 @@ Quickshell taskbar widget placed in the status bar.
   - Total pending is deliberately **not** what the badge shows; it remains available in the tooltip and via the `count` IPC command.
 - **Interactions**:
   - Left click: Toggles main panel (`tablerase.ardoise toggle`).
-  - Right click: Opens Quick Add modal (`tablerase.ardoise quickadd`).
+  - Right click: Opens the Quick Add modal. The bar widget closes the panel and then calls `bar.shell.summon(moduleName, "{}")` to mount the plugin's `overlay` entry point. There is **no `quickadd` IPC function** — the scripted route is the shell-level `omarchy-shell shell summon tablerase.ardoise '{}'`, not a plugin command. (An earlier revision of this document advertised a `quickadd` plugin command that resolves to `Function not found.`; the IPC contract test now guards against re-introducing it.)
   - Scroll: Cycles active profile filter.
 - **Shell IPC Contract (`IpcHandler: tablerase.ardoise`)**:
   - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
@@ -428,6 +429,9 @@ Before committing any UI or navigation change:
 2. Verify with tests in `tests/qml-runtime.test.mts` that keyboard navigation did not break.
 3. Test with live shell: `omarchy-restart-shell` and verify interactive motions.
 4. Verify all changes are documented in this `DESIGN.md`.
+5. Run `npm run test:docker` to reproduce CI exactly, including the `CI=1`
+   strict guards that turn a missing prerequisite into a failure rather than a
+   silent skip. See `AGENTS.md` § *Test Tiers*.
 
 ### Reloading the shell after a QML / JS change
 `omarchy-shell shell rescanPlugins` exits 0 but does **not** re-instantiate an
