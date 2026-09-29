@@ -18,6 +18,9 @@ Rectangle {
   property int selectedIndex: 0
   property int activeTab: 0 // 0: Snapshots & Rollback, 1: Sync Settings
   property int syncFocusIndex: 0 // 0: remoteField, 1: saveRemoteBtn, 2: syncNowBtn
+  property string snapshotSection: "snapshots" // "snapshots" | "actions"
+  property int actionButtonIndex: 0 // 0: rollback, 1: recover
+  property alias contextMenu: contextMenu
 
   readonly property var selectedSnapshot: (root.snapshots && root.snapshots.length > root.selectedIndex)
     ? root.snapshots[root.selectedIndex]
@@ -26,7 +29,10 @@ Rectangle {
   signal closeRequested()
 
   onActiveTabChanged: {
+    if (contextMenu) contextMenu.close()
     if (activeTab === 0) {
+      root.snapshotSection = "snapshots"
+      root.actionButtonIndex = 0
       root.ensureSnapshotVisible()
     } else {
       root.syncFocusIndex = 0
@@ -37,8 +43,11 @@ Rectangle {
   function open() {
     isOpen = true
     activeTab = 0
+    snapshotSection = "snapshots"
+    actionButtonIndex = 0
     selectedIndex = 0
     syncFocusIndex = 0
+    if (contextMenu) contextMenu.close()
     if (root.barWidget && typeof root.barWidget.refreshGitHistory === "function") {
       root.barWidget.refreshGitHistory(true)
     }
@@ -46,8 +55,26 @@ Rectangle {
   }
 
   function close() {
+    if (contextMenu && contextMenu.isOpen) {
+      contextMenu.close()
+      return
+    }
     isOpen = false
     root.closeRequested()
+  }
+
+  function openContextMenuForSelected() {
+    if (!root.selectedSnapshot) return
+    var targetY = Style.space(80)
+    if (snapshotList && root.selectedIndex >= 0 && root.selectedIndex < snapshotList.count) {
+      var item = snapshotList.itemAtIndex(root.selectedIndex)
+      if (item) {
+        var mapped = item.mapToItem(root, item.width - Style.space(200), item.height / 2)
+        contextMenu.open(root.selectedSnapshot, mapped.x, mapped.y)
+        return
+      }
+    }
+    contextMenu.open(root.selectedSnapshot, (root.width - Style.space(260)) / 2, Style.space(100))
   }
 
   function toggle() {
@@ -100,14 +127,18 @@ Rectangle {
     root.close()
   }
 
-  Keys.onPressed: function(event) {
+  function handleKey(event) {
+    if (contextMenu && contextMenu.isOpen) {
+      if (contextMenu.handleKey(event)) return true
+    }
+
     if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "u") {
       event.accepted = true
       root.close()
       return
     }
 
-    // Tab switching with 1, 2, Tab, Backtab
+    // Tab switching with 1, 2
     if (event.key === Qt.Key_1 || event.text === "1") {
       event.accepted = true
       root.activeTab = 0
@@ -118,65 +149,149 @@ Rectangle {
       root.activeTab = 1
       return
     }
-    if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
-      event.accepted = true
-      root.activeTab = (root.activeTab === 0 ? 1 : 0)
-      return
-    }
 
     if (root.activeTab === 0) {
-      if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
+      // Tab / Shift+Tab section transitions in Tab 0
+      if (event.key === Qt.Key_Tab) {
         event.accepted = true
-        if (root.snapshots && root.snapshots.length > 0) {
-          root.selectedIndex = Math.min(root.snapshots.length - 1, root.selectedIndex + 1)
-          root.ensureSnapshotVisible()
+        if (root.snapshotSection === "snapshots") {
+          root.snapshotSection = "actions"
+          root.actionButtonIndex = 0
+        } else {
+          if (root.actionButtonIndex === 0) {
+            root.actionButtonIndex = 1
+          } else {
+            root.snapshotSection = "snapshots"
+          }
         }
         return
       }
-      if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+      if (event.key === Qt.Key_Backtab) {
         event.accepted = true
-        if (root.snapshots && root.snapshots.length > 0) {
-          root.selectedIndex = Math.max(0, root.selectedIndex - 1)
-          root.ensureSnapshotVisible()
+        if (root.snapshotSection === "actions") {
+          if (root.actionButtonIndex === 1) {
+            root.actionButtonIndex = 0
+          } else {
+            root.snapshotSection = "snapshots"
+          }
+        } else {
+          root.snapshotSection = "actions"
+          root.actionButtonIndex = 1
         }
         return
       }
-      if (event.key === Qt.Key_L || event.text === "l") {
-        event.accepted = true
-        root.activeTab = 1
-        return
-      }
-      if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
-        event.accepted = true
-        if (root.snapshots && root.snapshots.length > 0) {
-          root.selectedIndex = root.snapshots.length - 1
-          root.ensureSnapshotVisible()
+
+      if (root.snapshotSection === "snapshots") {
+        if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
+          event.accepted = true
+          if (root.snapshots && root.snapshots.length > 0) {
+            if (root.selectedIndex < root.snapshots.length - 1) {
+              root.selectedIndex++
+              root.ensureSnapshotVisible()
+            } else {
+              root.snapshotSection = "actions"
+              root.actionButtonIndex = 0
+            }
+          }
+          return
         }
-        return
-      }
-      if (event.key === Qt.Key_G || event.text === "g") {
-        event.accepted = true
-        if (root.snapshots && root.snapshots.length > 0) {
-          root.selectedIndex = 0
-          root.ensureSnapshotVisible()
+        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          if (root.snapshots && root.snapshots.length > 0) {
+            root.selectedIndex = Math.max(0, root.selectedIndex - 1)
+            root.ensureSnapshotVisible()
+          }
+          return
         }
-        return
-      }
-      if (event.key === Qt.Key_R || event.text === "r") {
-        event.accepted = true
-        if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.rollbackToCommit === "function") {
-          root.barWidget.rollbackToCommit(root.selectedSnapshot.hash)
+        if (event.key === Qt.Key_L || event.text === "l") {
+          event.accepted = true
+          root.activeTab = 1
+          return
         }
-        return
-      }
-      if (event.key === Qt.Key_C || event.text === "c") {
-        event.accepted = true
-        if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
-          root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)
+        if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
+          event.accepted = true
+          if (root.snapshots && root.snapshots.length > 0) {
+            root.selectedIndex = root.snapshots.length - 1
+            root.ensureSnapshotVisible()
+          }
+          return
         }
-        return
+        if (event.key === Qt.Key_G || event.text === "g") {
+          event.accepted = true
+          if (root.snapshots && root.snapshots.length > 0) {
+            root.selectedIndex = 0
+            root.ensureSnapshotVisible()
+          }
+          return
+        }
+        if (event.key === Qt.Key_M || event.text === "m" || event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Menu) {
+          event.accepted = true
+          if (root.selectedSnapshot) {
+            root.openContextMenuForSelected()
+          }
+          return
+        }
+        if (event.key === Qt.Key_R || event.text === "r") {
+          event.accepted = true
+          if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.rollbackToCommit === "function") {
+            root.barWidget.rollbackToCommit(root.selectedSnapshot.hash)
+          }
+          return
+        }
+        if (event.key === Qt.Key_C || event.text === "c") {
+          event.accepted = true
+          if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
+            root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)
+          }
+          return
+        }
+      } else { // snapshotSection === "actions"
+        if (event.key === Qt.Key_H || event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.actionButtonIndex = 0
+          return
+        }
+        if (event.key === Qt.Key_L || event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          root.actionButtonIndex = 1
+          return
+        }
+        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          root.snapshotSection = "snapshots"
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          if (root.actionButtonIndex === 0) {
+            rollbackBtn.clicked()
+          } else {
+            recoverBtn.clicked()
+          }
+          return
+        }
+        if (event.key === Qt.Key_R || event.text === "r") {
+          event.accepted = true
+          rollbackBtn.clicked()
+          return
+        }
+        if (event.key === Qt.Key_C || event.text === "c") {
+          event.accepted = true
+          recoverBtn.clicked()
+          return
+        }
       }
     } else if (root.activeTab === 1) {
+      if (event.key === Qt.Key_Tab) {
+        event.accepted = true
+        root.syncFocusIndex = (root.syncFocusIndex + 1) % 3
+        return
+      }
+      if (event.key === Qt.Key_Backtab) {
+        event.accepted = true
+        root.syncFocusIndex = (root.syncFocusIndex + 2) % 3
+        return
+      }
       if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
         event.accepted = true
         if (root.syncFocusIndex === 0) {
@@ -238,6 +353,11 @@ Rectangle {
         return
       }
     }
+    return false
+  }
+
+  Keys.onPressed: function(event) {
+    handleKey(event)
   }
 
   Column {
@@ -426,10 +546,16 @@ Rectangle {
               MouseArea {
                 id: itemHover
                 anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 hoverEnabled: true
-                onClicked: {
+                onClicked: function(mouse) {
                   root.selectedIndex = snapshotItem.index
+                  root.snapshotSection = "snapshots"
                   root.forceActiveFocus()
+                  if (mouse.button === Qt.RightButton) {
+                    var pos = mapToItem(root, mouse.x, mouse.y)
+                    contextMenu.open(snapshotItem.modelData, pos.x, pos.y)
+                  }
                 }
               }
 
@@ -450,7 +576,7 @@ Rectangle {
                   Text {
                     id: devLabel
                     anchors.centerIn: parent
-                    text: snapshotItem.modelData.deviceName || "unknown"
+                    text: (snapshotItem.modelData && snapshotItem.modelData.deviceName) ? snapshotItem.modelData.deviceName : "unknown"
                     color: snapshotItem.isLocalDevice ? Color.accent : Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption * 0.85
@@ -461,12 +587,12 @@ Rectangle {
                 // Message and relative date
                 Column {
                   anchors.verticalCenter: parent.verticalCenter
-                  width: parent.width - devLabel.parent.width - countBadge.width - Style.space(24)
+                  width: parent.width - devLabel.parent.width - (countBadge.visible ? countBadge.width : 0) - (moreBtn.visible ? moreBtn.width : 0) - Style.space(28)
                   spacing: Style.space(2)
 
                   Text {
                     width: parent.width
-                    text: snapshotItem.modelData.cleanMessage || snapshotItem.modelData.message || ""
+                    text: (snapshotItem.modelData && (snapshotItem.modelData.cleanMessage || snapshotItem.modelData.message)) ? (snapshotItem.modelData.cleanMessage || snapshotItem.modelData.message) : ""
                     color: root.barForeground
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
@@ -476,13 +602,13 @@ Rectangle {
                   Row {
                     spacing: Style.space(6)
                     Text {
-                      text: snapshotItem.modelData.shortHash
+                      text: (snapshotItem.modelData && snapshotItem.modelData.shortHash) ? snapshotItem.modelData.shortHash : ""
                       color: Color.muted
-                      font.family: Style.font.monospace
+                      font.family: "monospace"
                       font.pixelSize: Style.font.caption * 0.8
                     }
                     Text {
-                      text: "• " + GitSync.formatRelativeTime(snapshotItem.modelData.timestamp)
+                      text: "• " + ((snapshotItem.modelData && snapshotItem.modelData.timestamp) ? GitSync.formatRelativeTime(snapshotItem.modelData.timestamp) : "")
                       color: Color.muted
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption * 0.8
@@ -494,7 +620,7 @@ Rectangle {
                 Rectangle {
                   id: countBadge
                   anchors.verticalCenter: parent.verticalCenter
-                  visible: snapshotItem.modelData.pendingCount !== undefined
+                  visible: Boolean(snapshotItem.modelData && snapshotItem.modelData.pendingCount !== undefined)
                   implicitWidth: countText.implicitWidth + Style.space(6)
                   implicitHeight: countText.implicitHeight + Style.space(2)
                   radius: Style.cornerRadius * 0.4
@@ -503,10 +629,30 @@ Rectangle {
                   Text {
                     id: countText
                     anchors.centerIn: parent
-                    text: (snapshotItem.modelData.pendingCount !== undefined ? snapshotItem.modelData.pendingCount : "") + " pending"
+                    text: (snapshotItem.modelData && snapshotItem.modelData.pendingCount !== undefined ? snapshotItem.modelData.pendingCount : "") + " pending"
                     color: Color.muted
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption * 0.8
+                  }
+                }
+
+                // More options button (contextual menu trigger)
+                PanelActionButton {
+                  id: moreBtn
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: itemHover.containsMouse || snapshotItem.isSelected
+                  size: Style.space(22)
+                  iconText: "󰇙"
+                  fontSize: Style.font.caption
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  foreground: Color.muted
+                  hoverColor: Color.accent
+                  tooltipText: "Snapshot options"
+                  onClicked: {
+                    root.selectedIndex = snapshotItem.index
+                    root.snapshotSection = "snapshots"
+                    var pos = mapToItem(root, width / 2, height)
+                    contextMenu.open(snapshotItem.modelData, pos.x - Style.space(200), pos.y)
                   }
                 }
               }
@@ -536,6 +682,7 @@ Rectangle {
             enabled: Boolean(root.selectedSnapshot)
             fontSize: Style.font.caption
             bordered: true
+            hasCursor: (root.activeTab === 0) && (root.snapshotSection === "actions") && (root.actionButtonIndex === 0)
             onClicked: {
               if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.rollbackToCommit === "function") {
                 root.barWidget.rollbackToCommit(root.selectedSnapshot.hash)
@@ -558,6 +705,7 @@ Rectangle {
             enabled: Boolean(root.selectedSnapshot)
             fontSize: Style.font.caption
             bordered: true
+            hasCursor: (root.activeTab === 0) && (root.snapshotSection === "actions") && (root.actionButtonIndex === 1)
             onClicked: {
               if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
                 root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)
@@ -768,6 +916,31 @@ Rectangle {
           }
         }
       }
+    }
+  }
+
+  GitContextMenu {
+    id: contextMenu
+    bar: root.bar
+    z: 1000
+    onRollbackRequested: function(hash) {
+      if (root.barWidget && typeof root.barWidget.rollbackToCommit === "function") {
+        root.barWidget.rollbackToCommit(hash)
+      }
+      root.forceActiveFocus()
+    }
+    onRecoverRequested: function(hash) {
+      if (root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
+        root.barWidget.recoverFromCommit(hash)
+      }
+      root.forceActiveFocus()
+    }
+    onCopyHashRequested: function(hash) {
+      Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(hash) + " | wl-copy"])
+      root.forceActiveFocus()
+    }
+    onCloseRequested: {
+      root.forceActiveFocus()
     }
   }
 }

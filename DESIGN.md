@@ -307,9 +307,16 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
 | **Git Modal** | `1` / `2` | Switch between Snapshots (1) and Sync Settings (2) tabs |
-| **Git Modal (Snapshots)** | `j` / `k` / `↓` / `↑` | Navigate snapshot commit list |
-| **Git Modal (Snapshots)** | `r` | Rollback tasks to selected snapshot |
-| **Git Modal (Snapshots)** | `c` | Recover missing/deleted tasks from selected snapshot |
+| **Git Modal** | `Tab` / `Shift+Tab` | Advance / reverse major sections (`snapshots` list ⇄ `actions` buttons) |
+| **Git Modal (Snapshots)** | `j` / `k` / `↓` / `↑` | Navigate snapshot list (at bottom of list, `j` / `↓` transitions to `actions`) |
+| **Git Modal (Snapshots)** | `g` / `G` | Jump to first / last snapshot |
+| **Git Modal (Snapshots)** | `m` / `Space` / `Enter` / Right-Click | Open snapshot contextual menu (Rollback, Recover, Copy Hash) |
+| **Git Modal (Snapshots)** | `r` | Direct shortcut to rollback tasks to selected snapshot |
+| **Git Modal (Snapshots)** | `c` | Direct shortcut to recover missing/deleted tasks from selected snapshot |
+| **Git Modal (Actions)** | `h` / `l` / `←` / `→` | Cycle between Rollback and Recover Deleted buttons |
+| **Git Modal (Actions)** | `k` / `↑` | Return focus to snapshot list |
+| **Git Modal (Actions)** | `Enter` / `Space` | Activate focused button |
+| **Git Modal (Context Menu)**| `j` / `k` / `Enter` / `Esc` | Navigate menu items, activate selection, or dismiss |
 | **Git Modal (Sync Remote)** | `i` / `a` / `<slash>` / `Enter` | Enter insert mode in remote URL input field |
 | **Git Modal (Sync Remote)** | `Escape` (insert mode) | Blur remote URL field and return to normal motion mode without closing modal |
 | **Git Modal** | `Escape` / `q` / `u` (normal mode) | Dismiss Git modal and restore focus to panel |

@@ -34,6 +34,7 @@ Item {
   readonly property int pendingCount: TodoStore.getPendingCount(store, "all")
   readonly property var profiles: store ? (store.profiles || ["personal", "work"]) : ["personal", "work"]
   readonly property var visibleProfiles: TodoStore.getSortedProfiles(root.store, true, root.currentFilter)
+  property alias gitModal: gitModal
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   readonly property color cardBackground: Color.popups.background

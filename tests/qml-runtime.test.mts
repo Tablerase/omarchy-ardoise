@@ -442,6 +442,28 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
       !/if\s*\(\s*remoteField\.text\.trim\(\)\.length\s*===\s*0\s*\)\s*\{\s*root\.close\(\)/.test(gitModalContent),
     "GitModal remoteField must implement two-stage escape (switch from insert to normal mode) without dismissing the modal on empty text"
   );
+  assert.ok(
+    gitModalContent.includes("snapshotSection") &&
+      gitModalContent.includes("actionButtonIndex") &&
+      gitModalContent.includes("hasCursor: (root.activeTab === 0) && (root.snapshotSection === \"actions\") && (root.actionButtonIndex === 0)") &&
+      gitModalContent.includes("hasCursor: (root.activeTab === 0) && (root.snapshotSection === \"actions\") && (root.actionButtonIndex === 1)"),
+    "GitModal must support full vim motion section navigation and cursor highlighting on action buttons in Tab 0"
+  );
+  assert.ok(
+    gitModalContent.includes("GitContextMenu {") &&
+      gitModalContent.includes("id: contextMenu") &&
+      gitModalContent.includes("openContextMenuForSelected"),
+    "GitModal must mount GitContextMenu for snapshot context actions"
+  );
+  const contextMenuPath = path.join(repoDir, "ui", "GitContextMenu.qml");
+  assert.ok(fs.existsSync(contextMenuPath), "ui/GitContextMenu.qml must exist");
+  const contextMenuContent = fs.readFileSync(contextMenuPath, "utf8");
+  assert.ok(
+    contextMenuContent.includes("signal rollbackRequested") &&
+      contextMenuContent.includes("signal recoverRequested") &&
+      contextMenuContent.includes("signal copyHashRequested"),
+    "GitContextMenu must define rollbackRequested, recoverRequested, and copyHashRequested signals"
+  );
 
   // 4. PanelContent button tooltips using ShortcutToolTip
   const expectedButtons = [
@@ -713,6 +735,75 @@ ShellRoot {
             if (!panelKeyCatcher.blocked || !panelContent.activeFocusBlocked) {
                 console.error("[TEST FAIL] panelKeyCatcher must be blocked while GitModal is open");
                 Qt.exit(141);
+                return;
+            }
+
+            // Test GitModal Tab section navigation & Vim motions
+            var gm = panelContent.gitModal;
+            if (!gm) {
+                console.error("[TEST FAIL] panelContent.gitModal is not accessible");
+                Qt.exit(159);
+                return;
+            }
+            if (gm.snapshotSection !== "snapshots") {
+                console.error("[TEST FAIL] GitModal default snapshotSection should be 'snapshots', got: " + gm.snapshotSection);
+                Qt.exit(160);
+                return;
+            }
+            // Tab transitions from snapshots list to actions button section
+            gm.handleKey({ key: Qt.Key_Tab, text: "", modifiers: 0, accepted: false });
+            if (gm.snapshotSection !== "actions" || gm.actionButtonIndex !== 0) {
+                console.error("[TEST FAIL] Tab failed to transition to actions section (snapshotSection=" + gm.snapshotSection + ", actionButtonIndex=" + gm.actionButtonIndex + ")");
+                Qt.exit(161);
+                return;
+            }
+            // 'l' / Right moves to button 1 (Recover Deleted)
+            gm.handleKey({ key: Qt.Key_L, text: "l", modifiers: 0, accepted: false });
+            if (gm.actionButtonIndex !== 1) {
+                console.error("[TEST FAIL] 'l' failed to advance actionButtonIndex to 1");
+                Qt.exit(162);
+                return;
+            }
+            // 'h' / Left moves back to button 0 (Rollback)
+            gm.handleKey({ key: Qt.Key_H, text: "h", modifiers: 0, accepted: false });
+            if (gm.actionButtonIndex !== 0) {
+                console.error("[TEST FAIL] 'h' failed to move actionButtonIndex back to 0");
+                Qt.exit(163);
+                return;
+            }
+            // 'k' / Up transitions back up to snapshots list
+            gm.handleKey({ key: Qt.Key_K, text: "k", modifiers: 0, accepted: false });
+            if (gm.snapshotSection !== "snapshots") {
+                console.error("[TEST FAIL] 'k' in actions failed to transition back up to snapshots");
+                Qt.exit(164);
+                return;
+            }
+            // Backtab (Shift+Tab) reverse-transitions to actions button 1
+            gm.handleKey({ key: Qt.Key_Backtab, text: "", modifiers: 0, accepted: false });
+            if (gm.snapshotSection !== "actions" || gm.actionButtonIndex !== 1) {
+                console.error("[TEST FAIL] Shift+Tab failed to reverse-transition to actions (actionButtonIndex=" + gm.actionButtonIndex + ")");
+                Qt.exit(165);
+                return;
+            }
+            // Tab wraps from last action button back to snapshots
+            gm.handleKey({ key: Qt.Key_Tab, text: "", modifiers: 0, accepted: false });
+            if (gm.snapshotSection !== "snapshots") {
+                console.error("[TEST FAIL] Tab from action button 1 failed to wrap to snapshots");
+                Qt.exit(166);
+                return;
+            }
+
+            // Test GitContextMenu open & escape dismiss lifecycle
+            gm.contextMenu.open({ hash: "abcdef1234567890", shortHash: "abcdef1", message: "Test snapshot", timestamp: Date.now() }, 100, 100);
+            if (!gm.contextMenu.isOpen) {
+                console.error("[TEST FAIL] contextMenu.open() failed to open GitContextMenu");
+                Qt.exit(167);
+                return;
+            }
+            gm.handleKey({ key: Qt.Key_Escape, text: "", modifiers: 0, accepted: false });
+            if (gm.contextMenu.isOpen) {
+                console.error("[TEST FAIL] Escape failed to dismiss GitContextMenu");
+                Qt.exit(168);
                 return;
             }
 
