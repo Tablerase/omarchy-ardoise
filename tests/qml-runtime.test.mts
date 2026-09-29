@@ -777,7 +777,92 @@ ShellRoot {
                 Qt.exit(125);
                 return;
             }
+            // Test Clear Completed via 'c' key and footer button
+            // 1. Add and complete a task
+            barWidget.addTodo("Completed Task To Clear", "", "personal", "");
+            panelContent.store = barWidget.store;
+            panelContent.syncFilteredTodos();
+            var taskToClear = null;
+            for (var k = 0; k < panelContent.filteredTodos.length; k++) {
+                if (panelContent.filteredTodos[k].title === "Completed Task To Clear") {
+                    taskToClear = panelContent.filteredTodos[k];
+                    break;
+                }
+            }
+            if (!taskToClear) {
+                console.error("[TEST FAIL] Failed to prepare task for clear test");
+                Qt.exit(144);
+                return;
+            }
+            panelContent.applyToggleTodo(taskToClear.id);
+            if (panelContent.completedCount < 1) {
+                console.error("[TEST FAIL] completedCount should be >= 1 after toggling task done");
+                Qt.exit(145);
+                return;
+            }
+            var countBeforeClear = panelContent.filteredTodos.length;
+
+            // 2. Press 'c' to clear completed tasks
+            panelContent.focusSection = "tasks";
             panelContent.handleTextKey("c");
+
+            // 3. Verify task is removed from panelContent.filteredTodos and completedCount is 0
+            if (panelContent.completedCount !== 0) {
+                console.error("[TEST FAIL] completedCount was not 0 after handleTextKey('c')");
+                Qt.exit(146);
+                return;
+            }
+            if (panelContent.filteredTodos.length !== countBeforeClear - 1) {
+                console.error("[TEST FAIL] filteredTodos length did not decrease after clearCompleted");
+                Qt.exit(147);
+                return;
+            }
+            for (var cIdx = 0; cIdx < panelContent.filteredTodos.length; cIdx++) {
+                if (panelContent.filteredTodos[cIdx].id === taskToClear.id) {
+                    console.error("[TEST FAIL] Cleared task still present in panelContent.filteredTodos");
+                    Qt.exit(148);
+                    return;
+                }
+            }
+            if (panelContent.store.todos.some(function(t) { return t.id === taskToClear.id })) {
+                console.error("[TEST FAIL] Cleared task still present in panelContent.store.todos");
+                Qt.exit(149);
+                return;
+            }
+
+            // 4. Test footer Clear button (triggerFooterButton(0))
+            barWidget.addTodo("Footer Task To Clear", "", "personal", "");
+            panelContent.store = barWidget.store;
+            panelContent.syncFilteredTodos();
+            var footerTask = null;
+            for (var f = 0; f < panelContent.filteredTodos.length; f++) {
+                if (panelContent.filteredTodos[f].title === "Footer Task To Clear") {
+                    footerTask = panelContent.filteredTodos[f];
+                    break;
+                }
+            }
+            if (!footerTask) {
+                console.error("[TEST FAIL] Failed to find Footer Task To Clear");
+                Qt.exit(153);
+                return;
+            }
+            panelContent.applyToggleTodo(footerTask.id);
+            if (panelContent.completedCount < 1) {
+                console.error("[TEST FAIL] completedCount should be >= 1 before footer clear");
+                Qt.exit(150);
+                return;
+            }
+            panelContent.triggerFooterButton(0);
+            if (panelContent.completedCount !== 0) {
+                console.error("[TEST FAIL] completedCount was not 0 after triggerFooterButton(0)");
+                Qt.exit(151);
+                return;
+            }
+            if (panelContent.store.todos.some(function(t) { return t.id === footerTask.id })) {
+                console.error("[TEST FAIL] Footer cleared task still present in store");
+                Qt.exit(152);
+                return;
+            }
 
             // Test moving UP at task 0 transitions focus into input field
             panelContent.focusSection = "tasks";
@@ -1038,6 +1123,13 @@ ShellRoot {
         assert.ok(
           sandboxedRaw.includes("Renamed through runtime test"),
           "Expected runtime test write to be sandboxed in temporary testConfigDir"
+        );
+      }
+      if (fs.existsSync(path.join(testConfigDir, "todos-archive.json"))) {
+        const sandboxedArchive = fs.readFileSync(path.join(testConfigDir, "todos-archive.json"), "utf8");
+        assert.ok(
+          sandboxedArchive.includes("Completed Task To Clear") && sandboxedArchive.includes("Footer Task To Clear"),
+          "Expected cleared tasks to be archived in temporary testConfigDir/todos-archive.json"
         );
       }
     }

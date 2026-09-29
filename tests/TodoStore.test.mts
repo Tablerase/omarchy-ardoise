@@ -336,9 +336,9 @@ test("archiveCompleted & normalizeArchive: archives completed tasks with complet
   store = toggleTodo(store, store.todos[0].id);
   store = toggleTodo(store, store.todos[1].id);
 
-  // Archive only personal completed tasks
+  // Archive only personal completed tasks (test resilience with # and uppercase)
   const emptyArchive = JSON.stringify({ version: 1, archived: [] });
-  const res1 = archiveCompleted(store, "personal", emptyArchive);
+  const res1 = archiveCompleted(store, "#PERSONAL", emptyArchive);
 
   assert.equal(res1.clearedCount, 1);
   assert.equal(res1.updatedStore.todos.length, 2); // 1 active, 1 work done remaining
@@ -346,9 +346,15 @@ test("archiveCompleted & normalizeArchive: archives completed tasks with complet
   assert.equal(res1.updatedArchive.archived[0].title, "Done task 2");
   assert.ok(typeof res1.updatedArchive.archived[0].completedAt === "number");
 
-  // Archive all remaining
-  const res2 = archiveCompleted(res1.updatedStore, "all", JSON.stringify(res1.updatedArchive));
-  assert.equal(res2.clearedCount, 1);
+  // Archive work completed tasks (test resilience with leading #)
+  const resWork = archiveCompleted(res1.updatedStore, "#work", JSON.stringify(res1.updatedArchive));
+  assert.equal(resWork.clearedCount, 1);
+  assert.equal(resWork.updatedStore.todos.length, 1); // Only active task left
+  assert.equal(resWork.updatedArchive.archived.length, 2);
+
+  // Archive all remaining (no-op since 0 done remaining)
+  const res2 = archiveCompleted(resWork.updatedStore, "all", JSON.stringify(resWork.updatedArchive));
+  assert.equal(res2.clearedCount, 0);
   assert.equal(res2.updatedStore.todos.length, 1); // Only active task left
   assert.equal(res2.updatedArchive.archived.length, 2);
 

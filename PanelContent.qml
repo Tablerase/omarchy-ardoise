@@ -13,6 +13,23 @@ Item {
   property var bar: null
   property var barWidget: null
   property var store: (barWidget && barWidget.store) ? barWidget.store : TodoStore.defaultStore()
+
+  onBarWidgetChanged: {
+    if (barWidget && barWidget.store) {
+      root.store = barWidget.store
+      root.syncFilteredTodos()
+    }
+  }
+
+  Connections {
+    target: root.barWidget
+    function onStoreChanged() {
+      if (root.barWidget && root.barWidget.store) {
+        root.store = root.barWidget.store
+        root.syncFilteredTodos()
+      }
+    }
+  }
   readonly property var todos: store ? (store.todos || []) : []
   readonly property int pendingCount: TodoStore.getPendingCount(store, "all")
   readonly property var profiles: store ? (store.profiles || ["personal", "work"]) : ["personal", "work"]
@@ -431,9 +448,11 @@ Item {
     savePendingNotes()
     if (barWidget) {
       barWidget.addTodo(title, description, profile, reminder)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       root.store = TodoStore.addTodo(root.store, title, description, profile, reminder)
     }
+    syncFilteredTodos()
   }
 
   function applyToggleTodo(id) {
@@ -443,9 +462,11 @@ Item {
     }
     if (barWidget) {
       barWidget.toggleTodo(id)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       root.store = TodoStore.toggleTodo(root.store, id)
     }
+    syncFilteredTodos()
   }
 
   function flushPendingCompletions() {
@@ -507,9 +528,11 @@ Item {
     savePendingNotes()
     if (barWidget) {
       barWidget.removeTodo(id)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       root.store = TodoStore.removeTodo(root.store, id)
     }
+    syncFilteredTodos()
   }
 
   function updateTodo(id, fields) {
@@ -519,6 +542,7 @@ Item {
     } else {
       root.store = TodoStore.updateTodo(root.store, id, fields)
     }
+    syncFilteredTodos()
   }
 
   function startEditingTask(id) {
@@ -553,9 +577,17 @@ Item {
     savePendingNotes()
     if (barWidget) {
       barWidget.clearCompleted(profile)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       var res = TodoStore.archiveCompleted(root.store, profile, "")
       root.store = res.updatedStore
+    }
+    root.pendingCompletionIds = []
+    root.slidingOutTaskIds = []
+    root.justCompletedTaskIds = []
+    syncFilteredTodos()
+    if (root.filteredTodos && root.cursorIndex >= root.filteredTodos.length) {
+      root.cursorIndex = Math.max(0, root.filteredTodos.length - 1)
     }
   }
 
@@ -563,9 +595,11 @@ Item {
     savePendingNotes()
     if (barWidget) {
       barWidget.addProfile(name)
+      if (barWidget.store) root.store = barWidget.store
     } else {
       root.store = TodoStore.addProfile(root.store, name)
     }
+    syncFilteredTodos()
   }
 
   function openArchive() {

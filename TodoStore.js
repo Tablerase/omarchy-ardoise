@@ -694,9 +694,10 @@ function removeProfile(store, name) {
  */
 function clearCompleted(store, profileFilter) {
   var s = cloneStore(store)
-  if (profileFilter && profileFilter !== "all") {
+  var cleanFilter = (profileFilter && profileFilter !== "all") ? cleanProfileName(profileFilter) : (profileFilter === "all" ? "all" : null)
+  if (cleanFilter && cleanFilter !== "all") {
     s.todos = s.todos.filter(function (t) {
-      return !t.done || t.profile !== profileFilter
+      return !t.done || cleanProfileName(t.profile || "personal") !== cleanFilter
     })
   } else {
     s.todos = s.todos.filter(function (t) { return !t.done })
@@ -1299,6 +1300,7 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
   var s = cloneStore(store)
   var arc = normalizeArchive(archiveRawText)
   var now = Date.now()
+  var cleanFilter = (profileFilter && profileFilter !== "all") ? cleanProfileName(profileFilter) : (profileFilter === "all" ? "all" : null)
 
   /** @type {Task[]} */
   var keptTodos = []
@@ -1307,7 +1309,8 @@ function archiveCompleted(store, profileFilter, archiveRawText) {
 
   for (var i = 0; i < s.todos.length; i++) {
     var task = s.todos[i]
-    var matchesFilter = (!profileFilter || profileFilter === "all" || task.profile === profileFilter)
+    var taskProfile = cleanProfileName(task.profile || "personal")
+    var matchesFilter = (!cleanFilter || cleanFilter === "all" || taskProfile === cleanFilter)
     if (task.done && matchesFilter) {
       cleared.push({
         id: task.id,

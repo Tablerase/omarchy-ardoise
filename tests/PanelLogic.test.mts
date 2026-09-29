@@ -454,4 +454,45 @@ test("handleActivate & handleReturn: apply dynamic reminder on reminder sub-sect
   assert.ok(reminderTime <= after + 30 * 60 * 1000 + 500);
 });
 
+test("handleTextKey: 'c' / 'C' triggers clearCompleted with currentFilter", () => {
+  let clearedFilter: string | null = null;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    currentFilter: "work",
+    clearCompleted: (filter: string) => {
+      clearedFilter = filter;
+    }
+  };
+
+  // Lowercase 'c'
+  handleTextKey(mockRoot, "c");
+  assert.equal(clearedFilter, "work");
+
+  // Uppercase 'C'
+  clearedFilter = null;
+  mockRoot.currentFilter = "all";
+  handleTextKey(mockRoot, "C");
+  assert.equal(clearedFilter, "all");
+});
+
+test("footer activation: Space and Enter on button 0 trigger clearCompleted", () => {
+  let triggeredIndex = -1;
+  const mockRoot: any = {
+    focusSection: "footer",
+    footerButtonIndex: 0,
+    cursorActive: true,
+    triggerFooterButton: (idx: number) => {
+      triggeredIndex = idx;
+    }
+  };
+
+  // Space (handleActivate)
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(triggeredIndex, 0);
+
+  // Enter (handleReturn)
+  triggeredIndex = -1;
+  handleReturn(mockRoot, TodoStore);
+  assert.equal(triggeredIndex, 0);
+});
 

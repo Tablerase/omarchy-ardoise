@@ -473,7 +473,7 @@ function handleTextKey(root, text, TodoStore) {
     if (typeof root.openQuickAdd === "function") root.openQuickAdd();
     return;
   }
-  if (text === "c") {
+  if (text === "c" || text === "C") {
     if (typeof root.clearCompleted === "function") root.clearCompleted(root.currentFilter);
     return;
   }

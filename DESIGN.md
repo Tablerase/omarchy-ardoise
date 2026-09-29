@@ -298,7 +298,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
-| **Panel** | `c` | Archive and clear completed tasks in current profile |
+| **Panel** | `c` / `C` | Archive and clear completed tasks in current profile |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |

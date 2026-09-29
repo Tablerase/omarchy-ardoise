@@ -45,6 +45,11 @@ BarWidget {
   property string gitSyncStatus: "idle" // "idle" | "syncing" | "success" | "error"
   property string gitSyncMessage: ""
   property string recoveringHash: ""
+  property string lastArchiveText: ""
+
+  function getArchiveText() {
+    return root.lastArchiveText || archiveFile.text() || "{\"version\":1,\"archived\":[]}"
+  }
 
   function loadTodos(raw) {
     root.store = TodoStore.normalize(raw)
@@ -78,9 +83,12 @@ BarWidget {
   }
 
   function clearCompleted(profile) {
-    var result = TodoStore.archiveCompleted(root.store, profile, archiveFile.text())
+    var currentText = root.getArchiveText()
+    var result = TodoStore.archiveCompleted(root.store, profile, currentText)
     saveStore(result.updatedStore, "Clear completed")
-    archiveFile.setText(JSON.stringify(result.updatedArchive, null, 2) + "\n")
+    var json = JSON.stringify(result.updatedArchive, null, 2) + "\n"
+    root.lastArchiveText = json
+    archiveFile.setText(json)
   }
 
   function setActiveProfile(profile) {
@@ -361,10 +369,12 @@ BarWidget {
             var remoteArchive = parts[1].trim()
             if (remoteTodos) {
               var mergedStore = TodoStore.mergeStores(root.store, remoteTodos)
-              var mergedArch = TodoStore.mergeArchives(archiveFile.text(), remoteArchive)
+              var mergedArch = TodoStore.mergeArchives(root.getArchiveText(), remoteArchive)
               root.store = mergedStore
               todoFile.setText(JSON.stringify(mergedStore, null, 2) + "\n")
-              archiveFile.setText(JSON.stringify(mergedArch, null, 2) + "\n")
+              var json = JSON.stringify(mergedArch, null, 2) + "\n"
+              root.lastArchiveText = json
+              archiveFile.setText(json)
               Quickshell.execDetached([
                 "bash", "-c",
                 "cd \"" + root.dataDirPath + "\" && git add todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Auto-merge remote changes\" && git push origin main"
@@ -457,7 +467,12 @@ BarWidget {
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onFileChanged: reload()
+    onLoaded: root.lastArchiveText = text()
+    onLoadFailed: root.lastArchiveText = "{\"version\":1,\"archived\":[]}"
+    onFileChanged: {
+      reload()
+      root.lastArchiveText = text()
+    }
   }
 
   Loader {
@@ -580,8 +595,8 @@ BarWidget {
     function list(): string { return JSON.stringify(root.todos) }
     function profiles(): string { return JSON.stringify(root.profiles) }
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
-    function archived(): string { return archiveFile.text() || "{\"version\":1,\"archived\":[]}" }
-    function archiveCount(): string { return String(TodoStore.getArchivedCount(archiveFile.text())) }
+    function archived(): string { return root.getArchiveText() }
+    function archiveCount(): string { return String(TodoStore.getArchivedCount(root.getArchiveText())) }
     function gitHistory(): string { return root.lastGitLog || "[]" }
     function gitRollback(hashStr: string): string { root.rollbackToCommit(hashStr); return "ok" }
     function gitRecover(hashStr: string): string { root.recoverFromCommit(hashStr); return "ok" }
