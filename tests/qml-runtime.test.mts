@@ -470,7 +470,29 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
     "GitContextMenu card must define explicit height derived from menuContent"
   );
 
-  // 4. PanelContent button tooltips using ShortcutToolTip
+  // 4. Chip variant design system and interactions
+  const chipPath = path.join(repoDir, "ui", "Chip.qml");
+  assert.ok(fs.existsSync(chipPath), "ui/Chip.qml must exist");
+  const chipContent = fs.readFileSync(chipPath, "utf8");
+  assert.ok(
+    chipContent.includes('property string variant: "default"') &&
+      chipContent.includes("effectiveRadius") &&
+      chipContent.includes("isMonospace: variant === \"location\"") &&
+      chipContent.includes('variant === "time"'),
+    "Ui.Chip must support 'time' and 'location' variants with distinct radius and monospace properties"
+  );
+  assert.ok(
+    panelContent.includes('variant: "time"') &&
+      panelContent.includes('variant: "location"'),
+    "PanelContent must use variant 'time' for reminders and 'location' for repositories/codebase chips"
+  );
+  assert.ok(
+    panelContent.includes('root.expandedSubSection = "reminders"') &&
+      panelContent.includes("root.openCodebase(itemRow.modelData)"),
+    "PanelContent chips must provide click interactions to expand reminders and launch codebase"
+  );
+
+  // 5. PanelContent button tooltips using ShortcutToolTip
   const expectedButtons = [
     { id: "helpBtn", shortcut: "?" },
     { id: "shortcutBtn", shortcut: "root.detectedPanelShortcut" },
@@ -1303,9 +1325,8 @@ test("ArdoiseIcon: warning color reads the theme's yellow and follows a live the
 
   const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
   const commonsDir = path.join(omarchyPath, "shell", "Commons");
-  const uiDir = path.join(omarchyPath, "shell", "Ui");
-  if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
-    t.skip("Omarchy shell Commons/Ui modules not found; skipping warning-color runtime test");
+  if (!fs.existsSync(commonsDir)) {
+    t.skip("Omarchy shell Commons module not found; skipping warning-color runtime test");
     return;
   }
 
@@ -1327,20 +1348,21 @@ test("ArdoiseIcon: warning color reads the theme's yellow and follows a live the
   try {
     fs.mkdirSync(currentThemeDir, { recursive: true });
     fs.symlinkSync(commonsDir, path.join(tmpDir, "Commons"));
-    fs.symlinkSync(uiDir, path.join(tmpDir, "Ui"));
     fs.symlinkSync(repoDir, path.join(tmpDir, "plugin"));
     writeColors("#df8e1d");
     fs.writeFileSync(themeNameFile, "catppuccin-latte", "utf8");
 
+    // Import through the plugin module path so ArdoiseIcon's own
+    // `../TodoStore.js` relative import still resolves.
     const harnessQml = `
 import QtQuick
 import Quickshell
-import "plugin/ui" as PluginUi
+import "plugin/ui" as Ui
 
 ShellRoot {
     id: root
 
-    PluginUi.ArdoiseIcon {
+    Ui.ArdoiseIcon {
         id: icon
         store: null
         forcedKey: "overdue"
@@ -1382,7 +1404,10 @@ ShellRoot {
     writeColors("#f9e2af");
     fs.writeFileSync(themeNameFile, "catppuccin", "utf8");
 
-    await new Promise((r) => child!.once("close", r));
+    const closed = new Promise<void>((resolve) => child!.once("close", () => resolve()));
+    const timedOut = new Promise<void>((resolve) => setTimeout(resolve, 12000));
+    await Promise.race([closed, timedOut]);
+    if (child.exitCode === null) child.kill("SIGKILL");
 
     assert.ok(!/is not a type|ReferenceError|Type .* unavailable/i.test(out),
       "warning-color harness reported QML errors:\n" + out);
@@ -1392,14 +1417,14 @@ ShellRoot {
     assert.ok(before, "harness did not report `before`:\n" + out);
     assert.ok(after, "harness did not report `after`:\n" + out);
 
-    // The theme's yellow must be read verbatim — not the hardcoded #df8e1d
+    // The theme's yellow must be read verbatim - not the hardcoded #df8e1d
     // fallback, and not the theme's red.
     assert.equal(before.toLowerCase(), "#df8e1d",
       "initial warning color should equal the theme's yellow key");
 
     // If the theme.name watch works, the live component re-reads colors.toml.
-    // This is the regression guard for the failure mode where watching
-    // colors.toml directly goes deaf after its inode is replaced.
+    // This guards the failure mode where watching colors.toml directly goes
+    // deaf once omarchy-theme-set replaces its inode.
     assert.equal(after.toLowerCase(), "#f9e2af",
       "warning color should follow a live theme switch (theme.name watch)");
   } finally {

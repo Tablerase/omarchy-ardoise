@@ -37,6 +37,12 @@ Item {
   property alias gitModal: gitModal
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
+  // Late-task severity, read by the header ArdoiseIcon (which owns the theme
+  // lookup) and handed down to every task row so panel rows, brand mark and
+  // bar all render the same amber. The literal fallback covers the window
+  // before the header exists, and keeps the value a real QColor so it can be
+  // assigned to a typed `color` property without a coercion warning.
+  readonly property color warningColor: brandIcon ? brandIcon.warningColor : "#df8e1d"
   readonly property color cardBackground: Color.popups.background
   // Opaque composite of selectedBackground tint over the solid card base — used as
   // fadeColor for pill rows inside expanded task drawers so the gradient has real contrast.
@@ -687,6 +693,7 @@ Item {
             spacing: Style.space(6)
 
             Ui.ArdoiseIcon {
+              id: brandIcon
               anchors.verticalCenter: parent.verticalCenter
               store: root.store
               bar: root.bar
@@ -1699,6 +1706,7 @@ Item {
                       isDueToday: itemRow.isDueTodayTask
                       bar: root.bar
                       barForeground: root.barForeground
+                      warningColor: root.warningColor
                       onClicked: {
                         root.cursorIndex = delegateRoot.index
                         root.focusSection = "tasks"
@@ -2030,11 +2038,29 @@ Item {
                           id: remBadge
                           visible: Boolean(itemRow.modelData.reminder)
                           anchors.verticalCenter: parent.verticalCenter
-                          iconText: "󰥔"
+                          variant: "time"
                           text: TodoStore.formatReminder(itemRow.modelData.reminder)
-                          chipColor: itemRow.isDone ? Color.muted : Color.accent
-                          maximumWidth: Style.space(100)
+                          isOverdue: itemRow.isOverdueTask
+                          isDueToday: itemRow.isDueTodayTask
+                          isDone: itemRow.isDone
+                          warningColor: root.warningColor
+                          tooltipText: {
+                            if (!itemRow.modelData.reminder) return ""
+                            var d = new Date(itemRow.modelData.reminder)
+                            var prefix = itemRow.isOverdueTask ? "Overdue: " : (itemRow.isDueTodayTask ? "Due today: " : "Reminder: ")
+                            return prefix + (isNaN(d.getTime()) ? itemRow.modelData.reminder : d.toLocaleString()) + "\nClick to configure reminders"
+                          }
+                          maximumWidth: Style.space(110)
                           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                          onClicked: {
+                            root.savePendingNotes()
+                            root.cursorIndex = delegateRoot.index
+                            root.expandedTaskId = itemRow.modelData.id
+                            root.expandedViaKeyboard = true
+                            root.expandedSubSection = "reminders"
+                            root.expandedReminderIndex = 0
+                            root.ensureTaskVisible(delegateRoot.index, true)
+                          }
                         }
 
                         // Repo badge (displays clean name without owner, does not touch location)
@@ -2042,12 +2068,24 @@ Item {
                           id: repoBadge
                           visible: Boolean(itemRow.modelData.repo)
                           anchors.verticalCenter: parent.verticalCenter
+                          variant: "location"
                           iconText: "󰊤"
                           text: root.cleanRepoName(itemRow.modelData.repo)
-                          chipColor: Color.accent
-                          tooltipText: "Repo: " + (itemRow.modelData.repo || "")
-                          maximumWidth: Style.space(85)
+                          tooltipText: {
+                            var r = itemRow.modelData.repo || ""
+                            var loc = itemRow.modelData.location
+                            if (loc && loc.localPath) {
+                              return "Repository: " + r + "\nPath: " + loc.localPath + "\nClick to open codebase in editor"
+                            }
+                            return "Repository: " + r
+                          }
+                          maximumWidth: Style.space(95)
                           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                          onClicked: {
+                            if (itemRow.modelData.location && itemRow.modelData.location.localPath) {
+                              root.openCodebase(itemRow.modelData)
+                            }
+                          }
                         }
 
                         // Tag chips
@@ -2298,6 +2336,7 @@ Item {
 
                     Ui.Chip {
                       anchors.verticalCenter: parent.verticalCenter
+                      variant: "location"
                       iconText: (itemRow.modelData.location && itemRow.modelData.location.repo) ? "󰊤" : "󰉋"
                       text: {
                         var loc = itemRow.modelData.location
@@ -2311,9 +2350,20 @@ Item {
                         }
                         return itemRow.modelData.repo || ""
                       }
-                      chipColor: Color.accent
+                      tooltipText: {
+                        var loc = itemRow.modelData.location
+                        if (loc && loc.localPath) {
+                          return "Target path: " + loc.localPath + "\nClick to open codebase in editor"
+                        }
+                        return ""
+                      }
                       maximumWidth: Style.space(180)
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      onClicked: {
+                        if (itemRow.modelData.location && itemRow.modelData.location.localPath) {
+                          root.openCodebase(itemRow.modelData)
+                        }
+                      }
                     }
 
                     // Display tag chips if any

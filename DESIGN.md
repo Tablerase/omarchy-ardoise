@@ -65,7 +65,11 @@ The plugin comprises 3 primary desktop surfaces rendered via Quickshell:
 
 ### Modular Component Library (`ui/`)
 To preserve long-term maintainability and visual consistency across the main panel and modal surfaces (inspired by OmaTasks), UI widgets are modularized in `ui/`:
-- **`ui/Chip.qml`**: Reusable compact pill/badge component for reminders, repositories, tags, and auto-detected locations. Strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, and optional removal button.
+- **`ui/Chip.qml`**: Reusable compact pill/badge component supporting first-class design system variants (`variant: "default"` | `"time"` | `"location"` | `"tag"`):
+  - **Time / Due Variant (`"time"`)**: Squircle ticket badge (`radius: Style.space(4)` = 4px) with bold proportional typography, dynamic urgency ramp (amber warning with timer-alert `󱫌` when overdue, vibrant accent with clock `󰥔` when due today, subtle neutral-accent when scheduled in the future, muted when done). Clicking the chip directly expands the task drawer and focuses the reminder presets row.
+  - **Location / Codebase Variant (`"location"`)**: Smooth pill capsule (`radius: implicitHeight / 2` = 9px) with `monospace` typography, accent git/folder icon (`󰊤`/`󰉋`), and developer code surface (`Color.menu.selectedBackground`). Clicking the chip directly launches the codebase in the configured editor via `openCodebase()`.
+  - **Tag Variant (`"tag"`)**: Compact category pill capsule for user profiles and tags (`#tag`).
+  - Common attributes: strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, optional removal button (`󰅖`), and hover cursor cues.
 - **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss. Mounted inside `PanelContent` (inside `PanelKeyCatcher`) so it sits in the correct focus scope and receives keyboard events normally. Height is guaranteed by `Panel.qml` inflating `contentHeight` to at least `Style.space(380)` when the modal is open, regardless of task-list count. Features a solid opaque card background (`Qt.rgba(Color.popups.background.r, Color.popups.background.g, Color.popups.background.b, 1.0)`) and hides underlying task content (`opacity: 0`) to prevent visual bleed-through. The search input opens in normal/motion mode (`isNavFocused`, 1px accent border) allowing instant <kbd>j</kbd>/<kbd>k</kbd> navigation into the shortcuts list, switches to insert mode with 2px accent border and tint on <kbd>i</kbd>/<kbd>a</kbd>/<kbd>/</kbd>/<kbd>Return</kbd>, and supports full vim motions (<kbd>g</kbd>/<kbd>G</kbd>, <kbd>Enter</kbd> to explore results, two-stage <kbd>Escape</kbd>). When the close button is reached, vim motions continue uninterrupted (<kbd>j</kbd> navigates back down to the search field in motion mode, <kbd>k</kbd> wraps to list, <kbd>Enter</kbd>/<kbd>Space</kbd>/<kbd>q</kbd>/<kbd>?</kbd> closes). Contains an unconditional full-coverage `MouseArea` (`hoverEnabled: true`, `acceptedButtons: Qt.AllButtons`) that blocks all hover and click events.
 - **`ui/GitModal.qml`**: Modal overlay for reviewing local Git commit snapshots, executing point-in-time rollbacks (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and configuring remote synchronization (GitHub / GitLab) with conflict-free 3-way JSON store merging and device tagging (`[hostname]`). Accessible via header action button (`󰊢`) or Vim <kbd>u</kbd>. Mounted inside `PanelContent` (same focus scope as `HelpModal`). Panel inflates to at least `Style.space(380)` when open. Features a solid opaque background and lazy loaded snapshots powered by a virtualized `ListView` with on-demand git pagination (`loadMoreGitHistory`), auto-scrolling `ensureSnapshotVisible()`, and full vim motion navigation across both tabs (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>g</kbd>/<kbd>G</kbd> top/bottom, <kbd>h</kbd>/<kbd>l</kbd>/<kbd>Tab</kbd> tab and button switching, <kbd>u</kbd>/<kbd>q</kbd>/<kbd>Esc</kbd> dismiss). In Tab 1 (Sync & Remote), the remote URL input and action buttons are fully navigable via vim motions (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>, <kbd>Enter</kbd>, <kbd>s</kbd> for quick sync) with cursor highlighting and two-stage escape (in insert mode, <kbd>Escape</kbd> blurs to normal motion mode on the remote field without closing the modal; in normal motion mode, <kbd>Escape</kbd> dismisses the modal). Status area uses `Color.menu.selectedBackground`. Contains an unconditional full-coverage `MouseArea` to block mouse bleed-through.
 - **`ui/GitContextMenu.qml`**: Contextual action menu popover for snapshots in `GitModal`. Supports point-in-time rollback (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and copying the commit hash (<kbd>y</kbd>) to the clipboard via `wl-copy`. Accessible via mouse right-click on snapshot row, row hover options button (`󰇙`), or keyboard (<kbd>m</kbd> / <kbd>Space</kbd> / <kbd>Return</kbd>). Features a full-coverage click-away scrim, explicit height sizing derived from content insets (`card.contentTopInset + card.contentBottomInset + menuContent.implicitHeight`), bounds checking keeping the popup within the parent modal bounds, and full vim motion navigation (<kbd>j</kbd>/<kbd>k</kbd> vertical item cycling, <kbd>Enter</kbd>/<kbd>Space</kbd> activation, <kbd>Escape</kbd> dismissal without closing `GitModal`).
@@ -172,7 +176,10 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        - **Line 3 (Metadata & Chips Row)**: Sub-line rendered when chips exist (`hasBadges === hasChips === true`, i.e., has repo, tags, or reminder):
          - Bounded strictly between the checkbox margin and the right edge (with docked profile indicator when viewing "all"), with `Style.space(20)` height ensuring chip borders and pills are never cropped vertically.
          - Profile badge (`profLabel`): Docked cleanly to the right when viewing "all" (`#profile`, elided). If the task has no other chips, the profile label moves inline to Line 1 instead, eliminating the empty 3rd row.
-         - Sub-line chips (`chipsRow`): Indented under title text displaying reminder pill (`󰥔 time` — tasks due today display strictly their scheduled time `HH:MM` without redundant "Due today at" or "Today" prefixes), repo badge (`󰊤 repo`), and tag chips (`#tag`).
+         - Sub-line chips (`chipsRow`): Indented under title text with clear semantic differentiation between temporal deadlines and spatial codebase context:
+           - **Time / Due Ticket (`variant: "time"`)**: Squircle ticket badge (`radius: Style.space(4)`) with bold proportional digits, dynamic urgency coloring (amber with `󱫌` when overdue, vibrant accent with `󰥔` when due today, subtle neutral-accent when scheduled in the future). Clicking directly expands the task drawer into the reminder presets row without toggling task completion.
+           - **Repo / Location Code Capsule (`variant: "location"`)**: Rounded pill capsule (`radius: implicitHeight / 2`) with `monospace` typography, accent git icon (`󰊤`), and developer code surface (`Color.menu.selectedBackground`). Clicking directly launches the codebase in the configured editor via `openCodebase()` when a local path is detected.
+           - **Tag Pills (`variant: "tag"`)**: Subtle pill capsule (`radius: implicitHeight / 2`) in muted neutral tone (`#tag`).
        - When an item has no notes or chips: Single-line layout (`Style.space(34)`), with title, checkbox, inline profile (in "all" view), and action buttons mathematically and visually centered with comfortable vertical padding.
        - Collapsed row content is vertically centered across 1-line, 2-line, and 3-line items via explicit height propagation on `expandedContent` and `itemHeaderCol`.
        - **Row Separators**: A light section separator (`PanelSeparator`, 1px, `strength: 0.08`) is rendered between adjacent item rows in the list to enhance readability.
@@ -421,3 +428,28 @@ Before committing any UI or navigation change:
 2. Verify with tests in `tests/qml-runtime.test.mts` that keyboard navigation did not break.
 3. Test with live shell: `omarchy-restart-shell` and verify interactive motions.
 4. Verify all changes are documented in this `DESIGN.md`.
+
+### Reloading the shell after a QML / JS change
+`omarchy-shell shell rescanPlugins` exits 0 but does **not** re-instantiate an
+already-mounted bar widget, so a changed ladder or color can keep rendering the
+previous build. A real restart is required:
+
+```bash
+timeout 20 bash -c 'while timeout 5 quickshell kill -p /usr/share/omarchy/shell --any-display; do :; done'
+hyprctl dispatch 'hl.dsp.exec_cmd("omarchy-launch-shell")'
+omarchy-shell shell ping     # expect: ok
+```
+
+`omarchy-restart-shell` performs the same steps but can block when invoked
+outside the Hyprland session; running them by hand avoids that.
+
+### Verifying the icon ladder
+Drive a rung with the plugin's own IPC and screenshot the bar. Two gotchas:
+- **End of day is computed in local time** (`TodoStore.js` `getTaskUrgencyBreakdown`), so a reminder set to `23:00Z` on a CEST machine lands on the *next* local day and resolves to `upcoming`, not `due`. Pick a UTC time comfortably inside the local day.
+- **Monitors may be scaled.** Screenshot rasters come out at the monitor scale (e.g. 1.6x), so a 13 px logical glyph is ~21 physical px. Compare against a reference rendered at the matching size, or the glyph identity is ambiguous at 13 px.
+
+Theme-swap freshness is covered automatically by
+`tests/qml-runtime.test.mts` → *"ArdoiseIcon: warning color reads the theme's
+yellow and follows a live theme switch"*, which sandboxes `HOME`, swaps
+`colors.toml` on a live component, and asserts the color follows. No need to
+switch the live theme to verify it.

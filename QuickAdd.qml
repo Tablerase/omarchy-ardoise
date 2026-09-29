@@ -855,6 +855,7 @@ Item {
           Ui.Chip {
             id: locationPill
             anchors.verticalCenter: parent.verticalCenter
+            variant: "location"
             iconText: root.detectedContext && root.detectedContext.repo ? "󰊤" : "󰉋"
             text: {
               if (!root.detectedContext) return ""
@@ -865,7 +866,6 @@ Item {
               }
               return root.detectedContext.localPath || ""
             }
-            chipColor: Color.accent
             removable: true
             maximumWidth: Style.space(260)
             borderAlpha: (root.focusSection === "location") ? 1.0 : 0.35
