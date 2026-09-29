@@ -614,7 +614,7 @@ test("getArdoiseIconState: climbs the ladder clear -> pending -> due -> overdue"
   };
   const overdueState = getArdoiseIconState(overdue, now);
   assert.equal(overdueState.key, "overdue");
-  assert.equal(overdueState.role, "urgent");
+  assert.equal(overdueState.role, "warning");
   assert.equal(overdueState.overdue, 1);
   assert.equal(overdueState.dueToday, 2);
   // The badge shows only the overdue subset, even though 3 tasks are pending
@@ -696,17 +696,47 @@ test("getArdoiseIconState: every rung has a distinct Nerd Font glyph and a color
   const glyphs = new Set(rungs.map((r) => r.glyph));
   assert.equal(glyphs.size, 4, "each ladder rung needs its own glyph");
 
-  // The two extremes share a filled-circle silhouette by design; the middle
-  // rungs are lists. Guard both so the family cannot silently drift.
+  // The first two rungs are lists of work; the last is a distinct silhouette.
   assert.notEqual(rungs[0].glyph, rungs[1].glyph);
   assert.notEqual(rungs[2].glyph, rungs[3].glyph);
+
+  // Severity ramp: neutral -> neutral -> informational -> warning. A task due
+  // today is on track, so it stays accent; only a genuinely late task
+  // escalates past accent.
   assert.deepEqual(
     rungs.map((r) => r.role),
-    ["foreground", "foreground", "accent", "urgent"]
+    ["foreground", "foreground", "accent", "warning"]
   );
 
   // Unknown keys are rejected rather than silently rendering a wrong rung.
   assert.equal(ardoiseIconStateForKey("nope"), null);
+});
+
+test("getArdoiseIconState: no rung uses the urgent role — red is reserved for errors", () => {
+  // Red is the shell's error channel. Using it for a late task would train the
+  // eye to ignore it, so the task ladder must stay on the softer warning ramp
+  // and leave urgent to genuine failure surfaces (QuickAdd title-required,
+  // GitModal errors, invalid input). This fails loudly if someone reintroduces
+  // red as a task severity.
+  for (const key of ["clear", "pending", "due", "overdue"]) {
+    const rung = ardoiseIconStateForKey(key);
+    assert.ok(rung, `rung ${key} must exist`);
+    assert.notEqual(
+      rung.role,
+      "urgent",
+      `rung ${key} must not paint in urgent red`
+    );
+  }
+
+  // Only the late rung escalates, and it escalates to warning specifically.
+  // `timer_alert` (U+F1ACC) is used rather than a clock glyph so it cannot be
+  // confused with the plain clock already reserved for reminders.
+  const late = ardoiseIconStateForKey("overdue");
+  assert.equal(late.role, "warning");
+  assert.equal(late.glyph, "󱫌");
+
+  // Due-today is informational, not a warning: a task due today is on track.
+  assert.equal(ardoiseIconStateForKey("due").role, "accent");
 });
 
 test("makeProgressBar: renders visual progress block bars", () => {

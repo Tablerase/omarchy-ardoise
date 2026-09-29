@@ -9,8 +9,14 @@ Rectangle {
   property bool isDueToday: false
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
   property color accentColor: Color.accent
+  // Late-task severity. Supplied by the host from ArdoiseIcon.warningColor so
+  // panel rows, the brand mark and the bar all read the same amber. The
+  // literal default keeps the row renderable if a host ever omits it.
+  //
+  // There is deliberately no urgentColor here any more: a late task is a
+  // warning, not an error, so red is not part of the task severity ramp.
+  property color warningColor: "#df8e1d"
 
   signal clicked()
 
@@ -42,14 +48,14 @@ Rectangle {
     : (root.checked
         ? Util.alpha(root.accentColor, 0.14)
         : (root.isOverdue
-            ? Util.alpha(root.urgentColor, 0.12)
+            ? Util.alpha(root.warningColor, 0.12)
             : (root.isDueToday ? Util.alpha(root.accentColor, 0.10) : "transparent")))
 
   Behavior on color { ColorAnimation { duration: 150 } }
 
   border.color: root.checked
     ? root.accentColor
-    : (root.isOverdue ? root.urgentColor : (root.isDueToday ? root.accentColor : Color.muted))
+    : (root.isOverdue ? root.warningColor : (root.isDueToday ? root.accentColor : Color.muted))
   border.width: (root.isOverdue || root.isDueToday || root.checked) ? 1.5 : 1
 
   Behavior on border.color { ColorAnimation { duration: 150 } }

@@ -1032,20 +1032,23 @@ function getTaskUrgencyBreakdown(store, customNow) {
 // everywhere. Rungs are driven by urgency rather than raw count, matching the
 // way omarchy's own battery/wifi/volume widgets swap on meaningful state.
 //
-// The two extremes deliberately share a silhouette: "clear" and "overdue" are
-// both filled circles, so the widget keeps a stable identity while only the
-// interior mark and the color role change. The middle rungs are lists.
+// The colour ramp IS the severity channel: foreground -> accent -> warning.
+// "due" is informational (a task due today is on track), so it stays accent
+// and only genuinely late tasks escalate to warning. The urgent role is
+// deliberately absent from every rung: red is reserved for real error
+// surfaces, so an orange task is late and a red task is broken. Guarded by a
+// test asserting no rung uses "urgent".
 //
 //   clear    0 pending                      check_circle       foreground
 //   pending  nothing time-critical          format_list_checks foreground
 //   due      due today, nothing overdue     list_status        accent
-//   overdue  anything overdue               alert_circle       urgent
+//   overdue  anything overdue               timer_alert        warning
 /** @type {Record<string, {key: string, glyph: string, role: string}>} */
 var ARDOISE_ICON_STATES = {
   clear: { key: "clear", glyph: "󰗠", role: "foreground" },
   pending: { key: "pending", glyph: "󰝖", role: "foreground" },
   due: { key: "due", glyph: "󱖫", role: "accent" },
-  overdue: { key: "overdue", glyph: "󰀨", role: "urgent" }
+  overdue: { key: "overdue", glyph: "󱫌", role: "warning" }
 }
 
 /**

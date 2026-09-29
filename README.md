@@ -11,7 +11,7 @@ A productivity status bar widget, flyout panel, quick-add modal, and background 
 ## Features
 
 - **Live Bar Widget**:
-  - Displays a stateful task-slate mark that escalates with urgency, plus a badge showing the count for the rung the icon depicts (e.g. overdue count, not total).
+  - Displays a stateful task-slate mark that escalates with severity, plus a badge showing the count for the rung the icon depicts (e.g. late count, not total). Rungs are neutral → due-today (accent) → late (theme warning amber); red is reserved for errors.
   - Interactive tooltip with profile breakdown: `󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit`.
   - Middle-click directly opens `todos.json` in your default editor via `omarchy-launch-editor`.
 - **Profiles & Categories**:
