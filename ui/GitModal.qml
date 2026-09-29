@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Quickshell
 import qs.Commons
 import qs.Ui
 import "../GitSync.js" as GitSync
@@ -65,16 +66,12 @@ Rectangle {
 
   function openContextMenuForSelected() {
     if (!root.selectedSnapshot) return
-    var targetY = Style.space(80)
-    if (snapshotList && root.selectedIndex >= 0 && root.selectedIndex < snapshotList.count) {
-      var item = snapshotList.itemAtIndex(root.selectedIndex)
-      if (item) {
-        var mapped = item.mapToItem(root, item.width - Style.space(200), item.height / 2)
-        contextMenu.open(root.selectedSnapshot, mapped.x, mapped.y)
-        return
-      }
+    if (snapshotList && snapshotList.currentItem) {
+      var mapped = snapshotList.currentItem.mapToItem(root, snapshotList.currentItem.width - Style.space(270), snapshotList.currentItem.height / 2)
+      contextMenu.open(root.selectedSnapshot, mapped.x, mapped.y)
+      return
     }
-    contextMenu.open(root.selectedSnapshot, (root.width - Style.space(260)) / 2, Style.space(100))
+    contextMenu.open(root.selectedSnapshot, (root.width - Style.space(260)) / 2, Math.max(Style.space(60), (root.height - Style.space(200)) / 2))
   }
 
   function toggle() {
@@ -553,7 +550,7 @@ Rectangle {
                   root.snapshotSection = "snapshots"
                   root.forceActiveFocus()
                   if (mouse.button === Qt.RightButton) {
-                    var pos = mapToItem(root, mouse.x, mouse.y)
+                    var pos = itemHover.mapToItem(root, mouse.x, mouse.y)
                     contextMenu.open(snapshotItem.modelData, pos.x, pos.y)
                   }
                 }
@@ -651,7 +648,7 @@ Rectangle {
                   onClicked: {
                     root.selectedIndex = snapshotItem.index
                     root.snapshotSection = "snapshots"
-                    var pos = mapToItem(root, width / 2, height)
+                    var pos = moreBtn.mapToItem(root, moreBtn.width / 2, moreBtn.height)
                     contextMenu.open(snapshotItem.modelData, pos.x - Style.space(200), pos.y)
                   }
                 }
