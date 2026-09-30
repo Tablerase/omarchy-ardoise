@@ -5,13 +5,14 @@
   "private": true,
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mts",
-    "test:deno": "deno test --no-check --allow-read tests/",
     "typecheck": "deno check TodoStore.js PanelLogic.js GitSync.js",
     "lint:qml": "qmllint *.qml ui/*.qml",
     "validate:plugin": "omarchy plugin validate .",
     "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test",
+    "check:ci": "CI=1 QT_QPA_PLATFORM=offscreen npm run typecheck && npm run lint:qml && npm run validate:plugin:ci && npm test",
+    "validate:plugin:ci": "bash \"${OMARCHY_PATH:-/tmp/omarchy}/bin/omarchy-plugin-validate\" .",
     "test:ci": "gh act -j test -P ubuntu-latest=node:20-bookworm-slim",
-    "test:docker": "docker run --rm -v \"$PWD:/work\" -w /work archlinux:latest bash -c 'echo \"/usr/lib/qt6/bin\" >> \"$GITHUB_PATH\" && export PATH=\"/usr/lib/qt6/bin:$PATH\" && pacman -Sy --noconfirm git quickshell qt6-declarative deno jq && qmllint *.qml && deno check TodoStore.js && deno test --no-check --allow-read tests/ && jq -e . manifest.json'"
+    "test:docker": "bash tools/ci-local.sh"
   },
   "author": "tablerase",
   "license": "MIT"

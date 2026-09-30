@@ -8,14 +8,9 @@ on:
     branches: [ main ]
 
 env:
-  # Omarchy commit providing the shell modules the QML tests mount
-  # (shell/Commons, shell/Ui) and the manifest validator.
-  #
-  # Pinned deliberately: tracking a branch means any upstream commit can turn
-  # this repo's CI red for reasons unrelated to the change under test. Bump
-  # this when you want to re-test against a newer Omarchy — see
-  # AGENTS.md "Test Tiers" for the procedure.
-  OMARCHY_REF: b421b1b479ee9ea0863792282eee4ffeb50923dc
+  # Placeholder; the real value is loaded from tools/omarchy-ref below so the
+  # pin has exactly one definition shared with tools/ci-local.sh.
+  OMARCHY_REF: ""
 
 jobs:
   test:
@@ -28,14 +23,19 @@ jobs:
         run: echo "/usr/lib/qt6/bin" >> "$GITHUB_PATH"
 
       - name: Install Dependencies
-        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs jq
+        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq
 
       - name: Checkout Code
         uses: actions/checkout@v7
 
       # The QML tests mount Omarchy's shell modules so `import qs.Commons`
-      # and `import qs.Ui` resolve. Fetch only what is needed, at a fixed
-      # commit, so the run is reproducible.
+      # and `import qs.Ui` resolve. Pinning a commit - rather than tracking the
+      # quattro branch - means upstream changes cannot turn this repo's CI red
+      # for reasons unrelated to the change under test. Bump it deliberately;
+      # see AGENTS.md "Test Tiers".
+      - name: Load Pinned Omarchy Ref
+        run: echo "OMARCHY_REF=$(tr -d '[:space:]' < tools/omarchy-ref)" >> "$GITHUB_ENV"
+
       - name: Fetch Omarchy Shell Modules
         run: |
           set -euo pipefail
@@ -46,7 +46,7 @@ jobs:
           git sparse-checkout set shell/Commons shell/Ui bin
           git fetch -q --depth 1 origin "$OMARCHY_REF"
           git checkout -q FETCH_HEAD
-          echo "export OMARCHY_PATH=/tmp/omarchy" >> "$GITHUB_ENV"
+          echo "OMARCHY_PATH=/tmp/omarchy" >> "$GITHUB_ENV"
           test -d /tmp/omarchy/shell/Commons
           test -d /tmp/omarchy/shell/Ui
           test -f /tmp/omarchy/bin/omarchy-plugin-validate
