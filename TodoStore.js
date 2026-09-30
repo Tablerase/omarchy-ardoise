@@ -107,13 +107,16 @@
  * @property {string} nextDueDiff
  */
 
+var CURRENT_SCHEMA_VERSION = 1
+var CURRENT_ARCHIVE_VERSION = 1
+
 /**
  * Creates an empty default Schema v1 store.
  * @returns {TodoStoreData}
  */
 function defaultStore() {
   return {
-    version: 1,
+    version: CURRENT_SCHEMA_VERSION,
     activeProfile: "personal",
     profiles: ["personal", "work"],
     todos: []
@@ -206,7 +209,8 @@ function normalizeTask(raw) {
   var reminder = raw.reminder ? String(raw.reminder) : null
   var notified = Boolean(raw.notified)
 
-  return {
+  /** @type {Task & Record<string, any>} */
+  var task = {
     id: id,
     title: title,
     description: description,
@@ -221,6 +225,15 @@ function normalizeTask(raw) {
     reminder: reminder,
     notified: notified
   }
+
+  // Forward compatibility: preserve unknown fields introduced by newer schemas
+  for (var k in raw) {
+    if (Object.prototype.hasOwnProperty.call(raw, k) && !(k in task)) {
+      task[k] = raw[k]
+    }
+  }
+
+  return task
 }
 
 /**
@@ -258,14 +271,16 @@ function normalize(raw) {
     }
     var profileList = Object.keys(profileSet)
     return {
-      version: 1,
+      version: CURRENT_SCHEMA_VERSION,
       activeProfile: "personal",
       profiles: profileList,
       todos: legacyTodos
     }
   }
 
-  // Schema v1 format
+  // Schema format (v1 or future)
+  var rawVersion = typeof data.version === "number" ? data.version : (Number(data.version) || CURRENT_SCHEMA_VERSION)
+  var resolvedVersion = Math.max(CURRENT_SCHEMA_VERSION, rawVersion)
   var activeProfile = cleanProfileName(data.activeProfile)
   /** @type {string[]} */
   var profiles = ["personal", "work"]
@@ -301,12 +316,22 @@ function normalize(raw) {
     profiles.push(activeProfile)
   }
 
-  return {
-    version: 1,
+  /** @type {TodoStoreData & Record<string, any>} */
+  var store = {
+    version: resolvedVersion,
     activeProfile: activeProfile,
     profiles: profiles,
     todos: todos
   }
+
+  // Forward compatibility: preserve root properties introduced by future schemas
+  for (var k in data) {
+    if (Object.prototype.hasOwnProperty.call(data, k) && !(k in store)) {
+      store[k] = data[k]
+    }
+  }
+
+  return store
 }
 
 /**
@@ -1251,11 +1276,11 @@ function normalizeArchive(raw) {
     try {
       data = JSON.parse(raw || "{}")
     } catch (_e) {
-      return { version: 1, archived: [] }
+      return { version: CURRENT_ARCHIVE_VERSION, archived: [] }
     }
   }
   if (!data || typeof data !== "object") {
-    return { version: 1, archived: [] }
+    return { version: CURRENT_ARCHIVE_VERSION, archived: [] }
   }
   var rawList = Array.isArray(data) ? data : (Array.isArray(data.archived) ? data.archived : [])
   /** @type {ArchivedTask[]} */
@@ -1274,7 +1299,8 @@ function normalizeArchive(raw) {
         }
       }
     }
-    archived.push({
+    /** @type {ArchivedTask & Record<string, any>} */
+    var normItem = {
       id: item.id !== undefined && item.id !== null ? item.id : now,
       title: capitalizeTitle(String(item.title || item.text || "").trim()),
       description: String(item.description || ""),
@@ -1284,10 +1310,17 @@ function normalizeArchive(raw) {
       location: normalizeLocation(item.location),
       createdAt: Number(item.createdAt) || now,
       completedAt: Number(item.completedAt) || now
-    })
+    }
+    for (var k in item) {
+      if (Object.prototype.hasOwnProperty.call(item, k) && !(k in normItem)) {
+        normItem[k] = item[k]
+      }
+    }
+    archived.push(normItem)
   }
+  var rawArchiveVersion = typeof data.version === "number" ? data.version : (Number(data.version) || CURRENT_ARCHIVE_VERSION)
   return {
-    version: Number(data.version) || 1,
+    version: Math.max(CURRENT_ARCHIVE_VERSION, rawArchiveVersion),
     archived: archived
   }
 }
@@ -1442,8 +1475,9 @@ function mergeStores(localRaw, remoteRaw) {
   }
   mergedTodos.sort(compareTasks)
 
+  var maxVersion = Math.max(local.version || 1, remote.version || 1, CURRENT_SCHEMA_VERSION)
   return {
-    version: 1,
+    version: maxVersion,
     activeProfile: activeProfile,
     profiles: mergedProfiles,
     todos: mergedTodos
@@ -1485,8 +1519,9 @@ function mergeArchives(localArchiveRaw, remoteArchiveRaw) {
     return (b.completedAt || 0) - (a.completedAt || 0)
   })
 
+  var maxArchiveVersion = Math.max(local.version || 1, remote.version || 1, CURRENT_ARCHIVE_VERSION)
   return {
-    version: 1,
+    version: maxArchiveVersion,
     archived: mergedList
   }
 }
@@ -1520,6 +1555,8 @@ function filterMissingTasks(currentRaw, snapshotRaw) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    CURRENT_SCHEMA_VERSION,
+    CURRENT_ARCHIVE_VERSION,
     defaultStore,
     cleanProfileName,
     normalizeTask,

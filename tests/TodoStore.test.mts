@@ -6,6 +6,8 @@ const require = createRequire(import.meta.url);
 const TodoStore = require("../TodoStore.js");
 
 const {
+  CURRENT_SCHEMA_VERSION,
+  CURRENT_ARCHIVE_VERSION,
   defaultStore,
   cleanProfileName,
   normalizeTask,
@@ -1257,6 +1259,112 @@ test("scale performance: handles 5,000 archived tasks and merge without degradat
   assert.equal(res.updatedArchive.archived.length, 5001);
   assert.ok(tClear < 100, `archiveCompleted with 5,000 tasks took ${tClear}ms (expected <100ms)`);
 });
+
+test("versioning & extensibility: normalizeTask preserves unknown/future extension fields", () => {
+  const futureRaw = {
+    id: 12345,
+    title: "Future task",
+    description: "Task from a future schema version",
+    profile: "work",
+    priority: "high",
+    subtasks: [{ id: 1, text: "Subtask 1", done: false }],
+    recurrence: { freq: "weekly", interval: 1 },
+    customMetadata: { score: 99 }
+  };
+
+  const normalized = normalizeTask(futureRaw);
+  assert.ok(normalized, "Task should be normalized");
+  assert.equal(normalized.title, "Future task");
+  assert.equal(normalized.profile, "work");
+  // Assert future fields are preserved without data loss
+  assert.equal(normalized.priority, "high");
+  assert.deepEqual(normalized.subtasks, [{ id: 1, text: "Subtask 1", done: false }]);
+  assert.deepEqual(normalized.recurrence, { freq: "weekly", interval: 1 });
+  assert.deepEqual(normalized.customMetadata, { score: 99 });
+});
+
+test("versioning & extensibility: normalize preserves future schema version and root properties", () => {
+  assert.equal(CURRENT_SCHEMA_VERSION, 1);
+  assert.equal(CURRENT_ARCHIVE_VERSION, 1);
+
+  const futureStore = {
+    version: 2,
+    activeProfile: "work",
+    profiles: ["personal", "work", "research"],
+    todos: [
+      { id: 1, title: "v2 task", profile: "work", priority: "critical" }
+    ],
+    workspaceSettings: { theme: "dark", autoArchiveDays: 30 }
+  };
+
+  const normalized = normalize(JSON.stringify(futureStore));
+  // Must not downgrade version 2 to version 1
+  assert.equal(normalized.version, 2);
+  assert.equal(normalized.activeProfile, "work");
+  assert.equal(normalized.todos.length, 1);
+  assert.equal(normalized.todos[0].priority, "critical");
+  // Root level extension properties must be preserved
+  assert.deepEqual(normalized.workspaceSettings, { theme: "dark", autoArchiveDays: 30 });
+});
+
+test("versioning & extensibility: mergeStores resolves version skew adopting the higher schema version", () => {
+  const localV1 = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work"],
+    todos: [
+      { id: 10, title: "Local task v1", done: false, updatedAt: 1000 }
+    ]
+  };
+
+  const remoteV2 = {
+    version: 2,
+    activeProfile: "work",
+    profiles: ["personal", "work", "research"],
+    todos: [
+      { id: 20, title: "Remote task v2", done: false, priority: "urgent", updatedAt: 2000 }
+    ]
+  };
+
+  const merged = mergeStores(localV1, remoteV2);
+  // Merged store must adopt the higher version (v2) and preserve tasks and v2 fields
+  assert.equal(merged.version, 2);
+  assert.equal(merged.todos.length, 2);
+  const v2Task = merged.todos.find((t) => t.id === 20);
+  assert.ok(v2Task, "Remote v2 task should be present");
+  assert.equal(v2Task.priority, "urgent");
+});
+
+test("versioning & extensibility: normalizeArchive preserves future archive versions and extra task properties", () => {
+  const futureArchive = {
+    version: 3,
+    archived: [
+      {
+        id: 99,
+        title: "Archived future task",
+        profile: "work",
+        category: "billing",
+        completedAt: 50000
+      }
+    ]
+  };
+
+  const normArc = normalizeArchive(JSON.stringify(futureArchive));
+  assert.equal(normArc.version, 3);
+  assert.equal(normArc.archived.length, 1);
+  assert.equal(normArc.archived[0].category, "billing");
+
+  const localArcV1 = {
+    version: 1,
+    archived: [{ id: 1, title: "Old archived", completedAt: 10000 }]
+  };
+  const mergedArc = mergeArchives(localArcV1, futureArchive);
+  assert.equal(mergedArc.version, 3);
+  assert.equal(mergedArc.archived.length, 2);
+  assert.equal(mergedArc.archived[0].id, 99);
+  assert.equal(mergedArc.archived[0].category, "billing");
+});
+
 
 
 
