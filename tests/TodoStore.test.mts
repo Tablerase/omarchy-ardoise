@@ -1168,4 +1168,95 @@ test("filterMissingTasks: finds tasks present in snapshot but absent currently",
   assert.equal(missing[1].id, 30);
 });
 
+test("scale performance: handles 500 active tasks within strict latency budgets", () => {
+  const now = Date.now();
+  const tasks = [];
+  const profiles = ["personal", "work", "project-x", "devops"];
+
+  for (let i = 0; i < 500; i++) {
+    tasks.push({
+      id: now + i,
+      title: `Task #${i + 1} scale test item with details and extra context`,
+      description: `Task ${i + 1} description and notes.`,
+      profile: profiles[i % profiles.length],
+      repo: i % 3 === 0 ? "omarchy-ardoise" : null,
+      tags: ["scale", `tag-${i % 5}`],
+      location: i % 2 === 0 ? "/home/rcutte/Work/tries/omarchy-ardoise" : null,
+      reminder: i % 10 === 0 ? new Date(now + 3600000).toISOString() : null,
+      done: i % 7 === 0,
+      createdAt: now - i * 60000
+    });
+  }
+
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: profiles,
+    todos: tasks
+  };
+
+  const t0 = performance.now();
+  const filtered = getFilteredTodos(store, "all");
+  const tFilter = performance.now() - t0;
+
+  const t1 = performance.now();
+  const pendingCount = getPendingCount(store, "all");
+  const tCount = performance.now() - t1;
+
+  const t2 = performance.now();
+  const urgency = getTaskUrgencyBreakdown(store);
+  const tUrgency = performance.now() - t2;
+
+  assert.equal(filtered.length, 500);
+  assert.ok(pendingCount > 0, "Pending count should be greater than 0");
+  assert.ok(tFilter < 50, `getFilteredTodos for 500 tasks took ${tFilter}ms (expected <50ms)`);
+  assert.ok(tCount < 10, `getPendingCount for 500 tasks took ${tCount}ms (expected <10ms)`);
+  assert.ok(tUrgency < 25, `getTaskUrgencyBreakdown for 500 tasks took ${tUrgency}ms (expected <25ms)`);
+});
+
+test("scale performance: handles 5,000 archived tasks and merge without degradation", () => {
+  const now = Date.now();
+  const archived = [];
+
+  for (let i = 0; i < 5000; i++) {
+    archived.push({
+      id: now + i,
+      title: `Archived task #${i + 1}`,
+      description: "Archived notes",
+      profile: "personal",
+      tags: ["archived"],
+      createdAt: now - i * 60000,
+      completedAt: now - i * 1000
+    });
+  }
+
+  const archiveData = { version: 1, archived };
+  const rawJson = JSON.stringify(archiveData);
+
+  const t0 = performance.now();
+  const normalized = normalizeArchive(rawJson);
+  const tNorm = performance.now() - t0;
+
+  assert.equal(normalized.archived.length, 5000);
+  assert.ok(tNorm < 100, `normalizeArchive for 5,000 tasks took ${tNorm}ms (expected <100ms)`);
+
+  const dummyStore = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: now + 99999, title: "Just completed", done: true, profile: "personal" }
+    ]
+  };
+
+  const t1 = performance.now();
+  const res = archiveCompleted(dummyStore, "all", rawJson);
+  const tClear = performance.now() - t1;
+
+  assert.equal(res.clearedCount, 1);
+  assert.equal(res.updatedArchive.archived.length, 5001);
+  assert.ok(tClear < 100, `archiveCompleted with 5,000 tasks took ${tClear}ms (expected <100ms)`);
+});
+
+
 

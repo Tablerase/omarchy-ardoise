@@ -217,10 +217,12 @@ BarWidget {
       "[ -f \"" + root.todoFilePath + "\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"" + root.todoFilePath + "\"; " +
       "[ -f \"" + root.archiveFilePath + "\" ] || echo '{\"version\":1,\"archived\":[]}' > \"" + root.archiveFilePath + "\"; " +
       "cd \"" + root.dataDirPath + "\" && " +
+      "git config gc.auto 100 2>/dev/null || true; " +
       "if [ ! -d \".git\" ]; then " +
       "  git init -b main; " +
       "  git config user.name \"" + root.deviceName + "\"; " +
       "  git config user.email \"" + Quickshell.env("USER") + "@" + root.deviceName + "\"; " +
+      "  git config gc.auto 100; " +
       "  git add todos.json todos-archive.json; " +
       "  git commit -m \"[" + root.deviceName + "] Initial task repository\"; " +
       "fi"
@@ -251,6 +253,7 @@ BarWidget {
       "git add todos.json todos-archive.json && " +
       "if ! git diff --cached --quiet; then " +
       "  git commit -m \"" + GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount) + "\"; " +
+      "  git gc --auto --quiet; " +
       "fi"
     ]
     onExited: root.refreshGitHistory()
