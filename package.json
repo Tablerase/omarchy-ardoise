@@ -5,6 +5,12 @@
   "private": true,
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mts",
+    "test:fast": "node --experimental-strip-types --test tests/TodoStore.test.mts tests/PanelLogic.test.mts tests/GitSync.test.mts tests/detect-context.test.mts tests/qml-static.test.mts",
+    "test:unit": "npm run test:fast",
+    "test:qml": "node --experimental-strip-types --test tests/qml-*.test.mts",
+    "test:qml:static": "node --experimental-strip-types --test tests/qml-static.test.mts",
+    "test:qml:core": "node --experimental-strip-types --test tests/qml-core.test.mts",
+    "test:qml:theme": "node --experimental-strip-types --test tests/qml-theme.test.mts",
     "typecheck": "deno check TodoStore.js PanelLogic.js GitSync.js",
     "lint:qml": "qmllint *.qml ui/*.qml",
     "validate:plugin": "omarchy plugin validate .",

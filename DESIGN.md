@@ -152,7 +152,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 1. **Header Item**:
    - Left: Ardoise Task-Slate Mark (`ui/ArdoiseIcon.qml` at `Style.font.subtitle`, ladder rung) + Title ("Ardoise") + Pending Task Count badge.
      - Brand mark and title form an interactive group: hovering smoothly transitions both to `Color.accent` with a pointer cursor and a `PanelToolTip` linking to the GitHub repository (`https://github.com/Tablerase/omarchy-ardoise`). Clicking it opens the GitHub repository in the user's default browser. The hover accent is applied via the component's `colorOverride`, which suppresses the ladder role for that frame only.
-   - Right: Shortcuts Help Toggle button (`?`) + Dual Desktop Shortcuts copy pill (`󰌌`, tracking Panel Toggle and Quick Add).
+   - Right: In-Panel Search button (`󰍉`, shortcut `/ or Ctrl+F`) + Shortcuts Help Toggle button (`?`) + Git Snapshots & Undo button (`󰊢`, `u`) + Dual Desktop Shortcuts copy pill (`󰌌`, tracking Panel Toggle and Quick Add).
 2. **Top Filter Pills Row (`visibleProfiles`)**:
    - "All" pill + active/pending profile pills sorted by pending count and recency.
    - Auto-scrollable flickable with clean single-hue alpha edge fade gradients (`Qt.rgba(r, g, b, 0)`).
@@ -163,7 +163,29 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
    - **Universal Escape**: Pressing <kbd>Escape</kbd> while typing blurs the text field into normal motion mode on the `"input"` section without closing the panel or discarding text. In normal mode, pressing <kbd>j</kbd>/<kbd>Down</kbd> moves into `tasks`, <kbd>k</kbd>/<kbd>Up</kbd> moves into `profiles`, and pressing <kbd>Enter</kbd>, <kbd>Space</kbd>, or typing any printable character re-enters edit mode.
    - Profile badge showing currently active filter tag.
    - Add button.
-4. **Task List View (`taskListView`)**:
+4. **In-Panel Search Tool (`searchRow`, `/` and `Ctrl+F`)**:
+   - Sleek expandable search bar positioned below the new task input row and above the task list.
+   - **Activation**:
+     - Pressing <kbd>/</kbd> in normal list/motion mode.
+     - Pressing <kbd>Ctrl+F</kbd> globally across the panel (from tasks, input, or key catcher).
+     - Clicking the search button `󰍉` in header right actions.
+   - **Live Query Scope**:
+     - Filters `filteredTodos` in real time as the user types without lag.
+     - Matches:
+       1. Task titles (`task.title`).
+       2. Task notes and descriptions (`task.description`).
+       3. Repository names (`task.repo` or `task.location.repo`).
+       4. Subsystem tags (`task.tags`).
+       5. Hashtag queries (`#profile`): searches across all profiles regardless of active profile filter. Pressing <kbd>Enter</kbd> while on a `#profile` query sets `currentFilter` to that profile and dismisses search.
+   - **Two-Stage Escape**:
+     - Non-empty query: Pressing <kbd>Escape</kbd> clears `searchField.text = ""` and `searchQuery = ""`, preserving the search bar in normal mode.
+     - Empty query: Pressing <kbd>Escape</kbd> collapses the search bar and returns focus to the task list in normal motion mode.
+   - **Quick Motion Dropdown**:
+     - Pressing <kbd>Down</kbd>, <kbd>Enter</kbd>, or <kbd>Tab</kbd> drops focus cleanly onto the first filtered task in the list (`focusSection = "tasks"`, `cursorIndex = 0`).
+   - **Empty State**:
+     - When no tasks match the active query, displays an informative empty card:
+       `󰍉 No tasks matching "<query>"` with a hint `Press Esc to clear search`.
+5. **Task List View (`taskListView`)**:
    - Vertically flickable column of tasks (`itemRow`).
    - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
    - Individual task row:
@@ -246,7 +268,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        - When `keySearchField.text` has content: pressing <kbd>Escape</kbd> blurs the field into normal motion navigation mode on `"search"` with active `BorderSurface` focus outline, preserving draft search queries.
        - In normal motion mode: pressing <kbd>Escape</kbd> dismisses; pressing <kbd>Enter</kbd>, <kbd>Space</kbd>, <kbd>i</kbd>, <kbd>a</kbd>, or typing any character re-enters text edit mode; pressing <kbd>j</kbd>/<kbd>Down</kbd>/<kbd>Tab</kbd> moves into the shortcuts list (`helpFlickable`); pressing <kbd>k</kbd>/<kbd>Up</kbd>/<kbd>Shift+Tab</kbd> moves to `closeHelpBtn`.
      - When navigating the shortcuts list: pressing <kbd>k</kbd> or <kbd>Up</kbd> at the top item moves back up to the search field in motion mode without swallowing keystrokes; typing any character redirects into search.
-   - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Modals). Uses `<slash>` instead of ambiguous `/ /` notation, and dynamically lists the active desktop keybinding (`root.detectedShortcut`).
+   - Keyboard shortcut directory grouped by category (Global, Navigation, Task Actions, Input & Create, Modals). Lists <kbd>/</kbd> / <kbd>Ctrl+F</kbd> for searching tasks, notes & profiles and <kbd>i</kbd> / <kbd>a</kbd> for focusing the new task input field, and dynamically lists the active desktop keybinding (`root.detectedShortcut`).
 
 #### Navigation State Flow (`focusSection`)
 ```
@@ -271,11 +293,13 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
   - `omarchy-shell tablerase.ardoise count`: Returns **total** pending task count string. Deliberately *not* rung-scoped: it is a data/scripting contract, whereas the bar badge is a display signal. Do not "fix" this to match the badge — `list` already exposes the full breakdown if a script needs urgency detail.
   - `omarchy-shell tablerase.ardoise add "<title> [#profile]"`: Adds task with optional `#profile`.
+  - `omarchy-shell tablerase.ardoise addDetailed "<title>" "<notes>" "<reminder>"`: Adds task with explicit notes/description and optional reminder (e.g. preset `+30m`, `+1h`, `tomorrow 9am` or ISO string; pass `""` if none).
   - `omarchy-shell tablerase.ardoise toggleTodo "<id>"`: Toggles task completion (`done`).
   - `omarchy-shell tablerase.ardoise update "<id>" '<fieldsJson>'`: Updates task properties (e.g. reminder, notes, profile).
   - `omarchy-shell tablerase.ardoise remove "<id>"`: Deletes task by ID.
   - `omarchy-shell tablerase.ardoise clear`: Archives and clears completed tasks.
   - `omarchy-shell tablerase.ardoise profiles`: Returns array of available profiles.
+  - `omarchy-shell tablerase.ardoise searchProfiles "<query>"`: Returns structured JSON array of profile names matching substring query.
   - `omarchy-shell tablerase.ardoise setProfile "<profile>"`: Sets active profile filter.
   - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility. In multi-monitor environments, `open` and `toggle` dynamically discover the `BarWidget` on the compositor-focused output via `root.bar.moduleWidgets()` and `Hyprland.focusedMonitor` to summon the panel on the active monitor, while `close` and `toggle` (when already open) target the currently open instance.
   - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
@@ -426,7 +450,7 @@ Resolution order: host `warningOverride` → user theme `bar.warning` (`Color.pi
 ## 6. Verification Checklist for UI Changes
 Before committing any UI or navigation change:
 1. Run `npm run check` (typecheck, `qmllint`, `omarchy plugin validate`, runtime unit tests).
-2. Verify with tests in `tests/qml-runtime.test.mts` that keyboard navigation did not break.
+2. Verify with tests in `tests/qml-windowed.test.mts` and `tests/qml-static.test.mts` that keyboard navigation did not break.
 3. Test with live shell: `omarchy-restart-shell` and verify interactive motions.
 4. Verify all changes are documented in this `DESIGN.md`.
 5. Run `npm run test:docker` to reproduce CI exactly, including the `CI=1`
@@ -453,7 +477,7 @@ Drive a rung with the plugin's own IPC and screenshot the bar. Two gotchas:
 - **Monitors may be scaled.** Screenshot rasters come out at the monitor scale (e.g. 1.6x), so a 13 px logical glyph is ~21 physical px. Compare against a reference rendered at the matching size, or the glyph identity is ambiguous at 13 px.
 
 Theme-swap freshness is covered automatically by
-`tests/qml-runtime.test.mts` → *"ArdoiseIcon: warning color reads the theme's
+`tests/qml-theme.test.mts` → *"ArdoiseIcon: warning color reads the theme's
 yellow and follows a live theme switch"*, which sandboxes `HOME`, swaps
 `colors.toml` on a live component, and asserts the color follows. No need to
 switch the live theme to verify it.

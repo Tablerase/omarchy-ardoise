@@ -46,7 +46,8 @@ const {
   capitalizeTitle,
   mergeStores,
   mergeArchives,
-  filterMissingTasks
+  filterMissingTasks,
+  searchProfiles
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -1364,6 +1365,117 @@ test("versioning & extensibility: normalizeArchive preserves future archive vers
   assert.equal(mergedArc.archived[0].id, 99);
   assert.equal(mergedArc.archived[0].category, "billing");
 });
+
+test("searchProfiles: searches profiles with substring and hashtag support", () => {
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "omarchy-dev", "research"],
+    todos: [
+      { id: 1, title: "task 1", profile: "work", done: false },
+      { id: 2, title: "task 2", profile: "work", done: false },
+      { id: 3, title: "task 3", profile: "omarchy-dev", done: false }
+    ]
+  };
+
+  // Empty or undefined returns all sorted profiles
+  const allProfs = searchProfiles(store);
+  assert.deepEqual(allProfs, ["work", "omarchy-dev", "personal", "research"]);
+
+  // Substring match
+  assert.deepEqual(searchProfiles(store, "dev"), ["omarchy-dev"]);
+  assert.deepEqual(searchProfiles(store, "search"), ["research"]);
+  assert.deepEqual(searchProfiles(store, "arch"), ["omarchy-dev", "research"]);
+  assert.deepEqual(searchProfiles(store, "work"), ["work"]);
+
+  // Strips leading hashtag
+  assert.deepEqual(searchProfiles(store, "#work"), ["work"]);
+  assert.deepEqual(searchProfiles(store, "##omarchy"), ["omarchy-dev"]);
+
+  // Case insensitive
+  assert.deepEqual(searchProfiles(store, "PERSONAL"), ["personal"]);
+
+  // No match
+  assert.deepEqual(searchProfiles(store, "nonexistent"), []);
+});
+
+test("getFilteredTodos: live search across title, notes, tags, repo, and #profile", () => {
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "omarchy"],
+    todos: [
+      {
+        id: 1,
+        title: "Implement auth login flow",
+        description: "Must support OAuth2 and PKCE tokens",
+        profile: "work",
+        repo: "backend-api",
+        tags: ["security", "auth"],
+        done: false,
+        createdAt: 1000
+      },
+      {
+        id: 2,
+        title: "Fix button hover style",
+        description: "Need subtle opacity animation on hover",
+        profile: "personal",
+        tags: ["ui", "css"],
+        location: { repo: "Tablerase/omarchy-ardoise", localPath: "~/Work/ardoise" },
+        done: false,
+        createdAt: 2000
+      },
+      {
+        id: 3,
+        title: "Refactor database migrations",
+        description: "Clean up schema v1 migration script",
+        profile: "work",
+        repo: "backend-api",
+        tags: ["database"],
+        done: true,
+        createdAt: 3000
+      }
+    ]
+  };
+
+  // Search by title substring
+  const titleMatch = getFilteredTodos(store, "all", "all", "all", "login");
+  assert.equal(titleMatch.length, 1);
+  assert.equal(titleMatch[0].id, 1);
+
+  // Search by description / notes
+  const descMatch = getFilteredTodos(store, "all", "all", "all", "PKCE");
+  assert.equal(descMatch.length, 1);
+  assert.equal(descMatch[0].id, 1);
+
+  const notesMatch = getFilteredTodos(store, "all", "all", "all", "opacity animation");
+  assert.equal(notesMatch.length, 1);
+  assert.equal(notesMatch[0].id, 2);
+
+  // Search by tag
+  const tagMatch = getFilteredTodos(store, "all", "all", "all", "css");
+  assert.equal(tagMatch.length, 1);
+  assert.equal(tagMatch[0].id, 2);
+
+  // Search by repo name (direct or location)
+  const repoMatch = getFilteredTodos(store, "all", "all", "all", "ardoise");
+  assert.equal(repoMatch.length, 1);
+  assert.equal(repoMatch[0].id, 2);
+
+  // Search by #profile query across all profiles
+  const hashMatch = getFilteredTodos(store, "work", "all", "all", "#personal");
+  assert.equal(hashMatch.length, 1);
+  assert.equal(hashMatch[0].id, 2);
+
+  // Search respecting currentFilter when not using hashtag
+  const scopedMatch = getFilteredTodos(store, "work", "all", "all", "backend");
+  assert.equal(scopedMatch.length, 2);
+
+  // Query with no match
+  const noneMatch = getFilteredTodos(store, "all", "all", "all", "xyz12345");
+  assert.equal(noneMatch.length, 0);
+});
+
 
 
 

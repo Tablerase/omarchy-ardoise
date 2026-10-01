@@ -161,6 +161,9 @@ Panel {
         if (event.key === Qt.Key_F2) {
           event.accepted = true
           panelContent.handleTextKey("r")
+        } else if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+          event.accepted = true
+          panelContent.activateSearch()
         }
       }
       onCloseRequested: {

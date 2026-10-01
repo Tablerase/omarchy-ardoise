@@ -75,10 +75,39 @@ Item {
   property bool showKeyHelp: false
   property bool showGitModal: false
   property string keyHelpSearch: ""
+  property string searchQuery: ""
+  property bool searchActive: false
   property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
   property int expandedReminderIndex: 0
   property int expandedProfileIndex: 0
   property var editingTaskId: -1
+
+  function activateSearch() {
+    root.searchActive = true
+    Qt.callLater(function() {
+      if (typeof searchField !== "undefined" && searchField) {
+        searchField.forceActiveFocus()
+      }
+    })
+  }
+
+  function closeSearch() {
+    root.searchActive = false
+    root.searchQuery = ""
+    if (typeof searchField !== "undefined" && searchField) {
+      searchField.text = ""
+    }
+    root.focusSection = "tasks"
+    root.cursorActive = true
+    root.releaseFocus()
+  }
+
+  function clearSearchText() {
+    root.searchQuery = ""
+    if (typeof searchField !== "undefined" && searchField) {
+      searchField.text = ""
+    }
+  }
 
   onExpandedSubSectionChanged: {
     if (root.expandedSubSection === "reminders") {
@@ -173,6 +202,11 @@ Item {
       focusSection = "tasks"
       showKeyHelp = false
       showGitModal = false
+      searchActive = false
+      searchQuery = ""
+      if (typeof searchField !== "undefined" && searchField) {
+        searchField.text = ""
+      }
       expandedSubSection = "header"
       expandedReminderIndex = 0
       expandedProfileIndex = 0
@@ -315,7 +349,7 @@ Item {
   property var filteredTodos: []
 
   function syncFilteredTodos() {
-    var next = TodoStore.getFilteredTodos(root.store, root.currentFilter)
+    var next = TodoStore.getFilteredTodos(root.store, root.currentFilter, "all", "all", root.searchQuery)
     if (!root.filteredTodos || root.filteredTodos.length !== next.length) {
       root.filteredTodos = next
       return
@@ -352,6 +386,7 @@ Item {
     }
   }
 
+  onSearchQueryChanged: syncFilteredTodos()
   onStoreChanged: syncFilteredTodos()
   Component.onCompleted: syncFilteredTodos()
   property var pendingCompletionIds: []
@@ -410,6 +445,7 @@ Item {
   }
   readonly property bool activeFocusBlocked: Boolean(
     (newTodoField && newTodoField.activeFocus) ||
+    (typeof searchField !== "undefined" && searchField && searchField.activeFocus) ||
     (descArea && descArea.editorActiveFocus) ||
     addingProfile ||
     root.showKeyHelp ||
@@ -427,8 +463,16 @@ Item {
   signal switchPanelRequested(int direction)
   signal returnFocusRequested()
 
+  Keys.onPressed: function(event) {
+    if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+      event.accepted = true
+      root.activateSearch()
+    }
+  }
+
   function releaseFocus() {
     if (newTodoField) newTodoField.focus = false
+    if (typeof searchField !== "undefined" && searchField) searchField.focus = false
     if (root.descArea) {
       if (typeof root.descArea.releaseFocus === "function") {
         root.descArea.releaseFocus()
@@ -741,6 +785,32 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(4)
+
+        PanelActionButton {
+          id: searchBtn
+          size: Style.space(26)
+          iconText: "󰍉"
+          fontSize: Style.font.subtitle
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: root.searchActive ? Color.accent : Color.muted
+          hoverColor: Color.accent
+          tooltipText: ""
+          onClicked: {
+            if (root.searchActive) {
+              root.closeSearch()
+            } else {
+              root.activateSearch()
+            }
+          }
+
+          HoverHandler { id: searchBtnHover }
+          Ui.ShortcutToolTip {
+            visible: searchBtnHover.hovered
+            description: "Search tasks, notes & profiles"
+            shortcut: "/ or Ctrl+F"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
+        }
 
         PanelActionButton {
           id: helpBtn
@@ -1209,6 +1279,13 @@ Item {
           root.releaseFocus()
         }
 
+        Keys.onPressed: function(event) {
+          if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+            event.accepted = true
+            root.activateSearch()
+          }
+        }
+
         Keys.onDownPressed: function(event) {
           event.accepted = true
           if (root.filteredTodos.length > 0) {
@@ -1280,12 +1357,146 @@ Item {
       }
     }
 
+    // Search row (expandable via / or Ctrl+F or searchBtn)
+    Row {
+      id: searchRow
+      visible: root.searchActive
+      width: parent.width
+      spacing: Style.space(6)
+
+      TextField {
+        id: searchField
+        width: parent.width - closeSearchBtn.implicitWidth - Style.space(6)
+        placeholderText: "Search tasks, notes, tags, #profiles..."
+        font.pixelSize: Style.font.caption
+        text: root.searchQuery
+        onTextChanged: {
+          root.searchQuery = text
+        }
+        background: BorderSurface {
+          color: searchField.activeFocus
+            ? Util.alpha(Color.accent, 0.08)
+            : Style.controlFill(false, searchField.hovered, root.barForeground, Color.accent)
+          borderSpec: searchField.activeFocus
+            ? Border.flat(Color.accent, 2)
+            : (searchField.hovered
+                ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                : Border.controlSpec("normal", root.barForeground, Color.accent))
+          radius: Style.cornerRadius
+        }
+
+        Keys.onPressed: function(event) {
+          if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+            event.accepted = true
+            searchField.selectAll()
+          }
+        }
+
+        Keys.onEscapePressed: function(event) {
+          event.accepted = true
+          if (searchField.text.length > 0) {
+            searchField.text = ""
+            root.searchQuery = ""
+          } else {
+            root.closeSearch()
+          }
+        }
+
+        Keys.onReturnPressed: function(event) {
+          event.accepted = true
+          var q = searchField.text.trim()
+          if (q.startsWith("#")) {
+            var matchedProfs = TodoStore.searchProfiles(root.store, q)
+            if (matchedProfs && matchedProfs.length > 0) {
+              root.currentFilter = matchedProfs[0]
+              root.closeSearch()
+              return
+            }
+          }
+          if (root.filteredTodos.length > 0) {
+            root.focusSection = "tasks"
+            root.cursorIndex = 0
+            root.ensureTaskVisible(0, false)
+          } else {
+            root.focusSection = "footer"
+            root.footerButtonIndex = 0
+          }
+          root.cursorActive = true
+          root.releaseFocus()
+        }
+
+        Keys.onDownPressed: function(event) {
+          event.accepted = true
+          if (root.filteredTodos.length > 0) {
+            root.focusSection = "tasks"
+            root.cursorIndex = 0
+            root.ensureTaskVisible(0, false)
+          } else {
+            root.focusSection = "footer"
+            root.footerButtonIndex = 0
+          }
+          root.cursorActive = true
+          root.releaseFocus()
+        }
+
+        Keys.onTabPressed: function(event) {
+          event.accepted = true
+          if (root.filteredTodos.length > 0) {
+            root.focusSection = "tasks"
+            root.cursorIndex = 0
+            root.ensureTaskVisible(0, false)
+          } else {
+            root.focusSection = "footer"
+            root.footerButtonIndex = 0
+          }
+          root.cursorActive = true
+          root.releaseFocus()
+        }
+
+        Keys.onBacktabPressed: function(event) {
+          event.accepted = true
+          root.focusSection = "input"
+          root.cursorActive = true
+          root.releaseFocus()
+        }
+      }
+
+      PanelActionButton {
+        id: closeSearchBtn
+        size: Style.space(26)
+        iconText: searchField.text.length > 0 ? "✕" : "󰅖"
+        fontSize: Style.font.caption
+        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        foreground: Color.muted
+        hoverColor: Color.accent
+        tooltipText: ""
+        onClicked: {
+          if (searchField.text.length > 0) {
+            searchField.text = ""
+            root.searchQuery = ""
+          } else {
+            root.closeSearch()
+          }
+        }
+
+        HoverHandler { id: closeSearchBtnHover }
+        Ui.ShortcutToolTip {
+          visible: closeSearchBtnHover.hovered
+          description: searchField.text.length > 0 ? "Clear search query" : "Close search bar"
+          shortcut: "Esc"
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        }
+      }
+    }
+
     // Empty state
     Text {
       visible: root.filteredTodos.length === 0
-      text: root.currentFilter === "all"
-        ? "No tasks yet. Type a task above and press Enter!"
-        : ("No tasks in #" + (root.currentFilter.length > 20 ? (root.currentFilter.slice(0, 18) + "…") : root.currentFilter) + ". Add one above!")
+      text: (root.searchActive && root.searchQuery.trim().length > 0)
+        ? ('󰍉 No tasks matching "' + (root.searchQuery.length > 25 ? (root.searchQuery.slice(0, 22) + "…") : root.searchQuery) + '"\nPress Esc to clear search')
+        : (root.currentFilter === "all"
+            ? "No tasks yet. Type a task above and press Enter!"
+            : ("No tasks in #" + (root.currentFilter.length > 20 ? (root.currentFilter.slice(0, 18) + "…") : root.currentFilter) + ". Add one above!"))
       color: Color.muted
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.font.caption

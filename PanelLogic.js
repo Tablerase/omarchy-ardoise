@@ -77,7 +77,8 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut) {
     { key: "u", desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
     { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
     { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
-    { key: "i / a / <slash>", desc: "Focus new task input field", category: "Input & Create" },
+    { key: "i / a", desc: "Focus new task input field", category: "Input & Create" },
+    { key: "/ / Ctrl+F", desc: "Search tasks, notes & profiles", category: "Navigation" },
     { key: "A", desc: "Open Quick Add modal", category: "Input & Create" },
     { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
     { key: "Esc", desc: "Leave input / editor or close panel", category: "Global" },
@@ -172,12 +173,23 @@ function handleEscape(root) {
     root.expandedSubSection = "header";
     return true;
   }
-  if (root.expandedTaskId !== -1) {
+  if (root.expandedTaskId !== undefined && root.expandedTaskId !== null && root.expandedTaskId !== -1) {
     if (typeof root.savePendingNotes === "function") root.savePendingNotes();
     root.expandedTaskId = -1;
     root.expandedViaKeyboard = false;
     root.expandedSubSection = "header";
     return true;
+  }
+  if (root.searchActive) {
+    if (root.searchQuery && root.searchQuery.length > 0) {
+      root.searchQuery = "";
+      if (typeof root.clearSearchText === "function") root.clearSearchText();
+      return true;
+    }
+    if (typeof root.closeSearch === "function") {
+      root.closeSearch();
+      return true;
+    }
   }
   return false;
 }
@@ -504,12 +516,16 @@ function handleTextKey(root, text, TodoStore) {
   }
   if (root.focusSection === "input") {
     if (typeof root.focusInputField === "function") root.focusInputField();
-    if (text !== "i" && text !== "a" && text !== "/" && typeof root.insertInputText === "function") {
+    if (text !== "i" && text !== "a" && typeof root.insertInputText === "function") {
       root.insertInputText(text);
     }
     return;
   }
-  if (text === "i" || text === "a" || text === "/") {
+  if (text === "/") {
+    if (typeof root.activateSearch === "function") root.activateSearch();
+    return;
+  }
+  if (text === "i" || text === "a") {
     root.focusSection = "input";
     if (typeof root.focusInputField === "function") root.focusInputField();
   } else if (text === "g" && root.focusSection === "tasks") {

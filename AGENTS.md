@@ -16,7 +16,14 @@
 
 ## Code Quality & Commit Standards
 - **Validation**: Always run `npm run check` (which runs `deno check TodoStore.js PanelLogic.js GitSync.js`, `qmllint *.qml ui/*.qml`, `omarchy plugin validate .`, and `tests/*.test.mts`). All checks must pass with zero errors and zero warnings.
-- **Automated Tests**: Update and add assertions to `tests/qml-runtime.test.mts` and `tests/TodoStore.test.mts` to prevent motion regressions.
+- **Fast Iteration**: Use `npm run test:fast` (< 0.8s) during active editing to run all unit and static QML tests.
+- **Automated Tests**: Update and add assertions to the corresponding test file:
+  - `tests/TodoStore.test.mts` for data store, urgency ladder, sorting, and storage.
+  - `tests/PanelLogic.test.mts` for keyboard navigation state machine and shortcuts.
+  - `tests/qml-static.test.mts` for QML AST, UI ergonomics, tooltip badges, and IPC contracts.
+  - `tests/qml-core.test.mts` for Quickshell headless offscreen ladder mounting.
+  - `tests/qml-theme.test.mts` for dynamic theme changes and palette switches.
+  - `tests/qml-windowed.test.mts` for interactive layer-shell motion, drawer, and notes harnesses.
 - **Live Reload**: After code changes pass checks, run `omarchy-restart-shell` to update the running environment.
 - **Commit Signing**: All local git commits must be signed using SSH: `git commit -S -m "..."`.
 - **No Remote Tags**: Do not create or push release tags (`v*`).
@@ -26,14 +33,14 @@
 
 Tests are split by what they need, so CI can run the maximum that works in a bare container without pretending to cover the rest.
 
-| Tier | Test | Needs | Runs in CI |
+| Tier | Test File | Needs | Runs in CI |
 |---|---|---|---|
-| Unit | `TodoStore`, `GitSync`, `PanelLogic`, `detect-context` | Node only | ✅ |
-| Static QML | `qml-runtime` — "Static QML Analysis", "IPC Contract" | repo files only | ✅ |
-| QML runtime, no compositor | `qml-runtime` — "Quickshell Core (no compositor)" | quickshell + omarchy `shell/Commons`,`shell/Ui` | ✅ |
-| Theme watch | `qml-runtime` — "ArdoiseIcon: warning color …" | quickshell + `shell/Commons` | ✅ |
-| QML runtime, windowed | `qml-runtime` — "Quickshell Headless Lifecycle [local-only]" | wlr-layer-shell compositor | ❌ |
-| Live shell | `qml-runtime` — "Live Shell IPC [local-only]" | running `omarchy-shell` | ❌ |
+| Unit | `tests/TodoStore`, `tests/GitSync`, `tests/PanelLogic`, `tests/detect-context` | Node only | ✅ |
+| Static QML | `tests/qml-static.test.mts` — "Static QML Analysis", "IPC Contract" | repo files only | ✅ |
+| QML runtime, no compositor | `tests/qml-core.test.mts` — "Quickshell Core (no compositor)" | quickshell + omarchy `shell/Commons`,`shell/Ui` | ✅ |
+| Theme watch | `tests/qml-theme.test.mts` — "ArdoiseIcon: warning color …" | quickshell + `shell/Commons` | ✅ |
+| QML runtime, windowed | `tests/qml-windowed.test.mts` — "Quickshell Headless Lifecycle [local-only]" | wlr-layer-shell compositor | ❌ |
+| Live shell | `tests/qml-live-shell.test.mts` — "Live Shell IPC [local-only]" | running `omarchy-shell` | ❌ |
 
 **Local-only is a hard requirement, not an oversight.** `QuickAdd.qml` is a `WlrLayer.Overlay`; with `QT_QPA_PLATFORM=offscreen` Quickshell reports `No PanelWindow backend loaded` and the config never loads. The window-free core test covers the other three top-level components plus the whole `ui/` library and asserts real resolved state (`rung=overdue count=2 role=warning` against a seeded store), so the CI ceiling is a coverage decision, not a technical limit we hit.
 
@@ -60,6 +67,8 @@ To move it: update the SHA, then run `npm run test:docker`. Expect the newest-Om
   - List tasks: `omarchy-shell tablerase.ardoise list`
   - Get count: `omarchy-shell tablerase.ardoise count`
   - Add task: `omarchy-shell tablerase.ardoise add "<title> [#profile]"`
+  - Add task with details: `omarchy-shell tablerase.ardoise addDetailed "<title>" "<notes>" "<reminder>"`
+  - Search profiles: `omarchy-shell tablerase.ardoise searchProfiles "<query>"`
   - Toggle completion: `omarchy-shell tablerase.ardoise toggleTodo "<id>"`
   - Update task: `omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "..."}'`
   - Remove task: `omarchy-shell tablerase.ardoise remove "<id>"`

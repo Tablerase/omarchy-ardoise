@@ -572,6 +572,18 @@ BarWidget {
       return "ok"
     }
     function add(task: string): string { root.addTodo(task); return "ok" }
+    function addDetailed(task: string, notes: string, reminder: string): string {
+      var t = String(task || "").trim()
+      var d = String(notes || "")
+      var r = reminder && String(reminder).trim() ? String(reminder).trim() : null
+      var finalRem = r
+      if (r && TodoStore && typeof TodoStore.computePresetReminder === "function") {
+        var computed = TodoStore.computePresetReminder(r)
+        if (computed) finalRem = computed
+      }
+      root.addTodo(t, d, null, finalRem)
+      return "ok"
+    }
     function toggleTodo(idStr: string): string {
       var id = Number(idStr)
       if (!isNaN(id)) { root.toggleTodo(id); return "ok" }
@@ -597,6 +609,9 @@ BarWidget {
     function count(): string { return String(root.pendingCount) }
     function list(): string { return JSON.stringify(root.todos) }
     function profiles(): string { return JSON.stringify(root.profiles) }
+    function searchProfiles(queryStr: string): string {
+      return JSON.stringify(TodoStore.searchProfiles(root.store, queryStr || ""))
+    }
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
     function archived(): string { return root.getArchiveText() }
     function archiveCount(): string { return String(TodoStore.getArchivedCount(root.getArchiveText())) }

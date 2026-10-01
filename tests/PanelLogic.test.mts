@@ -496,3 +496,66 @@ test("footer activation: Space and Enter on button 0 trigger clearCompleted", ()
   assert.equal(triggeredIndex, 0);
 });
 
+test("search activation & keybindings: '/' triggers search, and catalog lists '/ / Ctrl+F'", () => {
+  let searchActivated = false;
+  let focusedInput = false;
+
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cursorActive: true,
+    activateSearch: () => {
+      searchActivated = true;
+    },
+    focusInputField: () => {
+      focusedInput = true;
+    }
+  };
+
+  // '/' triggers activateSearch
+  handleTextKey(mockRoot, "/");
+  assert.equal(searchActivated, true);
+  assert.equal(focusedInput, false);
+
+  // 'i' and 'a' still focus new task input
+  searchActivated = false;
+  handleTextKey(mockRoot, "i");
+  assert.equal(focusedInput, true);
+  assert.equal(searchActivated, false);
+
+  // Keybindings catalog includes '/ / Ctrl+F'
+  const list = getKeybindingsList();
+  const searchItem = list.find((item: any) => item.key === "/ / Ctrl+F");
+  assert.ok(searchItem, "Catalog must list '/ / Ctrl+F'");
+  assert.equal(searchItem.desc, "Search tasks, notes & profiles");
+});
+
+test("handleEscape: two-stage escape for in-panel search", () => {
+  let clearedTextCalled = false;
+  let closedSearchCalled = false;
+
+  const mockRoot: any = {
+    expandedTaskId: -1,
+    searchActive: true,
+    searchQuery: "auth flow",
+    clearSearchText: () => {
+      clearedTextCalled = true;
+    },
+    closeSearch: () => {
+      closedSearchCalled = true;
+    }
+  };
+
+  // Stage 1: non-empty query clears search query
+  const res1 = handleEscape(mockRoot);
+  assert.equal(res1, true);
+  assert.equal(mockRoot.searchQuery, "");
+  assert.equal(clearedTextCalled, true);
+  assert.equal(closedSearchCalled, false);
+
+  // Stage 2: empty query collapses search bar
+  const res2 = handleEscape(mockRoot);
+  assert.equal(res2, true);
+  assert.equal(closedSearchCalled, true);
+});
+
+

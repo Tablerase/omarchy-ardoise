@@ -340,7 +340,14 @@ omarchy-restart-shell
 │   └── render-preview.sh # Automated Quickshell headless capture script
 ├── tests/                # Unit & runtime test suite
 │   ├── TodoStore.test.mts # Data store, schema normalization, and profile sorting tests
-│   └── qml-runtime.test.mts # Headless Quickshell lifecycle, motion regressions, & shell IPC tests
+│   ├── PanelLogic.test.mts # Keyboard navigation state machine & focus tests
+│   ├── GitSync.test.mts   # Git sync & commit parsing tests
+│   ├── detect-context.test.mts # Editor & terminal context detection tests
+│   ├── qml-static.test.mts # Static QML AST, UI ergonomics, & IPC contract tests
+│   ├── qml-core.test.mts  # Headless Quickshell ladder mounting (no compositor)
+│   ├── qml-theme.test.mts # Live theme palette switching & inode watch tests
+│   ├── qml-windowed.test.mts # Interactive layer-shell motion & notes lifecycle
+│   └── qml-live-shell.test.mts # Live desktop Omarchy shell IPC tests
 ├── DESIGN.md             # UI & interaction design specification (layout hierarchy, motions, tokens)
 ├── AGENTS.md             # AI model & developer guidelines and maintenance contract
 └── README.md             # Documentation and API reference

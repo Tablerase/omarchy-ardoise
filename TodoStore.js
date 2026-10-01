@@ -813,12 +813,15 @@ function compareTasks(a, b) {
  * @param {string} [profileFilter]
  * @param {string} [tagFilter]
  * @param {string} [repoFilter]
+ * @param {string} [searchFilter]
  * @returns {Task[]}
  */
-function getFilteredTodos(store, profileFilter, tagFilter, repoFilter) {
+function getFilteredTodos(store, profileFilter, tagFilter, repoFilter, searchFilter) {
   if (!store || !Array.isArray(store.todos)) return []
   var list = store.todos
-  if (profileFilter && profileFilter !== "all") {
+  var rawSearch = searchFilter ? String(searchFilter).trim() : ""
+  var isHashSearch = rawSearch.charAt(0) === "#"
+  if (profileFilter && profileFilter !== "all" && !isHashSearch) {
     var cleanFilter = cleanProfileName(profileFilter)
     list = list.filter(function (t) {
       return cleanProfileName(t.profile) === cleanFilter
@@ -837,7 +840,44 @@ function getFilteredTodos(store, profileFilter, tagFilter, repoFilter) {
              (t.location && t.location.repo && cleanProfileName(t.location.repo) === cleanRepo)
     })
   }
+  if (searchFilter) {
+    var rawQ = String(searchFilter).trim()
+    if (rawQ) {
+      var isHash = rawQ.charAt(0) === "#"
+      var cleanQ = rawQ.replace(/^#+/, "").toLowerCase().trim()
+      list = list.filter(function (t) {
+        if (isHash && cleanQ) {
+          var profMatch = Boolean(t.profile && cleanProfileName(t.profile).toLowerCase().includes(cleanQ))
+          var tagMatch = Boolean(Array.isArray(t.tags) && t.tags.some(function (tag) { return String(tag).toLowerCase().includes(cleanQ) }))
+          return profMatch || tagMatch
+        }
+        var q = rawQ.toLowerCase()
+        var inTitle = Boolean(t.title && t.title.toLowerCase().includes(q))
+        var inDesc = Boolean(t.description && t.description.toLowerCase().includes(q))
+        var inRepo = Boolean((t.repo && t.repo.toLowerCase().includes(q)) || (t.location && t.location.repo && t.location.repo.toLowerCase().includes(q)))
+        var inTags = Boolean(Array.isArray(t.tags) && t.tags.some(function (tag) { return String(tag).toLowerCase().includes(q) }))
+        var inProf = Boolean(t.profile && cleanProfileName(t.profile).toLowerCase().includes(q))
+        return inTitle || inDesc || inRepo || inTags || inProf
+      })
+    }
+  }
   return list.slice().sort(compareTasks)
+}
+
+/**
+ * Searches and returns sorted profile names matching a query.
+ * @param {TodoStoreData|null|undefined} store
+ * @param {string} [query]
+ * @returns {string[]}
+ */
+function searchProfiles(store, query) {
+  var profs = getSortedProfiles(store, false)
+  if (!query) return profs
+  var cleanQuery = String(query).replace(/^#+/, "").toLowerCase().trim()
+  if (!cleanQuery) return profs
+  return profs.filter(function (p) {
+    return p.toLowerCase().includes(cleanQuery)
+  })
 }
 
 /**
@@ -1595,7 +1635,8 @@ if (typeof module !== "undefined" && module.exports) {
     capitalizeTitle,
     mergeStores,
     mergeArchives,
-    filterMissingTasks
+    filterMissingTasks,
+    searchProfiles
   }
 }
 
