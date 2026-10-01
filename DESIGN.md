@@ -99,7 +99,13 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 3. **Title Input Field (`taskInput`)**:
    - In **insert mode** (`activeFocus === true`): 2px solid `Color.accent` border + soft accent tint fill (`Util.alpha(Color.accent, 0.08)`) — clear "I am typing" indicator.
    - In **nav/normal mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid `Color.accent` border, no fill tint — field is selected in keyboard nav but not being edited.
-   - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
+   - **Clean & Empty by Default**: Field opens completely empty with placeholder `"What needs to be done? (#tag or #profile optional)"`. Tasks can be typed directly (e.g. `test` or `Fix navbar`) without any mandatory `#` prefix, and will be assigned to `selectedProfile`.
+   - **Intelligent 3-Tier Default Profile Resolution (`TodoStore.resolveDefaultProfile`)**:
+     - **Tier 1 (Location Recency)**: If a codebase context is detected, scans `store.todos` for the most recent task matching `location.repo` or `location.localPath`, applying its profile. If no prior tasks exist for that location, checks if repo/folder name matches a known profile.
+     - **Tier 2 (Global Recency)**: If no location is detected or no tasks match, uses the profile of the most recently created or updated task across the entire store.
+     - **Tier 3 (Default Fallback)**: Falls back to `store.activeProfile` or `"personal"`.
+     - The resolved default is pre-selected and visibly highlighted in `quickAddProfileSelector` at launch, giving instant clarity on destination before typing.
+   - **Hashtag Override**: Typing an explicit `#profile` anywhere in the input dynamically overrides `selectedProfile`. Subsequent hashtags act as subsystem `#tags`.
    - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
    - **Title Validation & Error State**: When input contains only hashtags/profile/repo (e.g. `#ardoise/widget`) or when submission is attempted without an actual title, `taskInput` displays a high-contrast `Color.urgent` warning border (`Border.flat(Color.urgent, 2)` when focused, 1px when blurred) and a soft urgent background tint.
 4. **Hashtag Autocomplete Suggestions (`autocompleteBox`)** (Conditional: `autocompleteActive && autocompleteMatches.length > 0`):

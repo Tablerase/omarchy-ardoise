@@ -166,6 +166,11 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     quickAddContent.includes("if (root.autocompleteActive && root.autocompleteMatches.length > 0)"),
     "QuickAdd taskInput key handlers must intercept Down, Up, Tab, Backtab, Return, and Escape when autocomplete is active"
   );
+  assert.ok(
+    quickAddContent.includes("TodoStore.resolveDefaultProfile"),
+    "QuickAdd must call TodoStore.resolveDefaultProfile for intelligent default profile selection"
+  );
+
 
 
   // 2. Help search & shortcuts: Backspace on empty text dismisses modal

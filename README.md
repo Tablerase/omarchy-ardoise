@@ -1,7 +1,7 @@
 # Ardoise — Minimalist Task Slate for Omarchy
 
 <p align="center">
-  <img src="media/00-hero.webp" alt="Ardoise for Omarchy Demo" width="960">
+  <img src="./preview.png" alt="Ardoise Preview for Omarchy" width="960">
 </p>
 
 <p align="center">

@@ -205,7 +205,7 @@ Item {
     showReminderOptions = false
     selectedReminder = ""
     refreshReminderPresets()
-    selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
+    selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
     focusSection = "title"
     optionIndex = 0
     actionIndex = 1
@@ -248,7 +248,7 @@ Item {
       showNote = false
       showReminderOptions = false
       selectedReminder = ""
-      selectedProfile = (store && store.activeProfile) ? store.activeProfile : "personal"
+      selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
     }
     Qt.callLater(function() {
       taskInput.forceActiveFocus()
@@ -344,24 +344,9 @@ Item {
           if (res && (res.repo || res.localPath)) {
             root.detectedContext = res
             root.attachLocation = true
-            // If the user hasn't explicitly customized profile in draft, auto-match known profile
-            if (!root.hasDraft && root.store && Array.isArray(root.store.profiles)) {
-              var candidates = []
-              if (res.repo) {
-                var parts = res.repo.split("/")
-                candidates.push(TodoStore.cleanProfileName(parts[parts.length - 1]))
-                candidates.push(TodoStore.cleanProfileName(parts[0]))
-              }
-              if (res.repoName) {
-                candidates.push(TodoStore.cleanProfileName(res.repoName))
-              }
-              for (var i = 0; i < candidates.length; i++) {
-                var c = candidates[i]
-                if (c && root.store.profiles.indexOf(c) !== -1) {
-                  root.selectedProfile = c
-                  break
-                }
-              }
+            // If the user hasn't explicitly customized profile in draft, auto-resolve profile via 3-tier hierarchy
+            if (!root.hasDraft) {
+              root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, res)
             }
           } else {
             root.detectedContext = null
@@ -384,7 +369,7 @@ Item {
     onLoaded: {
       root.store = TodoStore.normalize(text())
       if (!root.opened) {
-        root.selectedProfile = root.store.activeProfile || "personal"
+        root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
       }
     }
     onFileChanged: reload()
@@ -610,7 +595,7 @@ Item {
         TextField {
           id: taskInput
           width: parent.width
-          placeholderText: "What needs to be done? (e.g. #work Fix bug)"
+          placeholderText: "What needs to be done? (#tag or #profile optional)"
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           color: Color.menu.text || Color.foreground

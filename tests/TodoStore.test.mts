@@ -49,7 +49,8 @@ const {
   filterMissingTasks,
   searchProfiles,
   getAllTags,
-  searchTags
+  searchTags,
+  resolveDefaultProfile
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -207,6 +208,14 @@ test("addProfile & removeProfile: profile lifecycle and protected personal defau
   // Attempting to remove "personal" is blocked
   store = removeProfile(store, "personal");
   assert.ok(store.profiles.includes("personal"));
+
+  // Attempting to add reserved "all" as a profile is rejected
+  store = addProfile(store, "all");
+  assert.ok(!store.profiles.includes("all"));
+
+  // getSortedProfiles never includes "all"
+  assert.ok(!getSortedProfiles(store, false).includes("all"));
+  assert.ok(!getSortedProfiles(store, true).includes("all"));
 });
 
 test("clearCompleted: clears completed tasks per profile or all", () => {
@@ -1557,6 +1566,103 @@ test("getAllTags & searchTags: extracts unique tags sorted by frequency and supp
   assert.deepEqual(searchTags(store, "nonexistent"), []);
   assert.equal(searchTags(store, "").length, 4);
 });
+
+test("resolveDefaultProfile: 3-tier resolution hierarchy (location > last used > default)", () => {
+  // Tier 3: Empty store defaults to activeProfile or personal
+  assert.equal(resolveDefaultProfile(null), "personal");
+  assert.equal(resolveDefaultProfile(undefined), "personal");
+  assert.equal(resolveDefaultProfile({ version: 1, activeProfile: "work", profiles: ["work"], todos: [] }), "work");
+
+  // Tier 2: No location provided - picks profile of most recent task
+  const storeWithTasks = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "omarchy"],
+    todos: [
+      { id: 1, title: "Old task", profile: "work", createdAt: 1000, updatedAt: 1000, done: false },
+      { id: 2, title: "Latest task", profile: "omarchy", createdAt: 2000, updatedAt: 3000, done: false },
+      { id: 3, title: "Older task", profile: "personal", createdAt: 1500, done: false }
+    ]
+  };
+  assert.equal(resolveDefaultProfile(storeWithTasks, null), "omarchy");
+  assert.equal(resolveDefaultProfile(storeWithTasks, undefined), "omarchy");
+
+  // Tier 1: Matches location context to previous task with that location
+  const storeWithLocations = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "omarchy", "client-x"],
+    todos: [
+      {
+        id: 1,
+        title: "Task in repo A",
+        profile: "work",
+        createdAt: 1000,
+        updatedAt: 1000,
+        done: false,
+        location: { repo: "Company/RepoA", localPath: "~/Work/RepoA" }
+      },
+      {
+        id: 2,
+        title: "Newer task in repo B",
+        profile: "omarchy",
+        createdAt: 2000,
+        updatedAt: 2000,
+        done: false,
+        location: { repo: "Tablerase/omarchy-ardoise", localPath: "~/Work/ardoise" }
+      },
+      {
+        id: 3,
+        title: "Latest global task in repo A with client-x profile",
+        profile: "client-x",
+        createdAt: 3000,
+        updatedAt: 4000,
+        done: false,
+        location: { repo: "Company/RepoA", localPath: "~/Work/RepoA" }
+      }
+    ]
+  };
+
+  // Searching for RepoA context returns "client-x" (most recent task in RepoA)
+  assert.equal(
+    resolveDefaultProfile(storeWithLocations, { repo: "company/repoa", localPath: "~/Work/RepoA" }),
+    "client-x"
+  );
+
+  // Searching for omarchy-ardoise context returns "omarchy" (task 2)
+  assert.equal(
+    resolveDefaultProfile(storeWithLocations, { repo: "Tablerase/omarchy-ardoise", localPath: "/tmp" }),
+    "omarchy"
+  );
+
+  // Searching by localPath only
+  assert.equal(
+    resolveDefaultProfile(storeWithLocations, { repo: null, localPath: "~/Work/ardoise" }),
+    "omarchy"
+  );
+
+  // Tier 1b: If no task has this location yet, candidate match from repo/repoName
+  const storeWithCandidate = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "omarchy-dev"],
+    todos: [
+      { id: 1, title: "Global task", profile: "work", createdAt: 5000, done: false }
+    ]
+  };
+  // repo is "Tablerase/omarchy-dev" -> candidate "omarchy-dev" exists in profiles!
+  assert.equal(
+    resolveDefaultProfile(storeWithCandidate, { repo: "Tablerase/omarchy-dev", repoName: "omarchy-dev" }),
+    "omarchy-dev"
+  );
+
+  // If no candidate matches in profiles and no task has this location, fallback to global latest task (Tier 2)
+  assert.equal(
+    resolveDefaultProfile(storeWithCandidate, { repo: "Unknown/mystery-repo", repoName: "mystery-repo" }),
+    "work"
+  );
+});
+
 
 
 

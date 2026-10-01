@@ -13,6 +13,7 @@
  * @property {string|null} [repo] - Git repository identifier (e.g. "Tablerase/omarchy-ardoise")
  * @property {string|null} [subpath] - Relative subpath in repo (e.g. "ui/", "server/")
  * @property {string|null} [localPath] - Local filesystem path (e.g. "~/Work/omarchy-ardoise")
+ * @property {string|null} [repoName] - Repository name or folder basename
  */
 
 /**
@@ -190,6 +191,7 @@ function normalizeTask(raw) {
   var title = capitalizeTitle(String(raw.title || raw.text || "").trim())
   var description = String(raw.description || "")
   var profile = cleanProfileName(raw.profile)
+  if (profile === "all") profile = "personal"
   var repo = raw.repo ? String(raw.repo).trim() : null
   /** @type {string[]} */
   var tags = []
@@ -281,16 +283,16 @@ function normalize(raw) {
   // Schema format (v1 or future)
   var rawVersion = typeof data.version === "number" ? data.version : (Number(data.version) || CURRENT_SCHEMA_VERSION)
   var resolvedVersion = Math.max(CURRENT_SCHEMA_VERSION, rawVersion)
-  var activeProfile = cleanProfileName(data.activeProfile)
+  var activeProfile = (data.activeProfile && data.activeProfile !== "all") ? cleanProfileName(data.activeProfile) : "personal"
   /** @type {string[]} */
   var profiles = ["personal", "work"]
   /** @type {Record<string, boolean>} */
-  var seenProfiles = { "personal": true, "work": true }
+  var seenProfiles = { "personal": true, "work": true, "all": true }
 
   if (Array.isArray(data.profiles)) {
     for (var p = 0; p < data.profiles.length; p++) {
       var c = cleanProfileName(data.profiles[p])
-      if (c && !seenProfiles[c]) {
+      if (c && c !== "all" && !seenProfiles[c]) {
         seenProfiles[c] = true
         profiles.push(c)
       }
@@ -682,7 +684,7 @@ function markTasksNotified(store, ids) {
 function addProfile(store, name) {
   var s = cloneStore(store)
   var p = cleanProfileName(name)
-  if (p && s.profiles.indexOf(p) === -1) {
+  if (p && p !== "all" && s.profiles.indexOf(p) === -1) {
     s.profiles.push(p)
   }
   return s
@@ -923,6 +925,99 @@ function searchTags(store, query) {
   })
 }
 
+/**
+ * Resolves the intelligent default profile using a 3-tier hierarchy:
+ * 1. Last profile used for this location (matching repo or localPath), or matching candidate name
+ * 2. Last profile used globally across the store (by latest task activity)
+ * 3. Default fallback (store.activeProfile || "personal")
+ *
+ * @param {TodoStoreData|null|undefined} store
+ * @param {TaskLocation|{ repo?: string|null, localPath?: string|null, repoName?: string|null }|null|undefined} [context]
+ * @returns {string}
+ */
+function resolveDefaultProfile(store, context) {
+  var def = (store && store.activeProfile) ? cleanProfileName(store.activeProfile) : "personal"
+  if (!store || !Array.isArray(store.todos)) return def
+
+  // Tier 1: Check tasks with matching location context (most recent first)
+  if (context && (context.repo || context.localPath)) {
+    var matchRepo = context.repo ? String(context.repo).toLowerCase().trim() : null
+    var matchPath = context.localPath ? String(context.localPath).trim() : null
+
+    var latestLocTime = -1
+    var latestLocProfile = null
+
+    for (var i = 0; i < store.todos.length; i++) {
+      var t = store.todos[i]
+      if (t && t.location) {
+        var tRepo = t.location.repo ? String(t.location.repo).toLowerCase().trim() : null
+        var tPath = t.location.localPath ? String(t.location.localPath).trim() : null
+
+        var isMatch = false
+        if (matchRepo && tRepo && matchRepo === tRepo) {
+          isMatch = true
+        } else if (matchPath && tPath && matchPath === tPath) {
+          isMatch = true
+        }
+
+        if (isMatch && t.profile) {
+          var time = Number(t.updatedAt || t.createdAt || 0)
+          if (time > latestLocTime) {
+            latestLocTime = time
+            latestLocProfile = cleanProfileName(t.profile)
+          }
+        }
+      }
+    }
+
+    if (latestLocProfile) {
+      return latestLocProfile
+    }
+
+    // Tier 1b: If no existing tasks for this location, check if repo or repoName directly matches a known profile
+    if (Array.isArray(store.profiles)) {
+      var candidates = []
+      if (context.repo) {
+        var parts = String(context.repo).split("/")
+        candidates.push(cleanProfileName(parts[parts.length - 1]))
+        candidates.push(cleanProfileName(parts[0]))
+      }
+      if (context.repoName) {
+        candidates.push(cleanProfileName(context.repoName))
+      }
+      for (var c = 0; c < candidates.length; c++) {
+        var cand = candidates[c]
+        if (cand && store.profiles.indexOf(cand) !== -1) {
+          return cand
+        }
+      }
+    }
+  }
+
+  // Tier 2: Last profile used globally across all tasks (by latest activity timestamp)
+  var latestGlobalTime = -1
+  var latestGlobalProfile = null
+
+  for (var j = 0; j < store.todos.length; j++) {
+    var task = store.todos[j]
+    if (task && task.profile) {
+      var taskTime = Number(task.updatedAt || task.createdAt || 0)
+      if (taskTime > latestGlobalTime) {
+        latestGlobalTime = taskTime
+        latestGlobalProfile = cleanProfileName(task.profile)
+      }
+    }
+  }
+
+  if (latestGlobalProfile) {
+    return latestGlobalProfile
+  }
+
+  // Tier 3: Default fallback
+  return def
+}
+
+
 
 /**
  * Returns profiles sorted by:
@@ -941,12 +1036,12 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
   /** @type {string[]} */
   var profList = []
   /** @type {Record<string, boolean>} */
-  var seen = {}
+  var seen = { "all": true }
 
   var sourceProfiles = (store && Array.isArray(store.profiles)) ? store.profiles : ["personal", "work"]
   for (var i = 0; i < sourceProfiles.length; i++) {
     var p = cleanProfileName(sourceProfiles[i])
-    if (p && !seen[p]) {
+    if (p && p !== "all" && !seen[p]) {
       seen[p] = true
       profList.push(p)
     }
@@ -967,7 +1062,7 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
     var task = todos[j]
     if (!task) continue
     var prof = cleanProfileName(task.profile)
-    if (!prof) continue
+    if (!prof || prof === "all") continue
 
     if (!seen[prof]) {
       seen[prof] = true
@@ -1001,17 +1096,17 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
   })
 
   if (onlyActive) {
-    var activeProf = (store && store.activeProfile) ? cleanProfileName(store.activeProfile) : "personal"
+    var activeProf = (store && store.activeProfile && store.activeProfile !== "all") ? cleanProfileName(store.activeProfile) : "personal"
     var cleanFilter = (currentFilter && currentFilter !== "all") ? cleanProfileName(currentFilter) : ""
     profList = profList.filter(function (name) {
-      return (counts[name] > 0) || (Boolean(cleanFilter) && name === cleanFilter) || (name === activeProf)
+      return (name !== "all") && ((counts[name] > 0) || (Boolean(cleanFilter) && name === cleanFilter) || (name === activeProf))
     })
     if (profList.length === 0) {
       profList.push(activeProf || "personal")
     }
   }
 
-  return profList
+  return profList.filter(function (name) { return name !== "all" })
 }
 
 /**
@@ -1682,7 +1777,8 @@ if (typeof module !== "undefined" && module.exports) {
     filterMissingTasks,
     searchProfiles,
     getAllTags,
-    searchTags
+    searchTags,
+    resolveDefaultProfile
   }
 }
 
