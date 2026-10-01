@@ -92,3 +92,132 @@ test("isValidRemoteUrl: validates git remote URLs", () => {
   assert.ok(!isValidRemoteUrl("ftp://invalid.com/repo.git"));
   assert.ok(!isValidRemoteUrl(""));
 });
+
+// Shared fixture for filterSnapshots tests
+const FIXTURE_SNAPSHOTS = [
+  {
+    hash: "aabbcc1122334455",
+    shortHash: "aabbcc1",
+    author: "rcutte",
+    email: "rcutte@omarchy",
+    timestamp: 1790200000000,
+    message: "[omarchy] Auto-save: added task (12 pending)",
+    cleanMessage: "Auto-save: added task (12 pending)",
+    deviceName: "omarchy",
+    pendingCount: 12
+  },
+  {
+    hash: "ddeeff6677889900",
+    shortHash: "ddeeff6",
+    author: "pierre",
+    email: "pierre@thinkpad",
+    timestamp: 1790100000000,
+    message: "[thinkpad] Completed 3 tasks (9 pending)",
+    cleanMessage: "Completed 3 tasks (9 pending)",
+    deviceName: "thinkpad",
+    pendingCount: 9
+  },
+  {
+    hash: "112233aabbccddee",
+    shortHash: "112233a",
+    author: "dev-box",
+    email: "dev@dev-box",
+    timestamp: 1790000000000,
+    message: "Initial task repository",
+    cleanMessage: "Initial task repository",
+    deviceName: "dev-box",
+    pendingCount: undefined
+  }
+];
+
+const { filterSnapshots } = GitSync;
+
+test("filterSnapshots: empty / whitespace query returns original array unchanged", () => {
+  assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, ""), FIXTURE_SNAPSHOTS);
+  assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, "   "), FIXTURE_SNAPSHOTS);
+  assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, null as any), FIXTURE_SNAPSHOTS);
+  assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, undefined as any), FIXTURE_SNAPSHOTS);
+});
+
+test("filterSnapshots: returns [] safely for invalid snapshot input", () => {
+  assert.deepStrictEqual(filterSnapshots(null as any, "foo"), []);
+  assert.deepStrictEqual(filterSnapshots(undefined as any, "foo"), []);
+  assert.deepStrictEqual(filterSnapshots("not-an-array" as any, "foo"), []);
+});
+
+test("filterSnapshots: single-token match on cleanMessage", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "auto-save");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "omarchy");
+});
+
+test("filterSnapshots: single-token match on raw message fallback", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "repository");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "dev-box");
+});
+
+test("filterSnapshots: device name match via plain token", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "thinkpad");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "thinkpad");
+});
+
+test("filterSnapshots: device name match via #device token syntax", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "#omarchy");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "omarchy");
+});
+
+test("filterSnapshots: device name match via [device] token syntax", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "[thinkpad]");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "thinkpad");
+});
+
+test("filterSnapshots: shortHash substring match", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "aabbcc1");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].shortHash, "aabbcc1");
+});
+
+test("filterSnapshots: full hash prefix match", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "ddeeff66778");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].shortHash, "ddeeff6");
+});
+
+test("filterSnapshots: author match", () => {
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "pierre");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].author, "pierre");
+});
+
+test("filterSnapshots: multi-token AND matching (all tokens must match)", () => {
+  // Both tokens must match the same snapshot
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "thinkpad completed");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].deviceName, "thinkpad");
+});
+
+test("filterSnapshots: multi-token query with no matches", () => {
+  // "omarchy" matches one snapshot but "completed" does not -> 0 results
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "omarchy completed");
+  assert.equal(result.length, 0);
+});
+
+test("filterSnapshots: case-insensitive matching", () => {
+  assert.equal(filterSnapshots(FIXTURE_SNAPSHOTS, "OMARCHY").length, 1);
+  assert.equal(filterSnapshots(FIXTURE_SNAPSHOTS, "AUTO-SAVE").length, 1);
+  assert.equal(filterSnapshots(FIXTURE_SNAPSHOTS, "INITIAL").length, 1);
+});
+
+test("filterSnapshots: query matching multiple snapshots", () => {
+  // "pending" appears in the cleanMessage of two snapshots
+  const result = filterSnapshots(FIXTURE_SNAPSHOTS, "pending");
+  assert.equal(result.length, 2);
+});
+
+test("filterSnapshots: empty snapshot array returns []", () => {
+  assert.deepStrictEqual(filterSnapshots([], "omarchy"), []);
+});

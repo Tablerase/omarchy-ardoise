@@ -562,12 +562,13 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   );
 });
 
-test("IPC Contract: every documented omarchy-shell command has a matching IpcHandler function", () => {
+test("IPC Contract: documented commands match the IpcHandler in DESIGN.md and README", () => {
   // Static contract check. The live-shell IPC test can only run on a real
   // Omarchy desktop, so this catches command drift on every platform -
-  // including CI - by cross-checking the two sources of truth.
+  // including CI. Both docs are user-facing, so both are held to the handler.
   const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
   const designDoc = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoDir, "README.md"), "utf8");
 
   const handlerStart = barWidget.indexOf("IpcHandler {");
   assert.ok(handlerStart !== -1, "BarWidget must declare an IpcHandler");
@@ -577,35 +578,69 @@ test("IPC Contract: every documented omarchy-shell command has a matching IpcHan
     [...handlerBlock.matchAll(/^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm)].map((m) => m[1])
   );
 
-  // Documentation references commands two ways: directly after the plugin
-  // prefix (`... ardoise toggleTodo "<id>"`) and as a slash list
-  // (`... ardoise open` / `close` / `toggle`). Match only those two shapes so
-  // payload values in the same sentence - e.g. the `done` field of
-  // toggleTodo - are not mistaken for commands.
-  const documented = new Set<string>();
-  for (const line of designDoc.split("\n")) {
-    if (!line.includes("tablerase.ardoise")) continue;
-    const direct = /tablerase\.ardoise\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line);
-    if (direct) documented.add(direct[1]);
-    for (const cont of line.matchAll(/\/\s*`([A-Za-z_][A-Za-z0-9_]*)`/g)) {
-      documented.add(cont[1]);
+  /** `... ardoise <cmd>` and slash lists (`... ardoise open` / `close`). */
+  const prefixForm = (doc: string) => {
+    const found = new Set<string>();
+    for (const line of doc.split("\n")) {
+      if (!line.includes("tablerase.ardoise")) continue;
+      const direct = /tablerase\.ardoise\s+([A-Za-z_][A-Za-z0-9_]*)/.exec(line);
+      if (direct) found.add(direct[1]);
+      for (const cont of line.matchAll(/\/\s*`([A-Za-z_][A-Za-z0-9_]*)`/g)) {
+        found.add(cont[1]);
+      }
     }
-  }
+    return found;
+  };
 
-  assert.ok(documented.size > 0, "DESIGN.md must document the IPC command surface");
+  /** Every backticked identifier in a slice of the doc. */
+  const backticked = (doc: string, from: string, to?: string) => {
+    const start = doc.indexOf(from);
+    assert.notEqual(start, -1, `expected to find "${from}"`);
+    const slice = to ? doc.slice(start, doc.indexOf(to, start)) : doc.slice(start);
+    return new Set([...slice.matchAll(/`([A-Za-z_][A-Za-z0-9_]*)`/g)].map((m) => m[1]));
+  };
 
-  for (const cmd of documented) {
+  // DESIGN.md documents the full contract, so it must be exhaustive in both
+  // directions. Payload values in the same sentence - e.g. the `done` field of
+  // toggleTodo - are deliberately not matched by prefixForm.
+  const designCommands = prefixForm(designDoc);
+  assert.ok(designCommands.size > 0, "DESIGN.md must document the IPC command surface");
+
+  for (const cmd of designCommands) {
     assert.ok(
       implemented.has(cmd),
       `DESIGN.md documents \`${cmd}\` but BarWidget's IpcHandler does not implement it`
     );
   }
-  // The other direction too: an undocumented command is still live on the
-  // shell bus even though users reading the docs would never find it.
   for (const cmd of implemented) {
     assert.ok(
-      documented.has(cmd),
+      designCommands.has(cmd),
       `BarWidget implements IPC command \`${cmd}\` but DESIGN.md does not document it`
+    );
+  }
+
+  // The README is user-facing, so it must document every command too - but
+  // its grouping table is prose-heavy, so it is matched by backticked token
+  // rather than by the shell prefix.
+  const readmeCommands = new Set<string>([
+    ...backticked(readme, "### All commands", "\n---"),
+    ...prefixForm(readme),
+  ]);
+
+  for (const cmd of implemented) {
+    assert.ok(
+      readmeCommands.has(cmd),
+      `BarWidget implements IPC command \`${cmd}\` but README.md does not document it`
+    );
+  }
+
+  // Reverse check for the README, scoped to the grouping table. That section
+  // contains command names only, so anything backticked there is meant to be a
+  // command and a typo becomes a "Function not found" for the user.
+  for (const cmd of backticked(readme, "### All commands", "\n---")) {
+    assert.ok(
+      implemented.has(cmd),
+      `README.md lists \`${cmd}\` as a command but BarWidget's IpcHandler does not implement it`
     );
   }
 
@@ -616,5 +651,9 @@ test("IPC Contract: every documented omarchy-shell command has a matching IpcHan
   assert.ok(
     implemented.has("addDetailed") && implemented.has("searchProfiles"),
     "New IPC entry points (addDetailed/searchProfiles) must be available in BarWidget"
+  );
+  assert.ok(
+    implemented.has("gitSearch"),
+    "gitSearch IPC entry point must be available in BarWidget (Phase 2 snapshot search)"
   );
 });

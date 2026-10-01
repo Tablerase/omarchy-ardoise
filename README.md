@@ -4,59 +4,249 @@
   <img src="preview.png" alt="Ardoise for Omarchy" width="960">
 </p>
 
-A productivity status bar widget, flyout panel, quick-add modal, and background reminder service for **Omarchy Quattro (Omarchy 4.x)**, built with Quickshell and QtQuick.
+<p align="center">
+  A keyboard-first task list that lives in your Omarchy bar, knows what is late,
+  and works offline.
+</p>
+
+Everything stays in plain JSON on your machine. No account, no sync service, no
+lock-in — point any tool you like at the file and it reacts instantly.
 
 ---
 
 ## Features
 
-- **Live Bar Widget**:
-  - Displays a stateful task-slate mark that escalates with severity, plus a badge showing the count for the rung the icon depicts (e.g. late count, not total). Rungs are neutral → due-today (accent) → late (theme warning amber); red is reserved for errors.
-  - Interactive tooltip with profile breakdown: `󰍽 [L] Panel   󰍽 [R] Quick Add   󰍽 [M] Edit`.
-  - Middle-click directly opens `todos.json` in your default editor via `omarchy-launch-editor`.
-- **Profiles & Categories**:
-  - Built-in `personal` and `work` profiles, with support for custom profiles (`#project1`, `#shopping`, etc.).
-  - **Zero-Clutter Auto-Hiding**: Profiles with zero active/pending tasks automatically hide from the filter bar, keeping your workspace clean.
-  - **Tag Aliasing**: `#perso` and `#personal` are unified into the canonical `personal` tag.
-  - **Flexible Hashtag Syntax**: Typing `#work Deploy release` or `# work Deploy release` automatically categorizes the task to `work`.
-  - **Horizontal Wheel Scrolling**: Scroll the mouse wheel (or touchpad two-finger scroll) over the pills to scroll horizontally.
-  - **Ultra-Thin Scrollbar**: 2px sleek native horizontal scrollbar appears when profiles overflow.
-  - **Soft Blur/Fade Edges**: Gradient fade edges smoothly blend overflowed pills into the card background before the pinned `+` button.
-  - Create new profiles directly from the panel UI or Quick Add.
-- **Notes & Descriptions**:
-  - Optional multiline descriptions and notes per task.
-  - **Expandable Task Rows (`󰅀` / `󰅃`)**: Click the chevron on any task to view/edit notes, set quick reminders, or reassign profiles in place.
-  - Notes indicator icon (`󰏫`) displays when a collapsed task contains a description.
-- **Full Title Hover Tooltip**:
-  - When a task title exceeds the available row width, hovering over the truncated text displays the complete title via Omarchy's themed `PanelToolTip`.
-- **Configurable Reminders & Background Service**:
-  - Scheduled timestamps with quick presets (`+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`).
-  - Headless background service (`Service.qml`) running 24/7 in the Omarchy Quattro shell.
-  - Native desktop notifications via `omarchy-notification-send` with direct click-to-open actions (`--exec omarchy-shell shell toggle tablerase.ardoise "{}"`).
-- **Keyboard-First Task Capture (Quick Add)**:
-  - Summon from anywhere via global hotkey (`SUPER + SHIFT + T`).
-  - 1-second capture: type task and hit `Enter` to add instantly.
-  - Optional expandable note and reminder preset selector.
-- **Cloud & AI-Ready Reactive Storage**:
-  - Pure Schema v1 in `~/.config/omarchy/tablerase.ardoise/todos.json`.
-  - Zero-latency inotify updates (`FileView` with `watchChanges: true`) — sync via Git, Nextcloud, Syncthing, or write via AI agents and CLI scripts.
-- **Shell IPC Integration**:
-  - Full IPC interface for scripting and AI assistants.
+The essentials, then the rest. Everything under a heading is a bonus you can
+ignore until you want it.
+
+<details open>
+<summary><b>Core — the task slate</b></summary>
+
+- **Severity-aware bar widget.** The mark escalates as work slips: neutral when
+  you're on track, blue when something is due today, amber when something is
+  **late**. The badge always counts the state the icon depicts, so a red-free
+  "2" means *2 overdue*, not *2 of 12*. Late work never turns red — red is
+  reserved for actual errors.
+- **Badge + tooltip.** Pending count on the bar; hover for a per-profile
+  breakdown, completion progress, and overdue / due-today detail.
+- **Flyout panel** with profile filters, an auto-hiding filter for empty
+  profiles, and expandable rows for notes, reminders, and profile changes.
+- **Quick Add** — a fullscreen capture bar. Type, <kbd>Enter</kbd>, gone.
+- **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
+  `#perso` and `#personal` resolve to the same profile.
+
+</details>
+
+<details>
+<summary><b>Keyboard & search</b></summary>
+
+- **Fully keyboard-driven.** <kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>,
+  <kbd>g</kbd>/<kbd>G</kbd>, <kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Space</kbd>,
+  <kbd>Esc</kbd> — no mouse required for any workflow.
+- **Two-stage <kbd>Esc</kbd>.** An empty field dismisses; a field with a draft
+  returns to motion mode without losing your text.
+- **In-panel search** — <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> filters
+  tasks as you type.
+- **Shortcut directory** (<kbd>?</kbd>) listing every binding, searchable.
+
+</details>
+
+<details>
+<summary><b>Reminders & notifications</b></summary>
+
+- Scheduled reminders with quick presets (`+30m`, `+1h`, `Tomorrow 9am`,
+  `Tomorrow 6pm`).
+- A headless service watches your file and raises native desktop
+  notifications; clicking one opens the panel.
+- Tasks never notify twice.
+
+</details>
+
+<details>
+<summary><b>Git-backed history & sync</b></summary>
+
+Your data directory is a git repository, so every change is a snapshot.
+
+- **Point-in-time rollback** of tasks and archives from a commit.
+- **Recover deleted tasks** from any snapshot.
+- **Remote sync** with a conflict-free three-way merge — safe when two
+  machines edited the same list offline.
+- Open the snapshot panel from the header button or <kbd>u</kbd>.
+
+</details>
+
+<details>
+<summary><b>Context awareness</b></summary>
+
+- Quick Add reads the focused window and can prefill the repository and path
+  the command detected, so coding tasks are captured with their context
+  already attached.
+
+</details>
+
+<details>
+<summary><b>Scripting & AI integration</b></summary>
+
+- **22 shell commands** over `omarchy-shell tablerase.ardoise` — see
+  [Scripting](#scripting--automation).
+- **React to writes.** The data file is watched, so external tools, git hooks,
+  and AI agents can write to it and the UI updates immediately.
+- **Forward-compatible schema.** A file written by a newer Ardoise is never
+  downgraded, so a rollback won't truncate your list.
+
+</details>
 
 ---
 
-## Data Schema (Version 1)
+## Install
 
-Stored at `~/.config/omarchy/tablerase.ardoise/todos.json`:
+Ardoise is a shell plugin. It needs **Omarchy Quattro (Omarchy 4.x)**.
+
+```bash
+# 1. Place the plugin where Omarchy looks for it
+mkdir -p ~/.config/omarchy/plugins
+git clone https://github.com/Tablerase/omarchy-ardoise \
+  ~/.config/omarchy/plugins/tablerase.ardoise
+
+# 2. Let the shell discover it, then put it on the bar
+omarchy-shell shell rescanPlugins
+omarchy plugin enable tablerase.ardoise right
+
+# 3. Apply
+omarchy-restart-shell
+```
+
+To take it off the bar without uninstalling:
+
+```bash
+omarchy plugin disable tablerase.ardoise
+```
+
+### First 30 seconds
+
+```bash
+# Add a task from your shell
+omarchy-shell tablerase.ardoise add "Ship the release #work"
+
+# Open the panel
+omarchy-shell tablerase.ardoise toggle
+```
+
+Then set up the two keybindings below so you never need the mouse again.
+
+---
+
+## Keybindings
+
+Ardoise ships **no default keybinding** — you choose the combination. The panel
+header has a keyboard button (`󰌌`) that copies both snippets to your clipboard
+and opens the file for you. The indicator tells you where you stand:
+
+> `✓` **Green** — both shortcuts detected in Hyprland.
+> `!` **Orange** — one of two active, or the bindings are commented out.
+> `✕` **Red** — not configured.
+
+**Omarchy Quattro (Lua)** — add to `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + ALT + T", "Ardoise Panel", "omarchy-shell tablerase.ardoise toggle")
+o.bind("SUPER + SHIFT + T", "Ardoise Quick Add", "omarchy-shell shell toggle tablerase.ardoise '{}'")
+```
+
+**Classic Omarchy (Conf)** — add to `~/.config/hypr/bindings.conf`:
+
+```ini
+bindd = SUPER ALT, T, Ardoise Panel, exec, omarchy-shell tablerase.ardoise toggle
+bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise "{}"
+```
+
+Then `hyprctl reload`.
+
+### Bar mouse shortcuts
+
+| Gesture | Action |
+| :--- | :--- |
+| **Left click** | Toggle the panel |
+| **Right click** | Open Quick Add |
+| **Middle click** | Open `todos.json` in your editor |
+| **Scroll** | Cycle the active profile filter |
+
+---
+
+## Organising with profiles & tags
+
+Profiles are the unit of filtering. Two are built in (`personal`, `work`) and
+you can create more from the panel or from Quick Add.
+
+```bash
+omarchy-shell tablerase.ardoise add "Review PR #code"
+omarchy-shell tablerase.ardoise add "Buy groceries #shopping"
+```
+
+Profiles with no pending tasks hide themselves from the filter row, so the
+panel stays short no matter how many you accumulate.
+
+---
+
+## Scripting & automation
+
+Everything the UI can do is available from the shell, so you can wire Ardoise
+into scripts, hooks, or an AI agent.
+
+```bash
+# What's outstanding?
+omarchy-shell tablerase.ardoise count
+omarchy-shell tablerase.ardoise list | jq '[.[] | select(.done == false)]'
+
+# Add work
+omarchy-shell tablerase.ardoise add "Review PR #work"
+omarchy-shell tablerase.ardoise addDetailed "Fix flake" "CI is red on main" "+1h"
+
+# Update, complete, remove
+omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "2026-09-22T09:00:00.000Z"}'
+omarchy-shell tablerase.ardoise toggleTodo "<id>"
+omarchy-shell tablerase.ardoise remove "<id>"
+```
+
+Two commands are built specifically for agents:
+
+```bash
+# Create a task with notes and a reminder in one call
+omarchy-shell tablerase.ardoise addDetailed "Refactor parser" "Split tokenizer out" "tomorrow 9am"
+
+# Resolve a profile from free text before using it
+omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
+```
+
+### All commands
+
+| Group | Commands |
+| :--- | :--- |
+| **Tasks** | `add`, `addDetailed`, `toggleTodo`, `update`, `remove`, `clear` |
+| **Queries** | `list`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount` |
+| **Profiles** | `setProfile` |
+| **Panel** | `open`, `close`, `toggle` |
+| **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch` |
+
+Notes:
+- `count` returns **total pending**, not the number of late tasks. Use `list`
+  and filter if you need urgency.
+- Quick Add has no plugin command — open it with
+  `omarchy-shell shell toggle tablerase.ardoise '{}'`.
+- The full contract, including multi-monitor behaviour, lives in
+  [`DESIGN.md`](DESIGN.md).
+
+---
+
+## Your data
+
+Plain JSON, written atomically, watched live.
 
 ```json
 {
   "version": 1,
   "activeProfile": "personal",
-  "profiles": [
-    "personal",
-    "work"
-  ],
+  "profiles": ["personal", "work"],
   "todos": [
     {
       "id": 1789992760433,
@@ -65,7 +255,6 @@ Stored at `~/.config/omarchy/tablerase.ardoise/todos.json`:
       "profile": "work",
       "done": false,
       "createdAt": 1789992760433,
-      "dueDate": null,
       "reminder": "2026-09-22T09:00:00.000Z",
       "notified": false
     }
@@ -73,295 +262,77 @@ Stored at `~/.config/omarchy/tablerase.ardoise/todos.json`:
 }
 ```
 
-### Schema Properties
+Stored at `~/.config/omarchy/tablerase.ardoise/`. Optional fields (`repo`,
+`tags`, `location`, `updatedAt`, `dueDate`) let you attach coding context.
 
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `version` | `number` | Schema version (`1`). |
-| `activeProfile` | `string` | Currently active default profile (`"personal"`). |
-| `profiles` | `string[]` | Registered list of profiles. |
-| `todos[].id` | `number` | Unique task identifier (timestamp). |
-| `todos[].title` | `string` | Task title text. |
-| `todos[].description` | `string` | Optional details, notes, or instructions. |
-| `todos[].profile` | `string` | Profile / category tag (`personal`, `work`, custom). |
-| `todos[].done` | `boolean` | Completion state (`true` or `false`). |
-| `todos[].createdAt` | `number` | Creation timestamp in epoch milliseconds. |
-| `todos[].dueDate` | `string\|null` | Optional due date ISO 8601 string. |
-| `todos[].reminder` | `string\|null` | Scheduled reminder ISO 8601 string. |
-| `todos[].notified` | `boolean` | Whether desktop notification has been fired. |
+**Forward compatibility:** a file written by a newer Ardoise keeps its higher
+`version` and is passed through untouched, so rolling back never truncates
+your list. Merges resolve per task by the most recent `updatedAt`.
+
+Full schema, archive format, and storage details:
+[`DESIGN.md` § 7](DESIGN.md).
 
 ---
 
-## Archive Schema (`todos-archive.json`)
+## Troubleshooting
 
-Stored at `~/.config/omarchy/tablerase.ardoise/todos-archive.json`. When tasks are marked as done and cleared, they are moved to this dedicated archive with completion timestamps for productivity tracking and analytics:
-
-```json
-{
-  "version": 1,
-  "archived": [
-    {
-      "id": 1789992760433,
-      "title": "Fix database query performance",
-      "description": "Index the user_id column on orders table",
-      "profile": "work",
-      "createdAt": 1789992760433,
-      "completedAt": 1789999999999
-    }
-  ]
-}
-```
-
-### Archive Properties
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `version` | `number` | Archive schema version (`1`). |
-| `archived[].id` | `number` | Original task identifier. |
-| `archived[].title` | `string` | Task title. |
-| `archived[].description` | `string` | Task notes or description. |
-| `archived[].profile` | `string` | Tag/profile when completed. |
-| `archived[].createdAt` | `number` | Epoch millisecond timestamp when task was created. |
-| `archived[].completedAt` | `number` | Epoch millisecond timestamp when task was cleared/archived. |
-
----
-
-## Shell IPC Reference
-
-You can control and query the todo plugin directly from terminal commands, shell scripts, or AI agents:
-
+**The widget isn't on my bar.**
 ```bash
-# Get pending task count
-omarchy-shell tablerase.ardoise count
-
-# List all tasks in JSON format
-omarchy-shell tablerase.ardoise list
-
-# Get list of registered profiles in JSON format
-omarchy-shell tablerase.ardoise profiles
-
-# Add a new task (supports #tags and # space tags)
-omarchy-shell tablerase.ardoise add "Review PR #work"
-omarchy-shell tablerase.ardoise add "Buy groceries #personal"
-
-# Switch active profile
-omarchy-shell tablerase.ardoise setProfile "work"
-
-# Toggle the task list flyout panel
-omarchy-shell tablerase.ardoise toggle
-
-# Open or close the panel explicitly
-omarchy-shell tablerase.ardoise open
-omarchy-shell tablerase.ardoise close
-
-# Clear all completed tasks and move them to archive
-omarchy-shell tablerase.ardoise clear
-
-# View all archived completed tasks in JSON format
-omarchy-shell tablerase.ardoise archived
-
-# Get total count of archived completed tasks
-omarchy-shell tablerase.ardoise archiveCount
-```
-
-### Scripting & AI Integration Examples
-
-Filter pending work tasks using `jq`:
-```bash
-omarchy-shell tablerase.ardoise list | jq '[.[] | select(.done == false and .profile == "work")]'
-```
-
-Add tasks directly via CLI or agy skill:
-```bash
-omarchy-shell tablerase.ardoise add "#project1 Implement user authentication"
-```
-
-Because the plugin monitors `~/.config/omarchy/tablerase.ardoise/todos.json` with inotify (`watchChanges: true`), external programs, git hooks, and synchronization clients (Nextcloud, Syncthing) can write directly to the JSON file, and changes will reflect across the bar widget and panel in real-time.
-
----
-
-## Desktop Shortcuts (Panel & Quick Add)
-
-Summon the dropdown task panel or the Quick Add modal anywhere on your desktop:
-
-### Hyprland Keybinding Configuration
-
-**Omarchy Quattro (Omarchy 4.x / Lua):**
-Add to `~/.config/hypr/bindings.lua`:
-```lua
-o.bind("SUPER + ALT + T", "Ardoise Panel Toggle", "omarchy-shell tablerase.ardoise toggle")
-o.bind("SUPER + SHIFT + T", "Ardoise Quick Add", "omarchy-shell shell toggle tablerase.ardoise '{}'")
-```
-
-**Classic Omarchy (Omarchy 3.x / Conf):**
-Add to `~/.config/hypr/bindings.conf`:
-```ini
-bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle
-bindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise "{}"
-```
-
-Then reload Hyprland:
-```bash
-hyprctl reload
-```
-
-> **Tip:** In the Todos panel header, click the keyboard icon button (`󰌌`) to automatically copy both binding snippets to your clipboard and open the config file in your editor.
-> - `✓` **Green**: Both shortcuts are active and detected in Hyprland.
-> - `!` **Orange**: 1 of 2 shortcuts is active, or bindings are commented out in your config file.
-> - `✕` **Red**: Shortcuts are unconfigured.
-
-### Bar Mouse Shortcuts
-- **󰍽 [L] Left Click**: Toggles the task list flyout panel.
-- **󰍽 [R] Right Click**: Directly summons the Quick Add modal.
-- **󰍽 [M] Middle Click**: Opens `~/.config/omarchy/tablerase.ardoise/todos.json` in your default terminal editor via `omarchy-launch-editor`.
-
----
-
-## Background Reminder Service
-
-The plugin includes a headless service (`Service.qml`) declared with kind `"service"` in [`manifest.json`](manifest.json).
-
-- **Lifecycle**: Loaded automatically by `shell.qml` when Omarchy starts and runs 24/7.
-- **Monitoring**: Inspects `todos.json` every 15 seconds for uncompleted tasks with `reminder <= now` and `notified == false`.
-- **Notification**: Calls `/usr/share/omarchy/bin/omarchy-notification-send`:
-  - Glyph: `󰥔` (reminder clock).
-  - Headline: Task title.
-  - Body: Profile tag and description notes.
-  - Click Action: Clicking the desktop notification triggers `omarchy-shell shell toggle tablerase.ardoise "{}"` to open the task panel.
-- **State Update**: Marks `notified: true` and writes back atomically to prevent duplicate alerts.
-
----
-
-## Local Development & Installation
-
-### 1. Link Plugin to Omarchy
-
-```bash
-mkdir -p "$HOME/.config/omarchy/plugins"
-ln -s "$(pwd)" "$HOME/.config/omarchy/plugins/tablerase.ardoise"
-```
-
-### 2. Rescan and Enable
-
-```bash
-# Tell Omarchy shell to discover the plugin
-omarchy-shell shell rescanPlugins
-
-# Enable on the bar
+omarchy plugin list                       # is it discovered?
 omarchy plugin enable tablerase.ardoise right
-```
-
-### 3. Move or Reorder (Optional)
-
-```bash
-# Position widget in the center or left section
-omarchy bar move tablerase.ardoise center 0
-```
-
-### 4. Verify Code Quality & Run Tests
-
-#### A. Fast Local Development (No Docker Required)
-
-Run tests and linters directly on your machine without spinning up containers:
-
-```bash
-# Complete local verification suite
-npm run check
-
-# Or run individual targets:
-npm test            # 33 automated tests (TodoStore logic + QML static analysis & runtime lifecycle)
-npm run test:deno   # Run test suite via Deno test runner
-npm run typecheck   # Static typecheck TodoStore.js via TypeScript
-npm run lint:qml    # Lint all QML files with qmllint
-npm run validate:plugin # Validate Omarchy Quattro plugin manifest & schema
-```
-
-#### B. Test GitHub Actions Locally (`gh act`)
-
-To test the exact GitHub Actions CI runner locally before pushing, use [`act`](https://github.com/nektos/act) via the official GitHub CLI extension:
-
-1. **Install the extension once:**
-   ```bash
-   gh extension install nektos/gh-act
-   ```
-
-2. **Run the CI test workflow locally:**
-   ```bash
-   npm run test:ci
-   # Or directly:
-   gh act -j test -P ubuntu-latest=node:20-bookworm-slim
-   ```
-   > **Note on Security:** We configure `node:20-bookworm-slim` (official Docker Hub image from the Node.js Foundation) as the host bootstrap runner. The test steps execute inside the official `archlinux:latest` container as defined in `.github/workflows/ci.yml`.
-
-#### C. Clean Containerized Run via Docker (Zero extra tools)
-
-If you prefer testing the pristine Arch Linux CI environment directly without installing `act`:
-
-```bash
-npm run test:docker
-```
-
-### 5. Restart Shell (After Modifying Service)
-
-```bash
 omarchy-restart-shell
 ```
 
----
+**My keybindings show orange or red.**
+The panel detects the bindings in your Hyprland config. Red means neither was
+found — check the file name for your setup (`bindings.lua` on Quattro,
+`bindings.conf` on classic) and reload with `hyprctl reload`.
 
-## Project Structure
+**Reminders aren't firing.**
+Confirm the task actually has a `reminder` in the past and `notified: false`.
+The service polls every 15 s, so allow a short delay after setting one.
 
-```text
-.
-├── manifest.json         # Plugin manifest (kinds: ["bar-widget", "overlay", "service"])
-├── package.json          # Test runner & validation scripts
-├── tsconfig.json         # TypeScript compiler & IDE configuration
-├── BarWidget.qml         # Bar readout, mouse gestures, IPC handler, and panel loader
-├── Panel.qml             # Wayland layer-shell KeyboardPanel wrapper
-├── PanelContent.qml      # Reusable task slate UI with profile filters, scrollbar, and task rows
-├── QuickAdd.qml          # Fullscreen overlay modal for rapid keyboard capture
-├── Service.qml           # Headless background service monitoring scheduled reminders
-├── TodoStore.js          # Fully-typed data store, Schema v1 normalization, and archive logic
-├── ui/                   # Modular component library shared by the panel and modals
-│   ├── ArdoiseIcon.qml   # Stateful task-slate brand mark (Nerd Font MD ladder rung, optically centred)
-│   ├── Chip.qml          # Compact pill/badge for reminders, repos, tags, locations
-│   ├── GitModal.qml      # Git snapshot review, rollback, and remote sync modal
-│   ├── HelpModal.qml     # Searchable keyboard shortcut directory
-│   ├── KeyBadge.qml      # Keyboard shortcut key badge
-│   ├── ProfileSelector.qml # Horizontal scrollable profile pill row
-│   ├── ReminderPills.qml  # Horizontal scrollable reminder preset row
-│   ├── ShortcutToolTip.qml # Action description + shortcut badges tooltip
-│   └── TaskCheck.qml     # Circular checkbox / urgency indicator button
-├── preview.png           # 1600x900 marketplace artwork & preview banner
-├── screenshots/          # High-resolution screenshots for documentation
-│   └── panel.png         # Flyout task panel screenshot
-├── tools/                # Development & asset generation tools
-│   ├── preview.qml       # Offscreen QML render definition
-│   └── render-preview.sh # Automated Quickshell headless capture script
-├── tests/                # Unit & runtime test suite
-│   ├── TodoStore.test.mts # Data store, schema normalization, and profile sorting tests
-│   ├── PanelLogic.test.mts # Keyboard navigation state machine & focus tests
-│   ├── GitSync.test.mts   # Git sync & commit parsing tests
-│   ├── detect-context.test.mts # Editor & terminal context detection tests
-│   ├── qml-static.test.mts # Static QML AST, UI ergonomics, & IPC contract tests
-│   ├── qml-core.test.mts  # Headless Quickshell ladder mounting (no compositor)
-│   ├── qml-theme.test.mts # Live theme palette switching & inode watch tests
-│   ├── qml-windowed.test.mts # Interactive layer-shell motion & notes lifecycle
-│   └── qml-live-shell.test.mts # Live desktop Omarchy shell IPC tests
-├── DESIGN.md             # UI & interaction design specification (layout hierarchy, motions, tokens)
-├── AGENTS.md             # AI model & developer guidelines and maintenance contract
-└── README.md             # Documentation and API reference
+**What did I change?**
+Open the snapshot panel with the header button or <kbd>u</kbd> for a commit
+history of your list.
+
+**Reading the logs.**
+```bash
+journalctl --user -f | grep -i ardoise
 ```
 
+**Starting over.**
+Stop the shell plugin, delete `~/.config/omarchy/tablerase.ardoise/` to remove
+tasks and their history, then re-enable.
+
 ---
 
-## Acknowledgments & Inspiration
+## Development
 
-- **[OmaTasks for Todoist](https://github.com/crmne/omatasks)** by **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT License):
-  - Canvas 2D vector inbox icon architecture.
-  - Multi-kind overlay pattern for fullscreen keyboard-first Quick Add modal.
-  - Headless Quickshell offscreen preview rendering and banner generation pipeline (`tools/render-preview`).
-- **[Planova / PlaneTxt](https://github.com/brvier/PlanovaQuickShell)** by **Benoît HERVIER** ([@brvier](https://github.com/brvier)):
-  - Separation of reactive data stores from visual UI presentation.
-- **[Omarchy](https://github.com/omacom/omarchy)**:
-  - For the Quickshell bar widget architecture, theme tokens, and desktop environment.
+```bash
+npm install          # no dependencies; this just primes the scripts
+npm run check        # typecheck, lint, validate manifest, full test suite
+npm run test:fast    # unit tiers only — sub-second
+npm run test:docker  # reproduce CI exactly in a container
+```
+
+Tests are tiered by what they need; some are deliberately local-only because
+they require a live compositor. See [`AGENTS.md`](AGENTS.md) for the tier table
+and the CI contract, and [`DESIGN.md`](DESIGN.md) for the UI specification and
+data schemas.
+
+---
+
+## Acknowledgments
+
+- **[OmaTasks for Todoist](https://github.com/crmne/omatasks)** by
+  **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT) — the
+  multi-kind overlay pattern behind the Quick Add modal, and the headless
+  preview pipeline.
+- **[Planova / PlaneTxt](https://github.com/brvier/PlanovaQuickShell)** by
+  **Benoît HERVIER** ([@brvier](https://github.com/brvier)) — separating a
+  reactive data store from its presentation.
+- **[Omarchy](https://github.com/omacom/omarchy)** — the bar widget
+  architecture, theme tokens, and the desktop this lives on.
+
+MIT licensed.

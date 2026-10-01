@@ -621,6 +621,9 @@ BarWidget {
     function gitSync(): string { root.syncWithRemote(); return "ok" }
     function gitSetRemote(urlStr: string): string { return root.setRemoteUrl(urlStr) }
     function gitGetRemote(): string { return root.remoteUrl }
+    function gitSearch(queryStr: string): string {
+      return JSON.stringify(GitSync.filterSnapshots(root.gitSnapshots, queryStr || ""))
+    }
   }
 
   WidgetButton {

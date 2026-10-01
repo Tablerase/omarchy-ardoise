@@ -23,8 +23,15 @@ Rectangle {
   property int actionButtonIndex: 0 // 0: rollback, 1: recover
   property alias contextMenu: contextMenu
 
-  readonly property var selectedSnapshot: (root.snapshots && root.snapshots.length > root.selectedIndex)
-    ? root.snapshots[root.selectedIndex]
+  // Snapshot search filter state
+  property bool searchActive: false
+  property string searchQuery: ""
+
+  // Filtered view: live-computed subset of snapshots matching searchQuery
+  readonly property var filteredSnapshots: GitSync.filterSnapshots(root.snapshots, root.searchQuery)
+
+  readonly property var selectedSnapshot: (root.filteredSnapshots && root.filteredSnapshots.length > root.selectedIndex)
+    ? root.filteredSnapshots[root.selectedIndex]
     : null
 
   signal closeRequested()
@@ -38,6 +45,9 @@ Rectangle {
     } else {
       root.syncFocusIndex = 0
     }
+    // Close search when switching away from Tab 0
+    root.searchActive = false
+    root.searchQuery = ""
     root.forceActiveFocus()
   }
 
@@ -48,11 +58,40 @@ Rectangle {
     actionButtonIndex = 0
     selectedIndex = 0
     syncFocusIndex = 0
+    searchActive = false
+    searchQuery = ""
     if (contextMenu) contextMenu.close()
     if (root.barWidget && typeof root.barWidget.refreshGitHistory === "function") {
       root.barWidget.refreshGitHistory(true)
     }
     Qt.callLater(function() { root.forceActiveFocus() })
+  }
+
+  function activateSearch() {
+    searchActive = true
+    Qt.callLater(function() {
+      if (typeof searchField !== "undefined" && searchField) {
+        searchField.forceActiveFocus()
+        searchField.selectAll()
+      }
+    })
+  }
+
+  function closeSearch() {
+    searchActive = false
+    searchQuery = ""
+    if (typeof searchField !== "undefined" && searchField) {
+      searchField.text = ""
+    }
+    selectedIndex = 0
+    root.forceActiveFocus()
+  }
+
+  function clearSearchText() {
+    searchQuery = ""
+    if (typeof searchField !== "undefined" && searchField) {
+      searchField.text = ""
+    }
   }
 
   function close() {
@@ -102,7 +141,8 @@ Rectangle {
     if (snapshotList && root.selectedIndex >= 0 && root.selectedIndex < snapshotList.count) {
       snapshotList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
     }
-    if (root.snapshots && root.selectedIndex >= root.snapshots.length - 5) {
+    // Only trigger lazy-load when not filtering (filtered results are a subset of loaded snapshots)
+    if (!root.searchActive && root.snapshots && root.selectedIndex >= root.snapshots.length - 5) {
       if (root.barWidget && typeof root.barWidget.loadMoreGitHistory === "function") {
         root.barWidget.loadMoreGitHistory()
       }
@@ -131,8 +171,22 @@ Rectangle {
 
     if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "u") {
       event.accepted = true
-      root.close()
+      // Two-stage escape: close search first if active, then dismiss modal
+      if (root.searchActive) {
+        root.closeSearch()
+      } else {
+        root.close()
+      }
       return
+    }
+
+    // Activate snapshot search via / or Ctrl+F (Tab 0 only)
+    if (root.activeTab === 0 && !root.searchActive) {
+      if (event.text === "/" || ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F)) {
+        event.accepted = true
+        root.activateSearch()
+        return
+      }
     }
 
     // Tab switching with 1, 2
@@ -181,8 +235,8 @@ Rectangle {
       if (root.snapshotSection === "snapshots") {
         if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
           event.accepted = true
-          if (root.snapshots && root.snapshots.length > 0) {
-            if (root.selectedIndex < root.snapshots.length - 1) {
+          if (root.filteredSnapshots && root.filteredSnapshots.length > 0) {
+            if (root.selectedIndex < root.filteredSnapshots.length - 1) {
               root.selectedIndex++
               root.ensureSnapshotVisible()
             } else {
@@ -194,28 +248,29 @@ Rectangle {
         }
         if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
           event.accepted = true
-          if (root.snapshots && root.snapshots.length > 0) {
+          if (root.filteredSnapshots && root.filteredSnapshots.length > 0) {
             root.selectedIndex = Math.max(0, root.selectedIndex - 1)
             root.ensureSnapshotVisible()
           }
           return
         }
-        if (event.key === Qt.Key_L || event.text === "l") {
+        // Suppress tab-switch via l when search is active (/ and Ctrl+F handles that UX)
+        if ((event.key === Qt.Key_L || event.text === "l") && !root.searchActive) {
           event.accepted = true
           root.activeTab = 1
           return
         }
         if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
           event.accepted = true
-          if (root.snapshots && root.snapshots.length > 0) {
-            root.selectedIndex = root.snapshots.length - 1
+          if (root.filteredSnapshots && root.filteredSnapshots.length > 0) {
+            root.selectedIndex = root.filteredSnapshots.length - 1
             root.ensureSnapshotVisible()
           }
           return
         }
         if (event.key === Qt.Key_G || event.text === "g") {
           event.accepted = true
-          if (root.snapshots && root.snapshots.length > 0) {
+          if (root.filteredSnapshots && root.filteredSnapshots.length > 0) {
             root.selectedIndex = 0
             root.ensureSnapshotVisible()
           }
@@ -386,7 +441,7 @@ Rectangle {
           spacing: Style.space(1)
 
           Text {
-            text: "Git Snapshots & Undo"
+            text: "Git Snapshots \u0026 Undo"
             color: root.barForeground
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.subtitle
@@ -394,7 +449,9 @@ Rectangle {
           }
 
           Text {
-            text: "Device: [" + root.deviceName + "] • " + (root.snapshots.length) + " snapshots"
+            text: root.searchActive && root.searchQuery.trim().length > 0
+              ? ("Device: [" + root.deviceName + "] • " + root.filteredSnapshots.length + " / " + root.snapshots.length + " snapshots")
+              : ("Device: [" + root.deviceName + "] • " + root.snapshots.length + " snapshots")
             color: Util.alpha(root.barForeground, 0.7)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
@@ -402,26 +459,59 @@ Rectangle {
         }
       }
 
-      // Close Button
-      PanelActionButton {
-        id: closeBtn
+      // Header right-action buttons
+      Row {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        size: Style.space(24)
-        iconText: "󰅖"
-        fontSize: Style.font.caption
-        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-        foreground: Color.muted
-        hoverColor: root.bar ? root.bar.urgent : Color.urgent
-        tooltipText: ""
-        onClicked: root.close()
+        spacing: Style.space(4)
 
-        HoverHandler { id: closeBtnHover }
-        ShortcutToolTip {
-          visible: closeBtnHover.hovered
-          description: "Close"
-          shortcut: "Esc"
+        // Search Button — Tab 0 only
+        PanelActionButton {
+          id: searchBtn
+          visible: root.activeTab === 0
+          size: Style.space(24)
+          iconText: "󰍉"
+          fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: root.searchActive ? Color.accent : Color.muted
+          hoverColor: Color.accent
+          tooltipText: ""
+          onClicked: {
+            if (root.searchActive) {
+              root.closeSearch()
+            } else {
+              root.activateSearch()
+            }
+          }
+
+          HoverHandler { id: searchBtnHover }
+          ShortcutToolTip {
+            visible: searchBtnHover.hovered
+            description: "Search snapshots"
+            shortcut: "/ or Ctrl+F"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
+        }
+
+        // Close Button
+        PanelActionButton {
+          id: closeBtn
+          size: Style.space(24)
+          iconText: "󰅖"
+          fontSize: Style.font.caption
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          foreground: Color.muted
+          hoverColor: root.bar ? root.bar.urgent : Color.urgent
+          tooltipText: ""
+          onClicked: root.close()
+
+          HoverHandler { id: closeBtnHover }
+          ShortcutToolTip {
+            visible: closeBtnHover.hovered
+            description: "Close"
+            shortcut: "Esc"
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+          }
         }
       }
     }
@@ -498,11 +588,111 @@ Rectangle {
         anchors.fill: parent
         spacing: Style.space(6)
 
+        // Snapshot Search Row (expandable via / or Ctrl+F or searchBtn)
+        Row {
+          id: snapshotSearchRow
+          visible: root.searchActive
+          width: parent.width
+          spacing: Style.space(6)
+
+          TextField {
+            id: searchField
+            width: parent.width - closeSnapshotSearchBtn.implicitWidth - Style.space(6)
+            placeholderText: "Search snapshots by message, device, hash, author..."
+            font.pixelSize: Style.font.caption
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            text: root.searchQuery
+            color: root.barForeground
+            onTextChanged: {
+              root.searchQuery = text
+              root.selectedIndex = 0
+            }
+            background: BorderSurface {
+              color: searchField.activeFocus
+                ? Util.alpha(Color.accent, 0.08)
+                : Style.controlFill(false, searchField.hovered, root.barForeground, Color.accent)
+              borderSpec: searchField.activeFocus
+                ? Border.flat(Color.accent, 2)
+                : (searchField.hovered
+                    ? Border.controlSpec("hover-cursor", root.barForeground, Color.accent)
+                    : Border.controlSpec("normal", root.barForeground, Color.accent))
+              radius: Style.cornerRadius
+            }
+
+            Keys.onPressed: function(event) {
+              if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_F) {
+                event.accepted = true
+                searchField.selectAll()
+              }
+            }
+
+            Keys.onEscapePressed: function(event) {
+              event.accepted = true
+              if (searchField.text.length > 0) {
+                searchField.text = ""
+                root.searchQuery = ""
+                root.selectedIndex = 0
+              } else {
+                root.closeSearch()
+              }
+            }
+
+            Keys.onReturnPressed: function(event) {
+              event.accepted = true
+              if (root.filteredSnapshots.length > 0) {
+                root.snapshotSection = "snapshots"
+                root.selectedIndex = 0
+                root.forceActiveFocus()
+                root.ensureSnapshotVisible()
+              }
+            }
+            Keys.onEnterPressed: function(event) {
+              event.accepted = true
+              if (root.filteredSnapshots.length > 0) {
+                root.snapshotSection = "snapshots"
+                root.selectedIndex = 0
+                root.forceActiveFocus()
+                root.ensureSnapshotVisible()
+              }
+            }
+
+            Keys.onDownPressed: function(event) {
+              event.accepted = true
+              if (root.filteredSnapshots.length > 0) {
+                root.snapshotSection = "snapshots"
+                root.selectedIndex = 0
+                root.forceActiveFocus()
+                root.ensureSnapshotVisible()
+              }
+            }
+          }
+
+          PanelActionButton {
+            id: closeSnapshotSearchBtn
+            size: Style.space(24)
+            iconText: "󰅖"
+            fontSize: Style.font.caption
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            foreground: Color.muted
+            hoverColor: Color.accent
+            tooltipText: ""
+            onClicked: root.closeSearch()
+
+            HoverHandler { id: closeSearchBtnHover }
+            ShortcutToolTip {
+              visible: closeSearchBtnHover.hovered
+              description: "Close search"
+              shortcut: "Esc"
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            }
+          }
+        }
+
         // Snapshot Virtualized List
         Item {
           id: listContainer
           width: parent.width
-          height: parent.height - actionRow.implicitHeight - Style.space(10)
+          height: parent.height - actionRow.implicitHeight - (snapshotSearchRow.visible ? snapshotSearchRow.implicitHeight + Style.space(6) : 0) - Style.space(10)
 
           ListView {
             id: snapshotList
@@ -510,7 +700,7 @@ Rectangle {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             spacing: Style.space(4)
-            model: root.snapshots
+            model: root.filteredSnapshots
             currentIndex: root.selectedIndex
 
             ScrollBar.vertical: ScrollBar {
@@ -656,7 +846,7 @@ Rectangle {
             }
           }
 
-          // Empty state
+          // Empty state: no snapshots at all
           Text {
             anchors.centerIn: parent
             visible: !root.snapshots || root.snapshots.length === 0
@@ -664,6 +854,28 @@ Rectangle {
             color: Color.muted
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
+          }
+
+          // Empty search results state
+          Column {
+            anchors.centerIn: parent
+            visible: root.snapshots && root.snapshots.length > 0 && root.searchActive && root.filteredSnapshots.length === 0
+            spacing: Style.space(4)
+
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "󰍉 No snapshots matching \"" + root.searchQuery + "\""
+              color: Color.muted
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              text: "Press Esc to clear or adjust search"
+              color: Util.alpha(Color.muted, 0.6)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption * 0.85
+            }
           }
         }
 

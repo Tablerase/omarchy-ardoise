@@ -72,7 +72,7 @@ To preserve long-term maintainability and visual consistency across the main pan
   - **Tag Variant (`"tag"`)**: Compact category pill capsule for user profiles and tags (`#tag`).
   - Common attributes: strictly bounded with `elide: Text.ElideRight`, capped max-width, tooltips, optional removal button (`󰅖`), and hover cursor cues.
 - **`ui/HelpModal.qml`**: Fullscreen-scoped searchable keyboard shortcut directory with fuzzy filter and two-stage Backspace dismiss. Mounted inside `PanelContent` (inside `PanelKeyCatcher`) so it sits in the correct focus scope and receives keyboard events normally. Height is guaranteed by `Panel.qml` inflating `contentHeight` to at least `Style.space(380)` when the modal is open, regardless of task-list count. Features a solid opaque card background (`Qt.rgba(Color.popups.background.r, Color.popups.background.g, Color.popups.background.b, 1.0)`) and hides underlying task content (`opacity: 0`) to prevent visual bleed-through. The search input opens in normal/motion mode (`isNavFocused`, 1px accent border) allowing instant <kbd>j</kbd>/<kbd>k</kbd> navigation into the shortcuts list, switches to insert mode with 2px accent border and tint on <kbd>i</kbd>/<kbd>a</kbd>/<kbd>/</kbd>/<kbd>Return</kbd>, and supports full vim motions (<kbd>g</kbd>/<kbd>G</kbd>, <kbd>Enter</kbd> to explore results, two-stage <kbd>Escape</kbd>). When the close button is reached, vim motions continue uninterrupted (<kbd>j</kbd> navigates back down to the search field in motion mode, <kbd>k</kbd> wraps to list, <kbd>Enter</kbd>/<kbd>Space</kbd>/<kbd>q</kbd>/<kbd>?</kbd> closes). Contains an unconditional full-coverage `MouseArea` (`hoverEnabled: true`, `acceptedButtons: Qt.AllButtons`) that blocks all hover and click events.
-- **`ui/GitModal.qml`**: Modal overlay for reviewing local Git commit snapshots, executing point-in-time rollbacks (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and configuring remote synchronization (GitHub / GitLab) with conflict-free 3-way JSON store merging and device tagging (`[hostname]`). Accessible via header action button (`󰊢`) or Vim <kbd>u</kbd>. Mounted inside `PanelContent` (same focus scope as `HelpModal`). Panel inflates to at least `Style.space(380)` when open. Features a solid opaque background and lazy loaded snapshots powered by a virtualized `ListView` with on-demand git pagination (`loadMoreGitHistory`), auto-scrolling `ensureSnapshotVisible()`, and full vim motion navigation across both tabs (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>g</kbd>/<kbd>G</kbd> top/bottom, <kbd>h</kbd>/<kbd>l</kbd>/<kbd>Tab</kbd> tab and button switching, <kbd>u</kbd>/<kbd>q</kbd>/<kbd>Esc</kbd> dismiss). In Tab 1 (Sync & Remote), the remote URL input and action buttons are fully navigable via vim motions (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>, <kbd>Enter</kbd>, <kbd>s</kbd> for quick sync) with cursor highlighting and two-stage escape (in insert mode, <kbd>Escape</kbd> blurs to normal motion mode on the remote field without closing the modal; in normal motion mode, <kbd>Escape</kbd> dismisses the modal). Status area uses `Color.menu.selectedBackground`. Contains an unconditional full-coverage `MouseArea` to block mouse bleed-through.
+- **`ui/GitModal.qml`**: Modal overlay for reviewing local Git commit snapshots, executing point-in-time rollbacks (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and configuring remote synchronization (GitHub / GitLab) with conflict-free 3-way JSON store merging and device tagging (`[hostname]`). Accessible via header action button (`󰊢`) or Vim <kbd>u</kbd>. Mounted inside `PanelContent` (same focus scope as `HelpModal`). Panel inflates to at least `Style.space(380)` when open. Features a solid opaque background and lazy loaded snapshots powered by a virtualized `ListView` with on-demand git pagination (`loadMoreGitHistory`), auto-scrolling `ensureSnapshotVisible()`, and full vim motion navigation across both tabs (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>g</kbd>/<kbd>G</kbd> top/bottom, <kbd>h</kbd>/<kbd>l</kbd>/<kbd>Tab</kbd> tab and button switching, <kbd>u</kbd>/<kbd>q</kbd>/<kbd>Esc</kbd> dismiss). In Tab 1 (Sync & Remote), the remote URL input and action buttons are fully navigable via vim motions (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>, <kbd>Enter</kbd>, <kbd>s</kbd> for quick sync) with cursor highlighting and two-stage escape (in insert mode, <kbd>Escape</kbd> blurs to normal motion mode on the remote field without closing the modal; in normal motion mode, <kbd>Escape</kbd> dismisses the modal). Status area uses `Color.menu.selectedBackground`. Contains an unconditional full-coverage `MouseArea` to block mouse bleed-through. **Snapshot Search Filter (Tab 0)**: <kbd>/</kbd> or <kbd>Ctrl+F</kbd> or clicking the `󰍉` header button activates an inline search bar. Snapshot list binds to `filteredSnapshots` (computed via `GitSync.filterSnapshots(snapshots, searchQuery)`) providing real-time cross-field matching against commit messages (`cleanMessage`/`message`), device names (supports plain, `#device`, and `[device]` token syntax), commit hashes (7-char `shortHash` and full `hash` substring), and author names. Multi-token AND matching is supported (e.g. `laptop update`). **Two-Stage Escape**: First <kbd>Escape</kbd> clears query text (search bar stays open); second <kbd>Escape</kbd> dismisses search and restores the full unfiltered list. Header subtitle updates to `N / M snapshots` when filtering is active. Empty search results display `󰍉 No snapshots matching "<query>"` with a `Press Esc to clear` hint. Lazy-load pagination is disabled while search is active (filtered results are a subset of already-loaded data). <kbd>l</kbd> tab-switch is suppressed while search is active to prevent accidental navigation away.
 - **`ui/GitContextMenu.qml`**: Contextual action menu popover for snapshots in `GitModal`. Supports point-in-time rollback (<kbd>r</kbd>), recovering deleted tasks (<kbd>c</kbd>), and copying the commit hash (<kbd>y</kbd>) to the clipboard via `wl-copy`. Accessible via mouse right-click on snapshot row, row hover options button (`󰇙`), or keyboard (<kbd>m</kbd> / <kbd>Space</kbd> / <kbd>Return</kbd>). Features a full-coverage click-away scrim, explicit height sizing derived from content insets (`card.contentTopInset + card.contentBottomInset + menuContent.implicitHeight`), bounds checking keeping the popup within the parent modal bounds, and full vim motion navigation (<kbd>j</kbd>/<kbd>k</kbd> vertical item cycling, <kbd>Enter</kbd>/<kbd>Space</kbd> activation, <kbd>Escape</kbd> dismissal without closing `GitModal`).
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary per-row status and severity indicator. Late tasks tint and border in the theme's **warning** amber (supplied by the host via `warningColor`; it has no `urgentColor` any more, so red cannot creep back into task severity), due-today stays accent, completed keeps the accent checkmark, and normal pending is a muted border.
 - **`ui/ArdoiseIcon.qml`**: The shared task-slate brand mark, rendered as a Nerd Font MD glyph (Private Use Area) rather than a vector. Optically centered with `TextMetrics.tightBoundingRect` horizontal correction — the same technique omarchy's own `Ui/OpticalGlyph.qml` uses — so it sits on the same optical centre as the icons beside it in the bar. The glyph is a **stateful ladder rung** resolved by `TodoStore.getArdoiseIconState()`, and the component is used at all three brand surfaces (status bar widget, panel brand header, QuickAdd header) so the plugin reports load identically everywhere. See §5 *Task-Slate Icon Ladder* for the rung table.
@@ -310,6 +310,7 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise gitSync`: Fetches remote, performs conflict-free 3-way store merge if diverged, and pushes to remote.
   - `omarchy-shell tablerase.ardoise gitSetRemote "<url>"`: Configures or removes Git remote URL.
   - `omarchy-shell tablerase.ardoise gitGetRemote`: Returns configured Git remote URL.
+  - `omarchy-shell tablerase.ardoise gitSearch "<query>"`: Returns filtered JSON array of snapshots matching the query against commit messages, device names (supports `#device` / `[device]` syntax), commit hashes, and author names. Multi-token AND matching; returns all snapshots on empty query.
 
 ---
 
@@ -342,6 +343,10 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
 | **Git Modal** | `1` / `2` | Switch between Snapshots (1) and Sync Settings (2) tabs |
 | **Git Modal** | `Tab` / `Shift+Tab` | Advance / reverse major sections (`snapshots` list ⇄ `actions` buttons) |
+| **Git Modal (Snapshots)** | `/` / `Ctrl+F` | Activate snapshot search filter bar |
+| **Git Modal (Snapshots, Search)** | `Escape` (non-empty query) | Clear search query (search bar stays open) |
+| **Git Modal (Snapshots, Search)** | `Escape` (empty query) | Close search bar and restore full unfiltered list |
+| **Git Modal (Snapshots, Search)** | `Enter` / `↓` | Jump focus from search bar to first filtered snapshot |
 | **Git Modal (Snapshots)** | `j` / `k` / `↓` / `↑` | Navigate snapshot list (at bottom of list, `j` / `↓` transitions to `actions`) |
 | **Git Modal (Snapshots)** | `g` / `G` | Jump to first / last snapshot |
 | **Git Modal (Snapshots)** | `m` / `Space` / `Enter` / Right-Click | Open snapshot contextual menu (Rollback, Recover, Copy Hash) |
@@ -353,7 +358,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Git Modal (Context Menu)**| `j` / `k` / `Enter` / `Esc` | Navigate menu items, activate selection, or dismiss |
 | **Git Modal (Sync Remote)** | `i` / `a` / `<slash>` / `Enter` | Enter insert mode in remote URL input field |
 | **Git Modal (Sync Remote)** | `Escape` (insert mode) | Blur remote URL field and return to normal motion mode without closing modal |
-| **Git Modal** | `Escape` / `q` / `u` (normal mode) | Dismiss Git modal and restore focus to panel |
+| **Git Modal** | `Escape` / `q` / `u` (normal mode) | Two-stage: if search is active, first Escape closes search; second Escape dismisses modal |
 | **Panel (Input)** | `Escape` | Blur text field to normal motion mode on `input` without discarding text |
 | **Panel (Input Normal)** | `i` / `a` / `Enter` / `Space` | Enter text edit mode in input field |
 | **Panel (Input Normal)** | `j` / `↓` | Move down to task list |
@@ -481,3 +486,196 @@ Theme-swap freshness is covered automatically by
 yellow and follows a live theme switch"*, which sandboxes `HOME`, swaps
 `colors.toml` on a live component, and asserts the color follows. No need to
 switch the live theme to verify it.
+
+---
+
+## 7. Data & Integration Reference
+
+The user-facing README links here rather than duplicating this material, so
+there is a single source of truth for schemas and layout.
+
+### 7.1 Task Schema (`todos.json`)
+
+Stored at `~/.config/omarchy/tablerase.ardoise/todos.json` (override the
+directory with the `ARDOISE_DATA_DIR` environment variable).
+
+```json
+{
+  "version": 1,
+  "activeProfile": "personal",
+  "profiles": ["personal", "work"],
+  "todos": [
+    {
+      "id": 1789992760433,
+      "title": "Fix database query performance",
+      "description": "Index the user_id column on orders table",
+      "profile": "work",
+      "repo": "omarchy-ardoise",
+      "tags": ["perf", "sql"],
+      "location": { "repo": "Tablerase/omarchy-ardoise", "subpath": "ui/", "localPath": "~/Work/omarchy-ardoise" },
+      "done": false,
+      "createdAt": 1789992760433,
+      "updatedAt": 1789992800000,
+      "dueDate": null,
+      "reminder": "2026-09-22T09:00:00.000Z",
+      "notified": false
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `version` | `number` | Schema version. `CURRENT_SCHEMA_VERSION` is `1` in `TodoStore.js`. |
+| `activeProfile` | `string` | Currently active default profile. |
+| `profiles` | `string[]` | Registered profiles. |
+| `todos[].id` | `number\|string` | Unique identifier (timestamp, or string when assigned by a client). |
+| `todos[].title` | `string` | Task title. |
+| `todos[].description` | `string` | Notes / details. |
+| `todos[].profile` | `string` | Profile or project name. |
+| `todos[].repo` | `string?` | Repository or component within the project. |
+| `todos[].tags` | `string[]?` | Subsystem tags / labels. |
+| `todos[].location` | `object\|null` | Where the work lives — see 7.2. |
+| `todos[].done` | `boolean` | Completion state. |
+| `todos[].createdAt` | `number` | Creation epoch ms. |
+| `todos[].updatedAt` | `number?` | Last-updated epoch ms. Drives skew resolution in `mergeStores`. |
+| `todos[].dueDate` | `string\|null` | Optional due date. |
+| `todos[].reminder` | `string\|null` | Scheduled reminder (ISO 8601). |
+| `todos[].notified` | `boolean?` | Whether the desktop notification has fired. |
+
+#### Versioning & forward compatibility
+
+`normalize()` never downgrades a store it does not recognise:
+
+```js
+var resolvedVersion = Math.max(CURRENT_SCHEMA_VERSION, rawVersion)
+```
+
+A file written by a **newer** Ardoise keeps its higher `version` and passes
+through untouched, so a newer build's data survives an older install. Merges
+take `Math.max(local.version, remote.version, CURRENT_SCHEMA_VERSION)`, and
+per-task conflicts resolve on the newer `updatedAt` (falling back to
+`createdAt`), so a merge is safe even when the two sides ran different
+versions. This is deliberate: a task list must not be silently truncated
+because a rollback happened.
+
+### 7.2 Task Location
+
+`location` is nullable; every field is optional.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `location.repo` | `string\|null` | Git repository identifier (e.g. `Tablerase/omarchy-ardoise`). |
+| `location.subpath` | `string\|null` | Relative subpath within the repo. |
+| `location.localPath` | `string\|null` | Local filesystem path. |
+
+Populated automatically by `tools/detect-context.sh` from the focused Hyprland
+window, and overridable by hand.
+
+### 7.3 Archive Schema (`todos-archive.json`)
+
+Completed tasks are moved here by `clear` / the footer's `Clear` action
+(`c`), with a `completedAt` stamp.
+
+```json
+{
+  "version": 1,
+  "archived": [
+    {
+      "id": 1789992760433,
+      "title": "Fix database query performance",
+      "description": "Index the user_id column on orders table",
+      "profile": "work",
+      "repo": "omarchy-ardoise",
+      "tags": ["perf"],
+      "location": { "repo": "Tablerase/omarchy-ardoise" },
+      "createdAt": 1789992760433,
+      "completedAt": 1789999999999
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `version` | `number` | Archive schema version (`CURRENT_ARCHIVE_VERSION`). |
+| `archived[].id` | `number\|string` | Original task identifier. |
+| `archived[].title` | `string` | Task title. |
+| `archived[].description` | `string` | Task notes. |
+| `archived[].profile` | `string` | Profile at completion time. |
+| `archived[].repo` | `string?` | Repository / component. |
+| `archived[].tags` | `string[]?` | Subsystem tags. |
+| `archived[].location` | `object\|null` | Location, per 7.2. |
+| `archived[].createdAt` | `number` | Epoch ms when created. |
+| `archived[].completedAt` | `number` | Epoch ms when archived. |
+
+### 7.4 Reactive Storage
+
+Both files are watched with `FileView` (`watchChanges: true`), so external
+writers — Nextcloud, Syncthing, git hooks, AI agents, shell scripts — are
+reflected in the bar and panel without a restart. Writes are atomic
+(temp file + rename) to avoid a partially-read file.
+
+### 7.5 Background Reminder Service
+
+`Service.qml` is declared with kind `"service"` and `keepLoaded: true`.
+
+- **Lifecycle**: loaded by `shell.qml` at startup; runs headless 24/7.
+- **Monitoring**: polls `todos.json` on a 15 s `Timer` for tasks where `reminder <= now` and `notified == false`.
+- **Notification**: calls `$OMARCHY_PATH/bin/omarchy-notification-send` with glyph `󰥔` (reminder clock), the title as headline, and profile + description as body. Click action: `omarchy-shell shell toggle tablerase.ardoise '{}'`.
+- **Deduplication**: sets `notified: true` and writes back, so a task never alerts twice. An in-memory guard also covers the window where a write is still in flight.
+
+### 7.6 Project Structure
+
+```text
+.
+├── manifest.json          # Plugin manifest (bar-widget, overlay, service)
+├── package.json           # Test & validation scripts
+├── tsconfig.json
+├── BarWidget.qml          # Bar readout, mouse gestures, IpcHandler, panel loader
+├── Panel.qml              # Wayland layer-shell wrapper around Ui.KeyboardPanel
+├── PanelContent.qml       # Panel UI: filters, search, scrollbar, task rows
+├── PanelLogic.js          # Pure focus/navigation state machine
+├── QuickAdd.qml           # Fullscreen overlay for keyboard capture
+├── Service.qml            # Headless reminder service
+├── TaskNotesArea.qml      # Notes editor surface
+├── TodoStore.js           # Typed store: schema, normalization, merging, archives
+├── GitSync.js             # Snapshot, rollback, recovery, remote sync
+├── ui/                    # Component library
+│   ├── ArdoiseIcon.qml    # Stateful task-slate mark (ladder rung, theme-aware)
+│   ├── Chip.qml           # Compact pill/badge
+│   ├── GitContextMenu.qml # Snapshot action popover
+│   ├── GitModal.qml       # Snapshot review, rollback, remote sync
+│   ├── HelpModal.qml      # Searchable shortcut directory
+│   ├── KeyBadge.qml       # Keyboard shortcut badge
+│   ├── ProfileSelector.qml# Scrollable profile pill row
+│   ├── ReminderPills.qml  # Scrollable reminder preset row
+│   ├── ShortcutToolTip.qml# Description + shortcut badges tooltip
+│   └── TaskCheck.qml      # Circular checkbox / severity indicator
+├── tools/
+│   ├── ci-local.sh        # Reproduce CI in a container
+│   ├── detect-context.sh  # Hyprland focused-window CWD/editor detection
+│   ├── omarchy-ref        # Pinned Omarchy commit for CI
+│   ├── preview.qml        # Offscreen render definition
+│   └── render-preview.sh  # Headless capture pipeline
+├── tests/                 # Tiered suite — see AGENTS.md "Test Tiers"
+│   ├── helpers/qml-test-utils.mts
+│   ├── TodoStore.test.mts
+│   ├── PanelLogic.test.mts
+│   ├── GitSync.test.mts
+│   ├── detect-context.test.mts
+│   ├── qml-static.test.mts
+│   ├── qml-core.test.mts
+│   ├── qml-theme.test.mts
+│   ├── qml-windowed.test.mts
+│   └── qml-live-shell.test.mts
+├── .github/workflows/ci.yml
+├── DESIGN.md
+├── AGENTS.md
+└── README.md
+```
+
+The QML tests are split **one file per tier** so each declares its own
+prerequisites: `qml-static` needs only repo files, `qml-core` needs quickshell
+plus `shell/Commons`/`shell/Ui`, `qml-theme` adds the theme-file watch, and
+`qml-windowed` / `qml-live-shell` need a real compositor and are local-only.

@@ -158,6 +158,54 @@ function isValidRemoteUrl(url) {
   return sshRegex.test(s) || httpsRegex.test(s)
 }
 
+/**
+ * Filters an array of GitSnapshot objects by a free-text query.
+ *
+ * Splits the query into whitespace-separated tokens. A snapshot matches only
+ * when **every** token is found in at least one of the following fields
+ * (all comparisons are case-insensitive):
+ *  - `cleanMessage` / `message`
+ *  - `deviceName` (strips a leading `#` or surrounding `[…]` from the token
+ *    before comparing so `#laptop` and `[laptop]` both find device "laptop")
+ *  - `shortHash` / `hash` (substring match)
+ *  - `author`
+ *
+ * Returns the original array unchanged when the query is empty or whitespace.
+ * Returns `[]` safely when the input is not a valid array.
+ *
+ * @param {GitSnapshot[]} snapshots
+ * @param {string} query
+ * @returns {GitSnapshot[]}
+ */
+function filterSnapshots(snapshots, query) {
+  if (!Array.isArray(snapshots)) return []
+  if (!query || typeof query !== "string" || !query.trim()) return snapshots
+
+  var tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return snapshots
+
+  return snapshots.filter(function(snap) {
+    return tokens.every(function(token) {
+      // Normalize device-tag syntax: strip leading # or surrounding [...]
+      var deviceToken = token.replace(/^\[(.+)\]$/, "$1").replace(/^#/, "")
+
+      var msg = (snap.cleanMessage || snap.message || "").toLowerCase()
+      var device = (snap.deviceName || "").toLowerCase()
+      var shortH = (snap.shortHash || "").toLowerCase()
+      var fullH = (snap.hash || "").toLowerCase()
+      var auth = (snap.author || "").toLowerCase()
+
+      return (
+        msg.indexOf(token) !== -1 ||
+        device.indexOf(deviceToken) !== -1 ||
+        shortH.indexOf(token) !== -1 ||
+        fullH.indexOf(token) !== -1 ||
+        auth.indexOf(token) !== -1
+      )
+    })
+  })
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     extractDeviceName,
@@ -166,6 +214,7 @@ if (typeof module !== "undefined" && module.exports) {
     parseGitLog,
     buildCommitMessage,
     formatRelativeTime,
-    isValidRemoteUrl
+    isValidRemoteUrl,
+    filterSnapshots
   }
 }

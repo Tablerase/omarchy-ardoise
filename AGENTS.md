@@ -76,4 +76,5 @@ To move it: update the SHA, then run `npm run test:docker`. Expect the newest-Om
   - List profiles: `omarchy-shell tablerase.ardoise profiles`
   - Clear completed: `omarchy-shell tablerase.ardoise clear`
   - Toggle / Open / Close UI: `omarchy-shell tablerase.ardoise toggle` (or `open` / `close`)
+  - Search git snapshots: `omarchy-shell tablerase.ardoise gitSearch "<query>"`
 
