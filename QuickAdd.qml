@@ -61,6 +61,85 @@ Item {
   function refreshReminderPresets() {
     reminderPresets = TodoStore.getReminderPresets()
   }
+
+  // --- Profile & Tag Autocomplete State ---
+  property bool autocompleteActive: false
+  property string autocompleteMode: "profile" // "profile" | "tag"
+  property string autocompleteQuery: ""
+  property int autocompleteIndex: 0
+  property int autocompleteTokenStart: -1
+  property int autocompleteTokenEnd: -1
+
+  readonly property var autocompleteMatches: {
+    if (!autocompleteActive) return []
+    if (autocompleteMode === "tag") {
+      return (typeof TodoStore.searchTags === "function") ? TodoStore.searchTags(root.store, autocompleteQuery) : []
+    }
+    return (typeof TodoStore.searchProfiles === "function") ? TodoStore.searchProfiles(root.store, autocompleteQuery) : []
+  }
+
+  function checkAutocompleteAtCursor() {
+    if (!taskInput.activeFocus) {
+      autocompleteActive = false
+      return
+    }
+    var pos = taskInput.cursorPosition
+    var text = taskInput.text
+    var before = text.slice(0, pos)
+
+    var match = before.match(/(^|\s)#([a-zA-Z0-9_\/-]*)$/)
+    if (!match) {
+      autocompleteActive = false
+      return
+    }
+
+    var query = match[2]
+    var hashIndex = before.length - query.length - 1
+
+    var textBeforeHash = before.slice(0, hashIndex)
+    var isFirstHash = !textBeforeHash.includes("#")
+
+    var after = text.slice(pos)
+    var afterMatch = after.match(/^[a-zA-Z0-9_\/-]*/)
+    var endPos = pos + (afterMatch ? afterMatch[0].length : 0)
+
+    autocompleteTokenStart = hashIndex
+    autocompleteTokenEnd = endPos
+    autocompleteMode = isFirstHash ? "profile" : "tag"
+    autocompleteQuery = query
+    autocompleteActive = true
+    if (autocompleteIndex >= autocompleteMatches.length) {
+      autocompleteIndex = 0
+    }
+  }
+
+  function applyAutocomplete(item) {
+    if (!item) return
+    var text = taskInput.text
+    var start = autocompleteTokenStart
+    var end = autocompleteTokenEnd
+    if (start < 0 || end < start) return
+
+    var afterChar = text.charAt(end)
+    var replacement = "#" + item + (afterChar === " " ? "" : " ")
+    var newText = text.slice(0, start) + replacement + text.slice(end)
+    var newCursor = start + replacement.length + (afterChar === " " ? 1 : 0)
+
+    taskInput.text = newText
+    taskInput.cursorPosition = newCursor
+
+    if (autocompleteMode === "profile") {
+      root.selectedProfile = TodoStore.cleanProfileName(item)
+    }
+    autocompleteActive = false
+    taskInput.forceActiveFocus()
+  }
+
+  function closeAutocomplete() {
+    autocompleteActive = false
+    autocompleteIndex = 0
+  }
+
   property string focusSection: "title" // "title", "profiles", "options", "notes", "reminders", "actions"
   property int optionIndex: 0 // 0: note, 1: reminder
   property int reminderPresetIndex: 0
@@ -110,6 +189,7 @@ Item {
   }
 
   function clearDraft() {
+    closeAutocomplete()
     draftTitle = ""
     draftDescription = ""
     draftProfile = ""
@@ -177,6 +257,7 @@ Item {
 
   function close() {
     root.opened = false
+    root.closeAutocomplete()
   }
 
   function dismiss() {
@@ -554,9 +635,19 @@ Item {
                                            : Border.controlSpec("normal", Color.foreground, Color.accent))))
             radius: Style.cornerRadius
           }
-          onAccepted: root.submit()
+          onAccepted: {
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              root.applyAutocomplete(root.autocompleteMatches[root.autocompleteIndex])
+            } else {
+              root.submit()
+            }
+          }
           Keys.onEscapePressed: function(event) {
             event.accepted = true
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              root.closeAutocomplete()
+              return
+            }
             if (taskInput.text.trim().length === 0) {
               root.dismiss()
             } else {
@@ -567,19 +658,55 @@ Item {
           }
           Keys.onTabPressed: function(event) {
             event.accepted = true
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              root.applyAutocomplete(root.autocompleteMatches[root.autocompleteIndex])
+              return
+            }
             root.advanceSection(1)
           }
           Keys.onBacktabPressed: function(event) {
             event.accepted = true
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              var len = root.autocompleteMatches.length
+              root.autocompleteIndex = (root.autocompleteIndex - 1 + len) % len
+              return
+            }
             root.advanceSection(-1)
           }
           Keys.onDownPressed: function(event) {
             event.accepted = true
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              root.autocompleteIndex = (root.autocompleteIndex + 1) % root.autocompleteMatches.length
+              return
+            }
             root.advanceSection(1)
           }
           Keys.onUpPressed: function(event) {
             event.accepted = true
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              var len = root.autocompleteMatches.length
+              root.autocompleteIndex = (root.autocompleteIndex - 1 + len) % len
+              return
+            }
             root.advanceSection(-1)
+          }
+          Keys.onReturnPressed: function(event) {
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              event.accepted = true
+              root.applyAutocomplete(root.autocompleteMatches[root.autocompleteIndex])
+              return
+            }
+            event.accepted = true
+            root.submit()
+          }
+          Keys.onEnterPressed: function(event) {
+            if (root.autocompleteActive && root.autocompleteMatches.length > 0) {
+              event.accepted = true
+              root.applyAutocomplete(root.autocompleteMatches[root.autocompleteIndex])
+              return
+            }
+            event.accepted = true
+            root.submit()
           }
           Keys.onPressed: function(event) {
             if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && (event.modifiers & Qt.ControlModifier)) {
@@ -589,6 +716,16 @@ Item {
               }
             }
           }
+          onActiveFocusChanged: {
+            if (activeFocus) {
+              root.checkAutocompleteAtCursor()
+            } else {
+              root.closeAutocomplete()
+            }
+          }
+          onCursorPositionChanged: {
+            root.checkAutocompleteAtCursor()
+          }
           onTextChanged: {
             root.draftTitle = text
             if (root.hasValidTitle) {
@@ -597,6 +734,157 @@ Item {
             var match = text.match(/#\s*([a-zA-Z0-9_-]+)/)
             if (match) {
               root.selectedProfile = TodoStore.cleanProfileName(match[1])
+            }
+            root.checkAutocompleteAtCursor()
+          }
+        }
+
+        // Autocomplete suggestions popup for #profile and #tag
+        Rectangle {
+          id: autocompleteBox
+          width: parent.width
+          visible: root.autocompleteActive && root.autocompleteMatches.length > 0
+          color: (Color.popups && Color.popups.background) ? Color.popups.background : Color.menu.background
+          border.color: (Color.popups && Color.popups.border) ? Color.popups.border : Color.menu.border
+          border.width: 1
+          radius: Style.cornerRadius
+          clip: true
+          implicitHeight: Math.min(Style.space(160), autocompleteInnerCol.implicitHeight + Style.space(8))
+
+          Connections {
+            target: root
+            function onAutocompleteIndexChanged() {
+              if (!root.autocompleteActive) return
+              var itemHeight = Style.space(28) + Style.space(2)
+              var headerHeight = Style.space(20) + Style.space(2)
+              var targetY = headerHeight + root.autocompleteIndex * itemHeight
+              if (targetY < autocompleteFlickable.contentY) {
+                autocompleteFlickable.contentY = targetY
+              } else if (targetY + itemHeight > autocompleteFlickable.contentY + autocompleteFlickable.height) {
+                autocompleteFlickable.contentY = targetY + itemHeight - autocompleteFlickable.height
+              }
+            }
+          }
+
+          Flickable {
+            id: autocompleteFlickable
+            anchors.fill: parent
+            anchors.margins: Style.space(4)
+            contentWidth: width
+            contentHeight: autocompleteInnerCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            Column {
+              id: autocompleteInnerCol
+              width: parent.width
+              spacing: Style.space(2)
+
+              // Header indicating mode (Profile or Tag)
+              Row {
+                width: parent.width
+                height: Style.space(20)
+                spacing: Style.space(6)
+                padding: Style.space(4)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.autocompleteMode === "profile" ? "󰭤" : "󰓹"
+                  color: Color.accent
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.autocompleteMode === "profile" ? "Profiles" : "Tags"
+                  color: Color.muted
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Repeater {
+                model: root.autocompleteMatches
+                delegate: Rectangle {
+                  id: matchItem
+                  width: autocompleteInnerCol.width
+                  height: Style.space(28)
+                  radius: Style.cornerRadius - 2
+                  readonly property bool isSelected: index === root.autocompleteIndex
+                  color: isSelected
+                    ? Util.alpha(Color.accent, 0.2)
+                    : (matchMouse.containsMouse ? Util.alpha(Color.foreground, 0.05) : "transparent")
+                  border.color: isSelected ? Util.alpha(Color.accent, 0.4) : "transparent"
+                  border.width: 1
+
+                  Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.space(8)
+                    anchors.right: metaCountText.left
+                    anchors.rightMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(8)
+
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: root.autocompleteMode === "profile" ? TodoStore.getProfileGlyph(modelData) : "󰓹"
+                      color: matchItem.isSelected ? Color.accent : Color.muted
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    Text {
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: "#" + modelData
+                      color: Color.menu.text || Color.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.body
+                      font.bold: matchItem.isSelected
+                      elide: Text.ElideRight
+                    }
+                  }
+
+                  Text {
+                    id: metaCountText
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: {
+                      if (root.autocompleteMode === "profile") {
+                        var pending = TodoStore.getPendingCount(root.store, modelData)
+                        return pending > 0 ? (pending + (pending === 1 ? " task" : " tasks")) : ""
+                      } else {
+                        var tagCount = 0
+                        if (root.store && Array.isArray(root.store.todos)) {
+                          for (var i = 0; i < root.store.todos.length; i++) {
+                            var t = root.store.todos[i]
+                            if (Array.isArray(t.tags) && t.tags.indexOf(modelData) !== -1) tagCount++
+                          }
+                        }
+                        return tagCount > 0 ? (tagCount + (tagCount === 1 ? " task" : " tasks")) : ""
+                      }
+                    }
+                    color: Color.muted
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+
+                  MouseArea {
+                    id: matchMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                      root.autocompleteIndex = index
+                    }
+                    onClicked: {
+                      root.applyAutocomplete(modelData)
+                    }
+                  }
+                }
+              }
             }
           }
         }

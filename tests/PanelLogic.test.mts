@@ -21,7 +21,10 @@ const {
   handleActivate,
   handleReturn,
   handleDelete,
-  handleTextKey
+  handleTextKey,
+  DEFAULT_BINDINGS,
+  normalizeKey,
+  resolveBindings
 } = PanelLogic;
 
 test("cleanRepoName: strips repo owner prefix cleanly", () => {
@@ -556,6 +559,107 @@ test("handleEscape: two-stage escape for in-panel search", () => {
   const res2 = handleEscape(mockRoot);
   assert.equal(res2, true);
   assert.equal(closedSearchCalled, true);
+});
+
+test("normalizeKey: standardizes key representation and aliases", () => {
+  assert.equal(normalizeKey("escape"), "Escape");
+  assert.equal(normalizeKey("Esc"), "Escape");
+  assert.equal(normalizeKey("space"), "Space");
+  assert.equal(normalizeKey("return"), "Return");
+  assert.equal(normalizeKey("enter"), "Return");
+  assert.equal(normalizeKey("ctrl+f"), "Ctrl+F");
+  assert.equal(normalizeKey("control+f"), "Ctrl+F");
+  assert.equal(normalizeKey("up"), "Up");
+  assert.equal(normalizeKey("down"), "Down");
+  assert.equal(normalizeKey("left"), "Left");
+  assert.equal(normalizeKey("right"), "Right");
+  assert.equal(normalizeKey("o"), "o");
+  assert.equal(normalizeKey("O"), "O");
+});
+
+test("resolveBindings: defaults match DEFAULT_BINDINGS and fall back safely", () => {
+  const resolved = resolveBindings({});
+  assert.deepEqual(resolved.bindings.next_task, ["j", "Down"]);
+  assert.deepEqual(resolved.bindings.prev_task, ["k", "Up"]);
+  assert.deepEqual(resolved.bindings.focus_input, ["i", "a"]);
+  assert.deepEqual(resolved.bindings.open_editor, ["e"]);
+  assert.equal(resolved.keyToAction["j"], "next_task");
+  assert.equal(resolved.keyToAction["k"], "prev_task");
+  assert.equal(resolved.keyToAction["i"], "focus_input");
+  assert.equal(resolved.keyToAction["e"], "open_editor");
+});
+
+test("resolveBindings: custom overrides and alias normalization", () => {
+  const resolved = resolveBindings({
+    open_editor: "o",
+    jump_top: ["t", "home"],
+    search: "ctrl+s",
+    unknown_action: "z"
+  });
+  assert.deepEqual(resolved.bindings.open_editor, ["o"]);
+  assert.deepEqual(resolved.bindings.jump_top, ["t", "Home"]);
+  assert.deepEqual(resolved.bindings.search, ["Ctrl+S"]);
+  assert.equal(resolved.keyToAction["o"], "open_editor");
+  assert.equal(resolved.keyToAction["t"], "jump_top");
+  assert.equal(resolved.keyToAction["Home"], "jump_top");
+  assert.equal(resolved.keyToAction["Ctrl+S"], "search");
+  // Default for unaffected actions remains
+  assert.deepEqual(resolved.bindings.next_task, ["j", "Down"]);
+});
+
+test("resolveBindings: invariant protection rejects remapping Escape", () => {
+  const resolved = resolveBindings({
+    open_editor: "Escape",
+    delete_task: "esc"
+  });
+  // Escape must not be bound to open_editor or delete_task
+  assert.notEqual(resolved.bindings.open_editor, ["Escape"]);
+  assert.notEqual(resolved.bindings.delete_task, ["Escape"]);
+  assert.equal(resolved.keyToAction["Escape"], undefined);
+});
+
+test("handleTextKey: respects active custom bindings", () => {
+  let editorOpened = false;
+  let openedTaskId = null;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cursorIndex: 0,
+    filteredTodos: [{ id: 42, title: "Test" }],
+    openEditor: (id: any) => {
+      editorOpened = true;
+      openedTaskId = id;
+    }
+  };
+
+  const customBindings = resolveBindings({
+    open_editor: "o"
+  });
+
+  // Default 'e' is no longer bound to open_editor if overridden
+  handleTextKey(mockRoot, "e", TodoStore, customBindings);
+  assert.equal(editorOpened, false);
+
+  // 'o' triggers openEditor
+  handleTextKey(mockRoot, "o", TodoStore, customBindings);
+  assert.equal(editorOpened, true);
+  assert.equal(openedTaskId, 42);
+});
+
+test("getKeybindingsList: formats custom keys in catalog dynamically", () => {
+  const customBindings = resolveBindings({
+    open_editor: "o",
+    next_task: "Down",
+    search: "Ctrl+S"
+  });
+
+  const list = getKeybindingsList("SUPER + ALT + T", "SUPER + SHIFT + T", customBindings);
+  const editorItem = list.find((item: any) => item.desc.includes("todos.json"));
+  assert.ok(editorItem);
+  assert.equal(editorItem.key, "o");
+
+  const searchItem = list.find((item: any) => item.desc.includes("Search tasks"));
+  assert.ok(searchItem);
+  assert.ok(searchItem.key.includes("Ctrl+S"));
 });
 
 

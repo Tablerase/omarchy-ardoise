@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
-import { extractHandler, repoDir } from "./helpers/qml-test-utils.mts";
+import os from "node:os";
+import { execSync, spawnSync } from "node:child_process";
+import { extractHandler, findOnPath, repoDir } from "./helpers/qml-test-utils.mts";
 
 test("Static QML Analysis: All QQC2 and custom UI components have required imports", () => {
   const rootFiles = fs
@@ -142,6 +143,30 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       panelContent.includes("if (parsed.title && parsed.title.trim().length > 0)"),
     "PanelContent onAccepted must validate parsed title before adding"
   );
+
+  // 1c. QuickAdd #profile and #tag autocomplete popup & key interception
+  assert.ok(
+    quickAddContent.includes("property bool autocompleteActive:") &&
+      quickAddContent.includes('property string autocompleteMode: "profile"') &&
+      quickAddContent.includes("readonly property var autocompleteMatches:"),
+    "QuickAdd must declare autocompleteActive, autocompleteMode, and autocompleteMatches"
+  );
+  assert.ok(
+    quickAddContent.includes("function checkAutocompleteAtCursor()") &&
+      quickAddContent.includes("function applyAutocomplete(item)") &&
+      quickAddContent.includes("function closeAutocomplete()"),
+    "QuickAdd must declare checkAutocompleteAtCursor, applyAutocomplete, and closeAutocomplete"
+  );
+  assert.ok(
+    quickAddContent.includes("id: autocompleteBox") &&
+      quickAddContent.includes("visible: root.autocompleteActive && root.autocompleteMatches.length > 0"),
+    "QuickAdd must render autocompleteBox conditionally on active state and matches"
+  );
+  assert.ok(
+    quickAddContent.includes("if (root.autocompleteActive && root.autocompleteMatches.length > 0)"),
+    "QuickAdd taskInput key handlers must intercept Down, Up, Tab, Backtab, Return, and Escape when autocomplete is active"
+  );
+
 
   // 2. Help search & shortcuts: Backspace on empty text dismisses modal
   assert.ok(
@@ -657,3 +682,141 @@ test("IPC Contract: documented commands match the IpcHandler in DESIGN.md and RE
     "gitSearch IPC entry point must be available in BarWidget (Phase 2 snapshot search)"
   );
 });
+
+test("Lua Keybindings Sandbox: tools/load-bindings.lua evaluates config and blocks unsafe calls", () => {
+  const loadBindingsScript = path.join(repoDir, "tools", "load-bindings.lua");
+  assert.ok(fs.existsSync(loadBindingsScript), "tools/load-bindings.lua must exist");
+
+  const luaPath = findOnPath("lua");
+  if (!luaPath) {
+    if (process.env.CI) throw new Error("lua must be installed in CI");
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-lua-test-"));
+  try {
+    // 1. Declarative table return
+    const tableFile = path.join(tmpDir, "table_bindings.lua");
+    fs.writeFileSync(tableFile, 'return { open_editor = "o", search = "ctrl+s", jump_top = { "t", "Home" } }');
+    const tableRes = spawnSync(luaPath, [loadBindingsScript, tableFile], { encoding: "utf8" });
+    assert.equal(tableRes.status, 0);
+    const tableJson = JSON.parse(tableRes.stdout.trim());
+    assert.equal(tableJson.open_editor, "o");
+    assert.equal(tableJson.search, "ctrl+s");
+    assert.deepEqual(tableJson.jump_top, ["t", "Home"]);
+
+    // 2. Imperative ardoise.bind syntax
+    const imperativeFile = path.join(tmpDir, "imperative_bindings.lua");
+    fs.writeFileSync(imperativeFile, 'ardoise.bind("o", "open_editor")\nardoise.bind("Ctrl+S", "search")');
+    const impRes = spawnSync(luaPath, [loadBindingsScript, imperativeFile], { encoding: "utf8" });
+    assert.equal(impRes.status, 0);
+    const impJson = JSON.parse(impRes.stdout.trim());
+    assert.equal(impJson.open_editor, "o");
+    assert.equal(impJson.search, "Ctrl+S");
+
+    // 3. Malicious attempt to use os.execute / io.open
+    const evilFile = path.join(tmpDir, "evil.lua");
+    const markerFile = path.join(tmpDir, "pwned.txt");
+    fs.writeFileSync(evilFile, `os.execute("touch ${markerFile}")\nreturn { open_editor = "o" }`);
+    const evilRes = spawnSync(luaPath, [loadBindingsScript, evilFile], { encoding: "utf8" });
+    // Sandbox should block execution: os is nil, error caught, marker file must NOT exist
+    assert.ok(!fs.existsSync(markerFile), "Sandbox must prevent os.execute from creating marker file");
+    const evilJson = JSON.parse(evilRes.stdout.trim());
+    assert.deepEqual(evilJson, {}, "Unsafe script execution error must safely return empty object");
+
+    // 4. Malformed syntax
+    const malformedFile = path.join(tmpDir, "syntax_error.lua");
+    fs.writeFileSync(malformedFile, "return { incomplete table");
+    const syntaxRes = spawnSync(luaPath, [loadBindingsScript, malformedFile], { encoding: "utf8" });
+    const syntaxJson = JSON.parse(syntaxRes.stdout.trim());
+    assert.deepEqual(syntaxJson, {}, "Syntax errors must safely resolve to empty object");
+
+    // 5. Non-existent file
+    const nonExistentRes = spawnSync(luaPath, [loadBindingsScript, path.join(tmpDir, "missing.lua")], { encoding: "utf8" });
+    assert.equal(nonExistentRes.status, 0);
+    assert.deepEqual(JSON.parse(nonExistentRes.stdout.trim()), {});
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Default Bindings Template: tools/default-bindings.lua is valid and documents all actions", () => {
+  const templatePath = path.join(repoDir, "tools", "default-bindings.lua");
+  const loadBindingsScript = path.join(repoDir, "tools", "load-bindings.lua");
+  assert.ok(fs.existsSync(templatePath), "tools/default-bindings.lua must exist");
+
+  const templateContent = fs.readFileSync(templatePath, "utf8");
+  const panelLogicContent = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
+
+  // Extract action names from DEFAULT_BINDINGS in PanelLogic.js
+  const defaultBindingsMatch = panelLogicContent.match(/var DEFAULT_BINDINGS = {([^}]+)}/s);
+  assert.ok(defaultBindingsMatch, "PanelLogic.js must declare DEFAULT_BINDINGS");
+  const actionKeys = [...defaultBindingsMatch[1].matchAll(/([a-z_]+)\s*:/g)].map((m) => m[1]);
+  assert.ok(actionKeys.length >= 15, "DEFAULT_BINDINGS must contain expected action catalog");
+
+  for (const action of actionKeys) {
+    assert.ok(
+      templateContent.includes(action),
+      `default-bindings.lua template must document action '${action}'`
+    );
+  }
+
+  // Ensure BarWidget and PanelContent have wired the template for auto-seeding
+  const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  assert.ok(barWidgetContent.includes("default-bindings.lua"), "BarWidget.qml must reference default-bindings.lua");
+  assert.ok(panelContent.includes("default-bindings.lua"), "PanelContent.qml must reference default-bindings.lua");
+
+  const luaPath = findOnPath("lua");
+  if (!luaPath) {
+    if (process.env.CI) throw new Error("lua must be installed in CI");
+    return;
+  }
+
+  const res = spawnSync(luaPath, [loadBindingsScript, templatePath], { encoding: "utf8" });
+  assert.equal(res.status, 0, "Evaluation of default-bindings.lua must succeed with exit code 0");
+  const parsed = JSON.parse(res.stdout.trim());
+  assert.deepEqual(parsed, {}, "Default template must return an empty object so defaults remain active");
+});
+
+test("HelpModal: dynamic dismiss key hint and key handling", () => {
+  const helpModalContent = fs.readFileSync(path.join(repoDir, "ui", "HelpModal.qml"), "utf8");
+  assert.ok(helpModalContent.includes("helpShortcutHint"), "HelpModal must declare helpShortcutHint");
+  assert.ok(helpModalContent.includes("isHelpDismissKey"), "HelpModal must declare isHelpDismissKey");
+  assert.ok(
+    helpModalContent.includes('"Press Esc or " + root.helpShortcutHint + " to close"'),
+    "HelpModal footer prompt must dynamically use helpShortcutHint"
+  );
+  assert.ok(
+    helpModalContent.includes("root.isHelpDismissKey(event)"),
+    "HelpModal Keys.onPressed must delegate to isHelpDismissKey"
+  );
+});
+
+test("Git Ignore Policy: BarWidget provisions .gitignore for bindings.lua", () => {
+  const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  assert.ok(
+    barWidgetContent.includes(".gitignore") && barWidgetContent.includes("bindings.lua"),
+    "BarWidget must ensure .gitignore excludes bindings.lua from task git repository"
+  );
+});
+
+test("Demo & Scenario Runner: tools/demo.sh exists, is executable, and supports hero scenario", () => {
+  const demoScript = path.join(repoDir, "tools", "demo.sh");
+  assert.ok(fs.existsSync(demoScript), "tools/demo.sh must exist");
+
+  const stat = fs.statSync(demoScript);
+  assert.ok(Boolean(stat.mode & 0o111), "tools/demo.sh must be executable");
+
+  const listRes = spawnSync(demoScript, ["list"], { encoding: "utf8" });
+  assert.equal(listRes.status, 0, "tools/demo.sh list must succeed with exit code 0");
+  assert.ok(listRes.stdout.includes("hero"), "tools/demo.sh list must include hero scenario");
+  assert.ok(listRes.stdout.includes("ladder"), "tools/demo.sh list must include ladder scenario");
+  assert.ok(listRes.stdout.includes("empty"), "tools/demo.sh list must include empty scenario");
+
+  const helpRes = spawnSync(demoScript, ["--help"], { encoding: "utf8" });
+  assert.equal(helpRes.status, 0, "tools/demo.sh --help must succeed with exit code 0");
+  assert.ok(helpRes.stdout.includes("hero"), "tools/demo.sh --help must document usage");
+});
+
+

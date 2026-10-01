@@ -55,34 +55,186 @@ function buildCodebaseCommand(localPath, homeDir) {
 }
 
 /**
+ * Canonical default keybindings mapping actions to arrays of key tokens.
+ * @type {Record<string, string[]>}
+ */
+var DEFAULT_BINDINGS = {
+  next_task: ["j", "Down"],
+  prev_task: ["k", "Up"],
+  cycle_left: ["h", "Left"],
+  cycle_right: ["l", "Right"],
+  jump_top: ["g"],
+  jump_bottom: ["G"],
+  toggle_done: ["Space"],
+  toggle_expand: ["Return"],
+  delete_task: ["x"],
+  edit_title: ["r", "F2"],
+  open_editor: ["e"],
+  git_undo: ["u"],
+  clear_completed: ["c"],
+  open_archive: ["d"],
+  focus_input: ["i", "a"],
+  search: ["/"],
+  quick_add: ["A"],
+  help: ["?"]
+};
+
+/**
+ * Normalizes a raw key string into a standardized token.
+ * @param {string} k
+ * @returns {string}
+ */
+function normalizeKey(k) {
+  if (!k || typeof k !== "string") return "";
+  var trimmed = k.trim();
+  var lower = trimmed.toLowerCase();
+  if (lower === "space") return "Space";
+  if (lower === "return" || lower === "enter") return "Return";
+  if (lower === "escape" || lower === "esc") return "Escape";
+  if (lower === "tab") return "Tab";
+  if (lower === "backtab") return "Backtab";
+  if (lower === "up" || lower === "↑") return "Up";
+  if (lower === "down" || lower === "↓") return "Down";
+  if (lower === "left" || lower === "←") return "Left";
+  if (lower === "right" || lower === "→") return "Right";
+  if (lower === "home") return "Home";
+  if (lower === "end") return "End";
+  if (lower === "pageup") return "PageUp";
+  if (lower === "pagedown") return "PageDown";
+  if (lower === "backspace") return "Backspace";
+  if (lower === "f2") return "F2";
+  if (lower.indexOf("+") !== -1) {
+    var parts = trimmed.split("+");
+    var normalizedParts = parts.map(function(p) {
+      var pl = p.trim().toLowerCase();
+      if (pl === "ctrl" || pl === "control") return "Ctrl";
+      if (pl === "shift") return "Shift";
+      if (pl === "alt") return "Alt";
+      if (pl === "super" || pl === "meta" || pl === "cmd") return "Super";
+      if (pl.length === 1) return pl.toUpperCase();
+      return normalizeKey(p.trim());
+    });
+    return normalizedParts.join("+");
+  }
+  return trimmed;
+}
+
+/**
+ * Resolves user keybindings overrides with safe defaults.
+ * @param {Record<string, any>} [userConfig]
+ * @returns {{bindings: Record<string, string[]>, keyToAction: Record<string, string>}}
+ */
+function resolveBindings(userConfig) {
+  /** @type {Record<string, string[]>} */
+  var resolved = {};
+  /** @type {Record<string, string>} */
+  var keyToAction = {};
+  var user = (userConfig && typeof userConfig === "object") ? userConfig : {};
+
+  for (var action in DEFAULT_BINDINGS) {
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_BINDINGS, action)) {
+      resolved[action] = DEFAULT_BINDINGS[action].slice();
+    }
+  }
+
+  for (var userAction in user) {
+    if (Object.prototype.hasOwnProperty.call(user, userAction) && Object.prototype.hasOwnProperty.call(DEFAULT_BINDINGS, userAction)) {
+      var val = user[userAction];
+      /** @type {string[]} */
+      var keys = [];
+      if (typeof val === "string" && val.trim().length > 0) {
+        keys = [normalizeKey(val)];
+      } else if (Array.isArray(val)) {
+        for (var i = 0; i < val.length; i++) {
+          if (typeof val[i] === "string" && val[i].trim().length > 0) {
+            keys.push(normalizeKey(val[i]));
+          }
+        }
+      }
+      if (keys.length > 0) {
+        // Enforce invariants: "Escape" is protected and cannot be remapped to task actions
+        keys = keys.filter(function(k) { return k !== "Escape"; });
+        if (keys.length > 0) {
+          resolved[userAction] = keys;
+        }
+      }
+    }
+  }
+
+  for (var act in resolved) {
+    var actKeys = resolved[act];
+    for (var j = 0; j < actKeys.length; j++) {
+      keyToAction[actKeys[j]] = act;
+    }
+  }
+
+  return {
+    bindings: resolved,
+    keyToAction: keyToAction
+  };
+}
+
+/**
  * Returns the catalog of supported keyboard shortcuts and navigation commands.
  * @param {string} [detectedPanelShortcut]
  * @param {string} [detectedQuickAddShortcut]
+ * @param {any} [activeBindings] Optional resolved bindings object
  * @returns {Array<{key: string, desc: string, category: string}>}
  */
-function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut) {
+function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut, activeBindings) {
   var panelShortcut = detectedPanelShortcut || "SUPER + ALT + T";
   var quickAddShortcut = detectedQuickAddShortcut || "SUPER + SHIFT + T";
+  var b = (activeBindings && activeBindings.bindings) ? activeBindings.bindings : DEFAULT_BINDINGS;
+
+  /**
+   * @param {string} action
+   * @param {string} fallback
+   * @returns {string}
+   */
+  function fmt(action, fallback) {
+    var keys = b[action];
+    if (!keys || keys.length === 0) return fallback;
+    return keys.map(/** @param {string} k */ function(k) {
+      if (k === "Up") return "↑";
+      if (k === "Down") return "↓";
+      if (k === "Left") return "←";
+      if (k === "Right") return "→";
+      if (k === "Return") return "Enter / Return";
+      return k;
+    }).join(" / ");
+  }
+
+  var searchKey = fmt("search", "/");
+  var searchDisplay = (searchKey === "/") ? "/ / Ctrl+F" : (searchKey.indexOf("Ctrl+F") !== -1 ? searchKey : searchKey + " / Ctrl+F");
+  var helpKey = fmt("help", "?");
+  var helpDisplay = (helpKey === "?") ? "? / Backspace" : (helpKey.indexOf("Backspace") !== -1 ? helpKey : helpKey + " / Backspace");
+
+  var cycleLeft = fmt("cycle_left", "h / ←");
+  var cycleRight = fmt("cycle_right", "l / →");
+  var cycleDisplay = (cycleLeft === "h / ←" && cycleRight === "l / →")
+    ? "h / l / ← / →"
+    : cycleLeft + " / " + cycleRight;
+
   return [
-    { key: "j / ↓", desc: "Next task", category: "Navigation" },
-    { key: "k / ↑", desc: "Previous task", category: "Navigation" },
-    { key: "h / l / ← / →", desc: "Cycle profile filters or footer buttons", category: "Navigation" },
+    { key: fmt("next_task", "j / ↓"), desc: "Next task", category: "Navigation" },
+    { key: fmt("prev_task", "k / ↑"), desc: "Previous task", category: "Navigation" },
+    { key: cycleDisplay, desc: "Cycle profile filters or footer buttons", category: "Navigation" },
     { key: "Tab / Shift+Tab", desc: "Switch section (profiles ↔ input ↔ tasks ↔ footer)", category: "Navigation" },
-    { key: "g / G", desc: "Jump to top / bottom of task list", category: "Navigation" },
-    { key: "Space", desc: "Toggle completed status of selected task", category: "Task Actions" },
-    { key: "Enter / Return", desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
-    { key: "x", desc: "Delete selected task", category: "Task Actions" },
-    { key: "r / F2", desc: "Edit title of selected task", category: "Task Actions" },
-    { key: "e", desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
-    { key: "u", desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
-    { key: "c", desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
-    { key: "d", desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
-    { key: "i / a", desc: "Focus new task input field", category: "Input & Create" },
-    { key: "/ / Ctrl+F", desc: "Search tasks, notes & profiles", category: "Navigation" },
-    { key: "A", desc: "Open Quick Add modal", category: "Input & Create" },
+    { key: fmt("jump_top", "g") + " / " + fmt("jump_bottom", "G"), desc: "Jump to top / bottom of task list", category: "Navigation" },
+    { key: fmt("toggle_done", "Space"), desc: "Toggle completed status of selected task", category: "Task Actions" },
+    { key: fmt("toggle_expand", "Enter / Return"), desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
+    { key: fmt("delete_task", "x"), desc: "Delete selected task", category: "Task Actions" },
+    { key: fmt("edit_title", "r / F2"), desc: "Edit title of selected task", category: "Task Actions" },
+    { key: fmt("open_editor", "e"), desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
+    { key: fmt("git_undo", "u"), desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
+    { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
+    { key: fmt("open_archive", "d"), desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
+    { key: fmt("focus_input", "i / a"), desc: "Focus new task input field", category: "Input & Create" },
+    { key: searchDisplay, desc: "Search tasks, notes & profiles", category: "Navigation" },
+    { key: fmt("quick_add", "A"), desc: "Open Quick Add modal", category: "Input & Create" },
     { key: "Shift+Enter", desc: "Insert newline in task notes", category: "Input & Create" },
     { key: "Esc", desc: "Leave input / editor or close panel", category: "Global" },
-    { key: "? / Backspace", desc: "Toggle or dismiss keybindings help modal", category: "Global" },
+    { key: helpDisplay, desc: "Toggle or dismiss keybindings help modal", category: "Global" },
     { key: panelShortcut, desc: "Global desktop shortcut: toggle Ardoise panel", category: "Global" },
     { key: quickAddShortcut, desc: "Global desktop shortcut: summon Quick Add modal", category: "Global" }
   ];
@@ -452,9 +604,10 @@ function handleTab(root, direction, TodoStore) {
  * Handles action keypresses (?, A, c, d, e, i, a, /, g, G).
  * @param {any} root PanelContent root QML object
  * @param {string} text
- * @param {any} TodoStore TodoStore module
+ * @param {any} [TodoStore] TodoStore module
+ * @param {any} [activeBindings]
  */
-function handleTextKey(root, text, TodoStore) {
+function handleTextKey(root, text, TodoStore, activeBindings) {
   root.cursorActive = true;
   root.mouseMovementDetected = false;
 
@@ -462,46 +615,6 @@ function handleTextKey(root, text, TodoStore) {
     return;
   }
 
-  if (text === "?") {
-    root.showKeyHelp = !root.showKeyHelp;
-    return;
-  }
-  if (text === "u" || text === "U") {
-    root.showGitModal = !root.showGitModal;
-    return;
-  }
-  if ((text === "r" || text === "R") && root.focusSection === "tasks") {
-    if (root.expandedTaskId === -1 || root.expandedTaskId === null || root.expandedSubSection === "header" || !root.expandedTaskId) {
-      if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
-        var currentTask = root.filteredTodos[root.cursorIndex];
-        if (currentTask && typeof root.startEditingTask === "function") {
-          root.startEditingTask(currentTask.id);
-          return;
-        }
-      }
-    }
-  }
-  if (text === "A") {
-    if (typeof root.openQuickAdd === "function") root.openQuickAdd();
-    return;
-  }
-  if (text === "c" || text === "C") {
-    if (typeof root.clearCompleted === "function") root.clearCompleted(root.currentFilter);
-    return;
-  }
-  if (text === "d") {
-    if (typeof root.openArchive === "function") root.openArchive();
-    return;
-  }
-  if (text === "e") {
-    var currentTaskId = null;
-    if (root.focusSection === "tasks" && root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
-      var t = root.filteredTodos[root.cursorIndex];
-      if (t) currentTaskId = t.id;
-    }
-    if (typeof root.openEditor === "function") root.openEditor(currentTaskId);
-    return;
-  }
   if (root.focusSection === "tasks" && root.expandedSubSection === "notes") {
     if (typeof root.focusNotesEditor === "function" && root.focusNotesEditor()) {
       if (text !== "i" && text !== "a" && text && text.length === 1) {
@@ -521,17 +634,94 @@ function handleTextKey(root, text, TodoStore) {
     }
     return;
   }
-  if (text === "/") {
+
+  var map = (activeBindings && activeBindings.keyToAction)
+    ? activeBindings.keyToAction
+    : (root.activeBindings && root.activeBindings.keyToAction)
+      ? root.activeBindings.keyToAction
+      : null;
+
+  var action = map ? (map[text] || map[text.toLowerCase()]) : null;
+
+  if (action === "help" || (!map && text === "?")) {
+    root.showKeyHelp = !root.showKeyHelp;
+    return;
+  }
+  if (action === "git_undo" || (!map && (text === "u" || text === "U"))) {
+    root.showGitModal = !root.showGitModal;
+    return;
+  }
+  if ((action === "edit_title" || (!map && (text === "r" || text === "R"))) && root.focusSection === "tasks") {
+    if (root.expandedTaskId === -1 || root.expandedTaskId === null || root.expandedSubSection === "header" || !root.expandedTaskId) {
+      if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var currentTask = root.filteredTodos[root.cursorIndex];
+        if (currentTask && typeof root.startEditingTask === "function") {
+          root.startEditingTask(currentTask.id);
+          return;
+        }
+      }
+    }
+  }
+  if (action === "delete_task") {
+    handleDelete(root);
+    return;
+  }
+  if (action === "toggle_done") {
+    handleActivate(root, TodoStore);
+    return;
+  }
+  if (action === "toggle_expand") {
+    handleReturn(root, TodoStore);
+    return;
+  }
+  if (action === "next_task") {
+    handleMove(root, 0, 1, TodoStore);
+    return;
+  }
+  if (action === "prev_task") {
+    handleMove(root, 0, -1, TodoStore);
+    return;
+  }
+  if (action === "cycle_left") {
+    handleMove(root, -1, 0, TodoStore);
+    return;
+  }
+  if (action === "cycle_right") {
+    handleMove(root, 1, 0, TodoStore);
+    return;
+  }
+  if (action === "quick_add" || (!map && text === "A")) {
+    if (typeof root.openQuickAdd === "function") root.openQuickAdd();
+    return;
+  }
+  if (action === "clear_completed" || (!map && (text === "c" || text === "C"))) {
+    if (typeof root.clearCompleted === "function") root.clearCompleted(root.currentFilter);
+    return;
+  }
+  if (action === "open_archive" || (!map && text === "d")) {
+    if (typeof root.openArchive === "function") root.openArchive();
+    return;
+  }
+  if (action === "open_editor" || (!map && text === "e")) {
+    var currentTaskId = null;
+    if (root.focusSection === "tasks" && root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+      var t = root.filteredTodos[root.cursorIndex];
+      if (t) currentTaskId = t.id;
+    }
+    if (typeof root.openEditor === "function") root.openEditor(currentTaskId);
+    return;
+  }
+  if (action === "search" || (!map && text === "/")) {
     if (typeof root.activateSearch === "function") root.activateSearch();
     return;
   }
-  if (text === "i" || text === "a") {
+  if (action === "focus_input" || (!map && (text === "i" || text === "a"))) {
     root.focusSection = "input";
     if (typeof root.focusInputField === "function") root.focusInputField();
-  } else if (text === "g" && root.focusSection === "tasks") {
+  } else if ((action === "jump_top" || (!map && text === "g")) && root.focusSection === "tasks") {
     root.cursorIndex = 0;
     if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(0, false);
-  } else if (text === "G" && root.focusSection === "tasks") {
+  } else if ((action === "jump_bottom" || (!map && text === "G")) && root.focusSection === "tasks") {
     if (root.filteredTodos && root.filteredTodos.length > 0) {
       var lastIdx = root.filteredTodos.length - 1;
       if (root.completedFoldOpen === false) {
@@ -696,6 +886,9 @@ if (typeof module !== "undefined" && module.exports) {
     handleActivate: handleActivate,
     handleReturn: handleReturn,
     handleDelete: handleDelete,
-    handleTextKey: handleTextKey
+    handleTextKey: handleTextKey,
+    DEFAULT_BINDINGS: DEFAULT_BINDINGS,
+    normalizeKey: normalizeKey,
+    resolveBindings: resolveBindings
   };
 }

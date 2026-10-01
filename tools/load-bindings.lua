@@ -54,6 +54,10 @@ local function to_json(val)
       end
     end
 
+    if n == 0 then
+      return "{}"
+    end
+
     if is_array then
       local parts = {}
       for i = 1, #val do
@@ -74,11 +78,43 @@ local function to_json(val)
 end
 
 -- Sandbox environment: whitelist only safe primitives
+local KNOWN_ACTIONS = {
+  next_task = true,
+  prev_task = true,
+  cycle_left = true,
+  cycle_right = true,
+  jump_top = true,
+  jump_bottom = true,
+  toggle_done = true,
+  toggle_expand = true,
+  delete_task = true,
+  edit_title = true,
+  open_editor = true,
+  git_undo = true,
+  clear_completed = true,
+  open_archive = true,
+  focus_input = true,
+  search = true,
+  quick_add = true,
+  help = true
+}
+
 local bindings_table = {}
 local ardoise_builder = {
-  bind = function(action, key)
-    if type(action) == "string" and (type(key) == "string" or type(key) == "table") then
-      bindings_table[action] = key
+  bind = function(a, b)
+    local act, k
+    if type(a) == "string" and KNOWN_ACTIONS[a] then
+      act = a
+      k = b
+    elseif type(b) == "string" and KNOWN_ACTIONS[b] then
+      act = b
+      k = a
+    else
+      act = a
+      k = b
+    end
+    if type(act) == "string" and (type(k) == "string" or type(k) == "table") then
+      bindings_table[act] = k
     end
   end,
   bindings = bindings_table

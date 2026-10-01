@@ -89,26 +89,29 @@ ShellRoot {
                     spacing: Style.space(17)
                     Repeater {
                         model: [
-                            "Reactive local storage (~/.config/omarchy/todos.json)",
-                            "Auto-hiding profile filters with smooth scrollbar",
-                            "24/7 background reminder notifications",
-                            "Dedicated completion archive (todos-archive.json)",
-                            "Fast global Quick Add overlay (SUPER + SHIFT + T)",
-                            "Native to Omarchy Quattro, down to the details"
+                            { icon: "󰌌", text: "Vim & keyboard navigation with customizable Lua bindings" },
+                            { icon: "󰍉", text: "In-panel search (/ or Ctrl+F) across tasks, notes, & profiles" },
+                            { icon: "󰊢", text: "Git-backed snapshots: automatic undo, rollback, & sync" },
+                            { icon: "󰉋", text: "Context-aware: auto-detects active workspace (Zed, VS Code, Nvim)" },
+                            { icon: "󱫌", text: "Urgency ladder: smart severity escalations without red alert fatigue" },
+                            { icon: "󰆍", text: "23 shell commands over omarchy-shell tablerase.ardoise" }
                         ]
                         Row {
-                            required property string modelData
+                            required property var modelData
                             spacing: Style.space(12)
                             Text {
-                                text: "•"
+                                text: modelData.icon
                                 color: Color.accent || "#1e66f5"
-                                font.pixelSize: Style.space(22)
+                                font.family: Style.font.family
+                                font.pixelSize: Style.space(18)
+                                anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
-                                text: modelData
+                                text: modelData.text
                                 color: "#cbd5e1"
                                 font.family: Style.font.family
                                 font.pixelSize: Style.space(17)
+                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                     }
@@ -153,15 +156,16 @@ ShellRoot {
                         spacing: Style.space(6)
 
                         PluginUi.ArdoiseIcon {
+                            id: barIcon
                             iconSize: Style.bar.iconFont
-                            store: null
+                            store: previewContent.store
                             forcedKey: "overdue"
                             anchors.verticalCenter: parent.verticalCenter
                         }
 
                         Text {
-                            text: "6"
-                            color: Color.urgent || "#d20f39"
+                            text: "1"
+                            color: barIcon.ladderColor
                             font.family: Style.font.family
                             font.pixelSize: Style.font.body
                             font.bold: true
@@ -196,6 +200,11 @@ ShellRoot {
                         anchors.fill: parent
                         anchors.margins: Style.space(12)
                         shortcutState: "active"
+                        shortcutRegistered: true
+                        panelShortcutRegistered: true
+                        quickAddShortcutRegistered: true
+                        detectedPanelShortcut: "SUPER + ALT + T"
+                        detectedQuickAddShortcut: "SUPER + SHIFT + T"
                         store: ({
                             version: 1,
                             activeProfile: "personal",
@@ -203,22 +212,26 @@ ShellRoot {
                             todos: [
                                 {
                                     id: 1,
-                                    title: "Finalize quarterly planning architecture",
-                                    description: "Review roadmap deliverables and milestones",
+                                    title: "Fix memory leak in parser AST traversal",
+                                    description: "Profile heap allocations during tree node cleanup",
                                     done: false,
                                     profile: "work",
-                                    reminder: "Today 18:00",
-                                    notified: false,
+                                    repo: "omarchy-ardoise",
+                                    tags: ["ui", "parser"],
+                                    reminder: new Date(Date.now() - 3600000).toISOString(),
+                                    location: { repo: "tablerase/omarchy-ardoise", localPath: "~/Work/tries/omarchy-ardoise" },
                                     createdAt: 1726930000000
                                 },
                                 {
                                     id: 2,
-                                    title: "Review pull request for Ardoise plugin",
-                                    description: "Validate CI workflows and headless test suite",
+                                    title: "Review PR #42 git snapshot search filter",
+                                    description: "Test cross-field matching on message, device, and hash",
                                     done: false,
                                     profile: "work",
-                                    reminder: "Tomorrow 09:00",
-                                    notified: false,
+                                    repo: "omarchy-ardoise",
+                                    tags: ["git", "search"],
+                                    reminder: new Date(Date.now() + 86400000).toISOString(),
+                                    location: { repo: "tablerase/omarchy-ardoise", localPath: "~/Work/tries/omarchy-ardoise" },
                                     createdAt: 1726931000000
                                 },
                                 {
@@ -227,39 +240,20 @@ ShellRoot {
                                     description: "",
                                     done: false,
                                     profile: "personal",
+                                    tags: ["errands"],
                                     reminder: null,
-                                    notified: false,
                                     createdAt: 1726932000000
                                 },
                                 {
                                     id: 4,
-                                    title: "Book dinner table for Friday evening",
-                                    description: "",
-                                    done: false,
-                                    profile: "personal",
-                                    reminder: "Friday 20:00",
-                                    notified: false,
-                                    createdAt: 1726933000000
-                                },
-                                {
-                                    id: 5,
-                                    title: "Refactor storage parser unit tests",
-                                    description: "",
-                                    done: false,
+                                    title: "Setup Lua keybindings configuration engine",
+                                    description: "Provide customizable bindings template with sandbox validation",
+                                    done: true,
                                     profile: "work",
+                                    tags: ["lua"],
                                     reminder: null,
-                                    notified: false,
-                                    createdAt: 1726934000000
-                                },
-                                {
-                                    id: 6,
-                                    title: "Read chapter 4 of Designing Data-Intensive Apps",
-                                    description: "",
-                                    done: false,
-                                    profile: "personal",
-                                    reminder: null,
-                                    notified: false,
-                                    createdAt: 1726935000000
+                                    completedAt: Date.now() - 7200000,
+                                    createdAt: 1726920000000
                                 }
                             ]
                         })

@@ -102,31 +102,42 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
    - Supports hashtag syntax auto-detecting profiles (e.g. `#work Finish docs`).
    - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
    - **Title Validation & Error State**: When input contains only hashtags/profile/repo (e.g. `#ardoise/widget`) or when submission is attempted without an actual title, `taskInput` displays a high-contrast `Color.urgent` warning border (`Border.flat(Color.urgent, 2)` when focused, 1px when blurred) and a soft urgent background tint.
-4. **Inline Validation Cue (`titleErrorRow`)**:
-   - Displayed immediately below `taskInput` whenever the title is missing while hashtags/tags are present, or when submission is attempted with an empty title.
+4. **Hashtag Autocomplete Suggestions (`autocompleteBox`)** (Conditional: `autocompleteActive && autocompleteMatches.length > 0`):
+   - Positioned immediately below `taskInput`, seamlessly expanding the card height without overlay bleed or clipping.
+   - **Semantic Role Separation**:
+     - **First Hashtag Token**: Queries profiles via `TodoStore.searchProfiles(store, query)` (`autocompleteMode = "profile"`). Selecting an item sets `selectedProfile` and updates the active profile pill in `quickAddProfileSelector`.
+     - **Subsequent Hashtag Tokens**: Queries tags across all store tasks via `TodoStore.searchTags(store, query)` (`autocompleteMode = "tag"`). Selecting an item inserts `#<tag> ` into the task title text without modifying `selectedProfile`.
+   - **Keyboard Navigation**:
+     - <kbd>↓</kbd> / <kbd>↑</kbd>: Cycle suggested matches (`autocompleteIndex`) with auto-scrolling (`Flickable`).
+     - <kbd>Tab</kbd> / <kbd>Enter</kbd>: Commit suggestion (`applyAutocomplete`), replacing query with `#<item> `, advancing cursor, and keeping focus in `taskInput`.
+     - <kbd>Shift+Tab</kbd>: Cycle matches backward.
+     - <kbd>Escape</kbd>: Dismisses autocomplete popup without blurring `taskInput` or dismissing Quick Add.
+   - **Styling & Indicators**: Opaque surface (`Color.popups.background || Color.menu.background`), mode badge (`󰭤 Profiles` / `󰓹 Tags`), profile glyph or tag icon (`󰓹`), `#name`, and right-aligned count (`N tasks` pending for profiles, `N used` for tags). Hovering highlights row; mouse click applies suggestion.
+5. **Inline Validation Cue (`titleErrorRow`)**:
+   - Displayed immediately below `taskInput` (or `autocompleteBox`) whenever the title is missing while hashtags/tags are present, or when submission is attempted with an empty title.
    - Renders an error icon (`󰅚`) and clear actionable message in `Color.urgent`: `"Title required: add task name after hashtag (e.g. #ardoise/widget My task)"` or `"Task title is required"`. Automatically hides as soon as a non-empty title is typed.
-5. **Draft Notice Banner** (Conditional: `hasDraft === true`):
+6. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
-6. **Option Toggles Row**:
+7. **Option Toggles Row**:
    - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When active, displays clean accent tint (`Util.alpha(Color.accent, 0.12)`), 1px accent border, and accent text/icon. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring and prominent focus fill. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
    - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`. When active with a chosen reminder, displays accent tint, 1px accent border, and formatted reminder string. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring.
    - Both buttons use `bordered: true`, scale popping, and explicit accent focus rings, ensuring navigation focus is always noticeably brighter and higher-contrast than resting active states.
-7. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
+8. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
    - **Insert mode** (`activeFocus === true`): 2px solid accent border + accent tint fill — clear editing indicator.
    - **Nav mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid accent border, no tint — field is selected in keyboard nav but not being edited.
    - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
-8. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
+9. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
    - Presets: `+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, plus "Clear". Presets and selected timestamps are dynamically recomputed at open and click/selection time relative to current local execution time rather than startup time. Bordered focus styling via `Ui.ReminderPills`.
-9. **Profile Selector Container (`quickAddProfileContainer`)**:
-   - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
-   - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-10. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
+10. **Profile Selector Container (`quickAddProfileContainer`)**:
+    - Horizontal scrollable profile selector (`Ui.ProfileSelector`) with profile glyphs, active pop, and auto-scroll (`ensureVisible`).
+    - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
+11. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
     - Positioned above actions and divider.
     - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
     - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
-11. **Separator**: Bottom dividing line (`PanelSeparator`).
-12. **Footer Actions Item**:
+12. **Separator**: Bottom dividing line (`PanelSeparator`).
+13. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision. When title is missing or error state is active, hints update to `"⚠ Title required before sending • Esc Cancel"`.
     - Right: Action buttons [Cancel] and [Add]:
       - Both buttons use `bordered: true`, 2px `Color.accent` focus border on navigation, and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
@@ -363,6 +374,10 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Input Normal)** | `i` / `a` / `Enter` / `Space` | Enter text edit mode in input field |
 | **Panel (Input Normal)** | `j` / `↓` | Move down to task list |
 | **Panel (Input Normal)** | `k` / `↑` | Move up to profile filter bar |
+| **Quick Add (Autocomplete)** | `↓` / `↑` | Cycle suggested profile or tag matches |
+| **Quick Add (Autocomplete)** | `Tab` / `Enter` | Commit selected match (`#<item> `) and advance cursor |
+| **Quick Add (Autocomplete)** | `Shift + Tab` | Cycle suggested matches backward |
+| **Quick Add (Autocomplete)** | `Escape` | Dismiss autocomplete popup (retains input focus and text) |
 | **Quick Add** | `Escape` | If title empty: dismiss modal. If non-empty: leave insert mode to `options`. |
 | **Quick Add (Normal)**| `Escape` | Dismiss modal |
 | **Quick Add (Normal)**| `i` / `a` | Enter insert mode into title input (or notes if on notes) |
@@ -373,6 +388,75 @@ Quickshell taskbar widget placed in the status bar.
 | **Notes Editor** | `Shift + Enter` | Insert newline |
 | **Notes Editor** | `Enter` | Save and commit note |
 | **Notes Editor** | `Escape` | Save note and blur to normal mode |
+
+### Custom User Keybindings (`bindings.lua`)
+
+Users can customize in-panel navigation and action shortcuts using a Lua file following Omarchy Quattro conventions.
+
+#### File Location & Auto-Seeding
+- Location: `~/.config/omarchy/tablerase.ardoise/bindings.lua` (or `$ARDOISE_DATA_DIR/bindings.lua` if customized).
+- **Auto-Seeding**: On first run, Ardoise automatically creates `bindings.lua` by copying the self-documenting template from [`tools/default-bindings.lua`](./tools/default-bindings.lua). The template lists all supported action names, modifier tokens, and syntax examples. It returns an empty table `{}` by default so all standard shortcuts remain active until customized.
+
+#### Sandboxing & Security Invariants
+Evaluation is executed via the standalone runner [`tools/load-bindings.lua`](./tools/load-bindings.lua):
+- **Hermetic Sandbox**: Evaluated in a stripped Lua 5.5 environment with no access to `os`, `io`, `debug`, `package`, `coroutine`, or `load`. Only safe deterministic primitives (`tostring`, `tonumber`, `type`, `pairs`, `ipairs`, `table.*`, `string.*`, `math.*`) are accessible.
+- **Fail-Safe Fallback**: Any syntax error, execution error, or missing file automatically and silently falls back to standard `DEFAULT_BINDINGS` without UI interruption.
+- **Invariant Protection**: The two-stage escape behavior is inviolable. Attempts to bind `Escape` / `esc` to other actions are rejected.
+
+#### Supported Configuration Syntax
+Both declarative table returns and imperative `ardoise.bind()` function calls are supported:
+
+**1. Declarative Table Return**:
+```lua
+return {
+  open_editor = "o",
+  quick_add = "a",
+  search = "ctrl+s",
+  jump_top = { "t", "Home" },
+  cycle_left = "Left",
+  cycle_right = "Right"
+}
+```
+
+**2. Imperative `ardoise.bind()`**:
+```lua
+ardoise.bind("open_editor", "o")
+ardoise.bind("search", "Ctrl+S")
+-- Keys and actions may be supplied in either order
+ardoise.bind("a", "quick_add")
+```
+
+#### Action Catalog
+| Action Name | Default Key(s) | Description |
+| :--- | :--- | :--- |
+| `next_task` | `j`, `Down` | Move to next task in list |
+| `prev_task` | `k`, `Up` | Move to previous task in list |
+| `cycle_left` | `h`, `Left` | Cycle active profiles or footer buttons left |
+| `cycle_right` | `l`, `Right` | Cycle active profiles or footer buttons right |
+| `jump_top` | `g` | Jump to first task |
+| `jump_bottom` | `G` | Jump to last task |
+| `toggle_done` | `Space` | Toggle task completion status |
+| `toggle_expand` | `Return` | Expand / collapse task details drawer |
+| `delete_task` | `x` | Delete selected task |
+| `edit_title` | `r`, `F2` | In-place edit of task title |
+| `open_editor` | `e` | Open `todos.json` in default editor |
+| `git_undo` | `u` | Toggle Git Snapshots & Undo modal |
+| `clear_completed` | `c` | Archive and clear completed tasks in current profile |
+| `open_archive` | `d` | Open `todos-archive.json` in editor |
+| `focus_input` | `i`, `a` | Focus new task input field |
+| `search` | `/` | Activate panel search bar |
+| `quick_add` | `A` | Open Quick Add overlay modal |
+| `help` | `?` | Toggle Help modal |
+
+#### Dynamic UI Reflection & Live Reload
+- Custom keybindings are watched with `FileView` (`watchChanges: true`), triggering live reload on disk save without restarting Quickshell.
+- The Help Modal (`HelpModal.qml`) dynamically formats and displays active user bindings. Its bottom dismiss prompt (`Press Esc or <key> to close`) and keyboard dismiss handlers dynamically match the active `help` binding.
+
+#### Git Tracking Strategy
+`bindings.lua` is explicitly excluded from the task snapshot git repository via `.gitignore` (`bindings.lua` and `*.tmp`):
+- **Conflict Prevention**: `GitSync.js` provides automatic three-way merging exclusively for structured task JSON (`todos.json` / `todos-archive.json`) based on task timestamps. Arbitrary Lua code cannot be three-way merged across machines and would produce git merge conflict markers that break parsing.
+- **Hardware Independence**: Keeps keybindings machine-local, avoiding overwriting shortcuts across disparate keyboards (e.g. laptop layout vs. desktop keyboard).
+- **Snapshot Isolation**: Restoring task snapshots via rollback never affects local keybinding configurations.
 
 ---
 
@@ -654,7 +738,10 @@ reflected in the bar and panel without a restart. Writes are atomic
 │   └── TaskCheck.qml      # Circular checkbox / severity indicator
 ├── tools/
 │   ├── ci-local.sh        # Reproduce CI in a container
+│   ├── default-bindings.lua # Template for user keybinding customization
+│   ├── demo.sh            # Reproducible demo scenario runner & data-safety manager
 │   ├── detect-context.sh  # Hyprland focused-window CWD/editor detection
+│   ├── load-bindings.lua  # Sandboxed Lua keybindings runner
 │   ├── omarchy-ref        # Pinned Omarchy commit for CI
 │   ├── preview.qml        # Offscreen render definition
 │   └── render-preview.sh  # Headless capture pipeline

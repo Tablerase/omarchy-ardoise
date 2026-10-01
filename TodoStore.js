@@ -881,6 +881,50 @@ function searchProfiles(store, query) {
 }
 
 /**
+ * Returns all unique tags used across tasks in the store, sorted by usage frequency descending, then alphabetical.
+ * @param {TodoStoreData|null|undefined} store
+ * @returns {string[]}
+ */
+function getAllTags(store) {
+  if (!store || !Array.isArray(store.todos)) return []
+  /** @type {Record<string, number>} */
+  var counts = {}
+  for (var i = 0; i < store.todos.length; i++) {
+    var t = store.todos[i]
+    if (Array.isArray(t.tags)) {
+      for (var j = 0; j < t.tags.length; j++) {
+        var tag = t.tags[j]
+        if (tag && typeof tag === "string") {
+          counts[tag] = (counts[tag] || 0) + 1
+        }
+      }
+    }
+  }
+  return Object.keys(counts).sort(function (a, b) {
+    var diff = counts[b] - counts[a]
+    if (diff !== 0) return diff
+    return a.localeCompare(b)
+  })
+}
+
+/**
+ * Searches and returns sorted tags matching a query.
+ * @param {TodoStoreData|null|undefined} store
+ * @param {string} [query]
+ * @returns {string[]}
+ */
+function searchTags(store, query) {
+  var tags = getAllTags(store)
+  if (!query) return tags
+  var cleanQuery = String(query).replace(/^#+/, "").toLowerCase().trim()
+  if (!cleanQuery) return tags
+  return tags.filter(function (t) {
+    return t.toLowerCase().includes(cleanQuery)
+  })
+}
+
+
+/**
  * Returns profiles sorted by:
  * 1. Descending pending task count (profiles with most pending tasks come first)
  * 2. Descending latest task activity timestamp (updatedAt || createdAt)
@@ -1636,7 +1680,9 @@ if (typeof module !== "undefined" && module.exports) {
     mergeStores,
     mergeArchives,
     filterMissingTasks,
-    searchProfiles
+    searchProfiles,
+    getAllTags,
+    searchTags
   }
 }
 

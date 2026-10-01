@@ -47,7 +47,9 @@ const {
   mergeStores,
   mergeArchives,
   filterMissingTasks,
-  searchProfiles
+  searchProfiles,
+  getAllTags,
+  searchTags
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -1399,6 +1401,59 @@ test("searchProfiles: searches profiles with substring and hashtag support", () 
   assert.deepEqual(searchProfiles(store, "nonexistent"), []);
 });
 
+test("getAllTags: extracts unique tags sorted by usage frequency descending then alphabetical", () => {
+  assert.deepEqual(getAllTags(null), []);
+  assert.deepEqual(getAllTags(undefined), []);
+  assert.deepEqual(getAllTags({ version: 1, activeProfile: "personal", profiles: [], todos: [] }), []);
+
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: 1, title: "Task 1", tags: ["backend", "urgent"], done: false },
+      { id: 2, title: "Task 2", tags: ["frontend", "urgent"], done: false },
+      { id: 3, title: "Task 3", tags: ["urgent", "api"], done: false },
+      { id: 4, title: "Task 4", tags: ["frontend"], done: false },
+      { id: 5, title: "Task 5", done: false } // no tags
+    ]
+  };
+
+  // urgent has 3, frontend has 2, api and backend have 1 each (api before backend alphabetically)
+  assert.deepEqual(getAllTags(store), ["urgent", "frontend", "api", "backend"]);
+});
+
+test("searchTags: searches tags with substring and hashtag support", () => {
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: 1, title: "Task 1", tags: ["backend", "urgent"], done: false },
+      { id: 2, title: "Task 2", tags: ["frontend", "urgent"], done: false },
+      { id: 3, title: "Task 3", tags: ["urgent", "ui-component"], done: false }
+    ]
+  };
+
+  // Empty or undefined returns all sorted tags
+  assert.deepEqual(searchTags(store), ["urgent", "backend", "frontend", "ui-component"]);
+  assert.deepEqual(searchTags(store, ""), ["urgent", "backend", "frontend", "ui-component"]);
+
+  // Substring match
+  assert.deepEqual(searchTags(store, "end"), ["backend", "frontend"]);
+  assert.deepEqual(searchTags(store, "comp"), ["ui-component"]);
+
+  // Strips leading hashtag
+  assert.deepEqual(searchTags(store, "#urgent"), ["urgent"]);
+  assert.deepEqual(searchTags(store, "##back"), ["backend"]);
+
+  // Case insensitive
+  assert.deepEqual(searchTags(store, "FRONTEND"), ["frontend"]);
+
+  // No match
+  assert.deepEqual(searchTags(store, "nonexistent"), []);
+});
+
 test("getFilteredTodos: live search across title, notes, tags, repo, and #profile", () => {
   const store = {
     version: 1,
@@ -1475,6 +1530,34 @@ test("getFilteredTodos: live search across title, notes, tags, repo, and #profil
   const noneMatch = getFilteredTodos(store, "all", "all", "all", "xyz12345");
   assert.equal(noneMatch.length, 0);
 });
+
+test("getAllTags & searchTags: extracts unique tags sorted by frequency and supports querying", () => {
+  let store = defaultStore();
+  store = addTodo(store, "Task 1", "", "work");
+  const id1 = store.todos[0].id;
+  store = updateTodo(store, id1, { tags: ["urgent", "bug", "frontend"] });
+
+  store = addTodo(store, "Task 2", "", "work");
+  const id2 = store.todos[0].id;
+  store = updateTodo(store, id2, { tags: ["bug", "backend"] });
+
+  store = addTodo(store, "Task 3", "", "personal");
+  const id3 = store.todos[0].id;
+  store = updateTodo(store, id3, { tags: ["bug"] });
+
+  const allTags = getAllTags(store);
+  // 'bug' count = 3, others count = 1
+  assert.equal(allTags[0], "bug");
+  assert.deepEqual(allTags.slice(1).sort(), ["backend", "frontend", "urgent"]);
+
+  // Test searchTags
+  assert.deepEqual(searchTags(store, "bu"), ["bug"]);
+  assert.deepEqual(searchTags(store, "#bug"), ["bug"]);
+  assert.deepEqual(searchTags(store, "end").sort(), ["backend", "frontend"]);
+  assert.deepEqual(searchTags(store, "nonexistent"), []);
+  assert.equal(searchTags(store, "").length, 4);
+});
+
 
 
 

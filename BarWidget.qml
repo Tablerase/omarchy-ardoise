@@ -36,6 +36,8 @@ BarWidget {
   })()
   readonly property string todoFilePath: dataDirPath + "/todos.json"
   readonly property string archiveFilePath: dataDirPath + "/todos-archive.json"
+  readonly property string bindingsFilePath: dataDirPath + "/bindings.lua"
+  readonly property string defaultBindingsTemplatePath: Qt.resolvedUrl("tools/default-bindings.lua").toString().replace(/^file:\/\//, "")
 
   property string deviceName: Quickshell.env("HOSTNAME") || "omarchy"
   property string lastCommitAction: "Update tasks"
@@ -216,6 +218,8 @@ BarWidget {
       "mkdir -p \"" + root.dataDirPath + "\" && " +
       "[ -f \"" + root.todoFilePath + "\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"" + root.todoFilePath + "\"; " +
       "[ -f \"" + root.archiveFilePath + "\" ] || echo '{\"version\":1,\"archived\":[]}' > \"" + root.archiveFilePath + "\"; " +
+      "if [ ! -f \"" + root.bindingsFilePath + "\" ] && [ -f \"" + root.defaultBindingsTemplatePath + "\" ]; then cp \"" + root.defaultBindingsTemplatePath + "\" \"" + root.bindingsFilePath + "\" 2>/dev/null || true; fi; " +
+      "if [ ! -f \"" + root.dataDirPath + "/.gitignore\" ]; then printf 'bindings.lua\\n*.tmp\\n' > \"" + root.dataDirPath + "/.gitignore\"; fi; " +
       "cd \"" + root.dataDirPath + "\" && " +
       "git config gc.auto 100 2>/dev/null || true; " +
       "if [ ! -d \".git\" ]; then " +
@@ -223,7 +227,7 @@ BarWidget {
       "  git config user.name \"" + root.deviceName + "\"; " +
       "  git config user.email \"" + Quickshell.env("USER") + "@" + root.deviceName + "\"; " +
       "  git config gc.auto 100; " +
-      "  git add todos.json todos-archive.json; " +
+      "  git add todos.json todos-archive.json .gitignore 2>/dev/null || git add todos.json todos-archive.json; " +
       "  git commit -m \"[" + root.deviceName + "] Initial task repository\"; " +
       "fi"
     ]

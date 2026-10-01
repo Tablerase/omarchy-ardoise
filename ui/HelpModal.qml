@@ -16,9 +16,44 @@ Rectangle {
 
   signal closeRequested()
 
+  property var activeBindings: null
+  readonly property string helpShortcutHint: {
+    if (root.activeBindings && root.activeBindings.bindings && root.activeBindings.bindings.help && root.activeBindings.bindings.help.length > 0) {
+      return root.activeBindings.bindings.help.join(" or ")
+    }
+    return "?"
+  }
+
+  function isHelpDismissKey(event) {
+    if (event.key === Qt.Key_Escape) return true
+    if (event.text === "q") return true
+    if (root.activeBindings && root.activeBindings.bindings && root.activeBindings.bindings.help) {
+      var keys = root.activeBindings.bindings.help
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i]
+        if (event.text && (event.text === k || event.text.toLowerCase() === k.toLowerCase())) return true
+        if (k === "F1" && event.key === Qt.Key_F1) return true
+        if (k === "F2" && event.key === Qt.Key_F2) return true
+        if (k === "F3" && event.key === Qt.Key_F3) return true
+        if (k === "F4" && event.key === Qt.Key_F4) return true
+        if (k === "F5" && event.key === Qt.Key_F5) return true
+        if (k === "F6" && event.key === Qt.Key_F6) return true
+        if (k === "F7" && event.key === Qt.Key_F7) return true
+        if (k === "F8" && event.key === Qt.Key_F8) return true
+        if (k === "F9" && event.key === Qt.Key_F9) return true
+        if (k === "F10" && event.key === Qt.Key_F10) return true
+        if (k === "F11" && event.key === Qt.Key_F11) return true
+        if (k === "F12" && event.key === Qt.Key_F12) return true
+      }
+    } else {
+      if (event.text === "?") return true
+    }
+    return false
+  }
+
   property string search: ""
   property string focusSection: "search" // "search" | "list" | "close"
-  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
+  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.search)
   readonly property bool searchFieldActiveFocus: root.isOpen && (keySearchField.activeFocus || (root.focusSection === "search"))
 
@@ -73,7 +108,7 @@ Rectangle {
   }
 
   Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "?") {
+    if (root.isHelpDismissKey(event)) {
       event.accepted = true
       root.close()
       return
@@ -227,7 +262,7 @@ Rectangle {
             helpFlickable.forceActiveFocus()
             return
           }
-          if (event.key === Qt.Key_Escape || event.text === "q" || event.text === "?") {
+          if (root.isHelpDismissKey(event)) {
             event.accepted = true
             root.close()
             return
@@ -408,7 +443,7 @@ Rectangle {
             root.focusSection = "search"
             root.forceActiveFocus()
           }
-        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || event.text === "?" || event.text === "q") {
+        } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || root.isHelpDismissKey(event)) {
           event.accepted = true
           root.close()
         } else if (event.key === Qt.Key_Backtab) {
@@ -503,7 +538,7 @@ Rectangle {
     Text {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
-      text: "Press Esc or ? to close"
+      text: "Press Esc or " + root.helpShortcutHint + " to close"
       color: Color.muted
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.space(9)

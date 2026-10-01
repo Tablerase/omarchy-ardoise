@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TodoStore.js" as TodoStore
@@ -67,6 +68,66 @@ Item {
   property bool shortcutRegistered: false
   property string moduleName: "tablerase.ardoise"
   property var descArea: null
+
+  readonly property string dataDirPath: (barWidget && barWidget.dataDirPath) ? barWidget.dataDirPath : (function() {
+    var custom = Quickshell.env("ARDOISE_DATA_DIR")
+    if (custom && custom.length > 0) return custom
+    var home = Quickshell.env("HOME")
+    if (home && home.length > 0) return home + "/.config/omarchy/tablerase.ardoise"
+    return ""
+  })()
+  readonly property string bindingsFilePath: dataDirPath ? (dataDirPath + "/bindings.lua") : ""
+  readonly property string defaultBindingsTemplatePath: Qt.resolvedUrl("tools/default-bindings.lua").toString().replace(/^file:\/\//, "")
+  property var userBindings: ({})
+  readonly property var activeBindings: Logic.resolveBindings(root.userBindings)
+
+  onBindingsFilePathChanged: {
+    if (root.bindingsFilePath && loadBindingsProc) {
+      loadBindingsProc.running = true
+    }
+  }
+
+  Process {
+    id: loadBindingsProc
+    command: [
+      "bash",
+      "-c",
+      "SCRIPT=\"$1\"; FILE=\"$2\"; TEMPLATE=\"$3\"; if [ ! -f \"$FILE\" ] && [ -f \"$TEMPLATE\" ]; then mkdir -p \"$(dirname \"$FILE\")\" 2>/dev/null; cp \"$TEMPLATE\" \"$FILE\" 2>/dev/null || true; fi; if command -v lua >/dev/null 2>&1 && [ -f \"$FILE\" ]; then lua \"$SCRIPT\" \"$FILE\" 2>/dev/null || echo '{}'; else echo '{}'; fi",
+      "--",
+      Qt.resolvedUrl("tools/load-bindings.lua").toString().replace(/^file:\/\//, ""),
+      root.bindingsFilePath,
+      root.defaultBindingsTemplatePath
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var parsed = JSON.parse(text)
+          if (parsed && typeof parsed === "object") {
+            root.userBindings = parsed
+          } else {
+            root.userBindings = ({})
+          }
+        } catch (e) {
+          root.userBindings = ({})
+        }
+      }
+    }
+  }
+
+  FileView {
+    id: bindingsFileView
+    path: root.bindingsFilePath
+    watchChanges: true
+    printErrors: false
+    onLoaded: {
+      loadBindingsProc.running = true
+    }
+    onFileChanged: {
+      reload()
+      loadBindingsProc.running = true
+    }
+  }
 
   property string focusSection: "tasks"
   property int cursorIndex: 0
@@ -213,6 +274,9 @@ Item {
     } else {
       mouseMovementDetected = false
       expandedViaKeyboard = false
+      if (root.bindingsFilePath && loadBindingsProc) {
+        loadBindingsProc.running = true
+      }
     }
   }
 
@@ -388,7 +452,12 @@ Item {
 
   onSearchQueryChanged: syncFilteredTodos()
   onStoreChanged: syncFilteredTodos()
-  Component.onCompleted: syncFilteredTodos()
+  Component.onCompleted: {
+    syncFilteredTodos()
+    if (root.bindingsFilePath && loadBindingsProc) {
+      loadBindingsProc.running = true
+    }
+  }
   property var pendingCompletionIds: []
   property var slidingOutTaskIds: []
   property var justCompletedTaskIds: []
@@ -455,7 +524,7 @@ Item {
     (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen)
   )
 
-  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut)
+  readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.keyHelpSearch)
 
   signal closeRequested()
@@ -2675,6 +2744,7 @@ Item {
     detectedShortcut: root.detectedPanelShortcut
     detectedPanelShortcut: root.detectedPanelShortcut
     detectedQuickAddShortcut: root.detectedQuickAddShortcut
+    activeBindings: root.activeBindings
     onCloseRequested: {
       root.showKeyHelp = false
       root.releaseFocus()
