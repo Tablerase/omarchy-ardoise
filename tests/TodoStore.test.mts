@@ -407,10 +407,11 @@ test("unarchive: moves the task back to the active store, preserving id and fiel
   let store = defaultStore();
   store = addTodo(store, "Keep me", "still active", "personal", null);
   store = addTodo(store, "Restore me", "the original notes", "work", null);
-  const restoreId = store.todos[1].id;
-  store.todos[1].repo = "omarchy-ardoise";
-  store.todos[1].tags = ["restore"];
-  store.todos[1].location = { repo: "omarchy-ardoise", subpath: null, localPath: "~/code/ardoise" };
+  const restoreTask = store.todos.find((t: any) => t.title === "Restore me")!;
+  const restoreId = restoreTask.id;
+  restoreTask.repo = "omarchy-ardoise";
+  restoreTask.tags = ["restore"];
+  restoreTask.location = { repo: "omarchy-ardoise", subpath: null, localPath: "~/code/ardoise" };
   store = toggleTodo(store, restoreId);
   const createdAt = store.todos.find((t: any) => t.id === restoreId)!.createdAt;
 
