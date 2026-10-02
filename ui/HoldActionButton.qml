@@ -34,16 +34,16 @@ Button {
       root.confirmed()
       return
     }
-    if (internal.chargeAnim.running) return
+    if (chargeAnim.running) return
     internal.charged = false
-    internal.drainAnim.stop()
-    internal.chargeAnim.restart()
+    drainAnim.stop()
+    chargeAnim.restart()
   }
 
   function stopCharging() {
-    internal.chargeAnim.stop()
+    chargeAnim.stop()
     if (!internal.charged && internal.progress > 0) {
-      internal.drainAnim.restart()
+      drainAnim.restart()
     }
   }
 
@@ -53,35 +53,38 @@ Button {
   Binding on implicitWidth { when: root.compactSize > 0; value: root.compactSize }
   Binding on implicitHeight { when: root.compactSize > 0; value: root.compactSize }
 
+  // Writable charge state. Kept on a plain QtObject so `progress`/`charged`
+  // can be exposed read-only, while the animations live on the Button root
+  // (a QtObject has no default property to host them).
   QtObject {
     id: internal
     property real progress: 0.0
     property bool charged: false
+  }
 
-    NumberAnimation {
-      id: chargeAnim
-      target: internal
-      property: "progress"
-      to: 1.0
-      duration: root.holdDuration
-      easing.type: Easing.Linear
-      onFinished: {
-        if (internal.progress >= 0.999) {
-          internal.charged = true
-          internal.progress = 0.0
-          root.confirmed()
-        }
+  NumberAnimation {
+    id: chargeAnim
+    target: internal
+    property: "progress"
+    to: 1.0
+    duration: root.holdDuration
+    easing.type: Easing.Linear
+    onFinished: {
+      if (internal.progress >= 0.999) {
+        internal.charged = true
+        internal.progress = 0.0
+        root.confirmed()
       }
     }
+  }
 
-    NumberAnimation {
-      id: drainAnim
-      target: internal
-      property: "progress"
-      to: 0.0
-      duration: 180
-      easing.type: Easing.OutQuad
-    }
+  NumberAnimation {
+    id: drainAnim
+    target: internal
+    property: "progress"
+    to: 0.0
+    duration: 180
+    easing.type: Easing.OutQuad
   }
 
   // Hold target. `hoverEnabled: false` lets hover fall through to the Button's

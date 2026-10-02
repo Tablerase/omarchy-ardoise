@@ -958,7 +958,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
   const panelLogic = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
   const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
-  const taskMenu = fs.readFileSync(path.join(repoDir, "ui", "TaskContextMenu.qml"), "utf8");
+  const taskMenu = fs.readFileSync(path.join(repoDir, "ui", "ContextActionMenu.qml"), "utf8");
   const archiveModal = fs.readFileSync(path.join(repoDir, "ui", "ArchiveModal.qml"), "utf8");
   const design = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
   const readme = fs.readFileSync(path.join(repoDir, "README.md"), "utf8");
@@ -971,11 +971,11 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
       taskMenu.includes("x: root.clampedX()") &&
       taskMenu.includes("y: root.clampedY()") &&
       taskMenu.includes("KeyBadge"),
-    "TaskContextMenu must clamp its card inside the panel and render key badges"
+    "ContextMenu must clamp its card inside the panel and render key badges"
   );
   assert.ok(
     !/^\s*focus:\s*true/m.test(taskMenu),
-    "TaskContextMenu must stay non-modal so PanelKeyCatcher keeps routing keys to PanelLogic"
+    "ContextMenu must stay non-modal so PanelKeyCatcher keeps routing keys to PanelLogic"
   );
   assert.ok(
     panelLogic.includes("task_menu: [\"K\"]") &&
@@ -995,7 +995,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
       panelContent.includes("function activateTaskMenuItem(actionId)") &&
       panelContent.includes("TodoStore.formatTaskForLLM(task)") &&
       panelContent.includes("Quickshell.execDetached([\"bash\", \"-c\", \"printf %s \" + Util.shellQuote(text) + \" | wl-copy\"])") &&
-      panelContent.includes("Ui.TaskContextMenu {") &&
+      panelContent.includes("Ui.ContextActionMenu {") &&
       panelContent.includes("onItemActivated: function(actionId) { root.activateTaskMenuItem(actionId) }"),
     "PanelContent must open the menu, dispatch actions, and copy via wl-copy with feedback"
   );
@@ -1024,16 +1024,24 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
   assert.ok(
     panelContent.includes("function openArchiveModal()") &&
       panelContent.includes("Ui.ArchiveModal {") &&
+      panelContent.includes("onShowArchiveModalChanged:") &&
+      panelContent.includes("archiveModal.open()") &&
       panelContent.includes("root.showArchiveModal ||") &&
       panelContent.includes("onClicked: root.openArchiveModal()"),
-    "PanelContent must mount the archive modal, block keys while open, and wire the footer button"
+    "PanelContent must mount the archive modal, sync onShowArchiveModalChanged, block keys while open, and wire the footer button"
   );
   assert.ok(
-    readme.includes("`unarchive`") && readme.includes("**24 shell commands**"),
-    "README must document the unarchive command and the updated command count"
+    archiveModal.includes("typeof purgeHold !== \"undefined\" && purgeHold") &&
+      archiveModal.includes("purgeHold.startCharging") &&
+      archiveModal.includes("purgeHold.stopCharging"),
+    "ArchiveModal must defensively guard purgeHold access against uninitialized or missing references"
   );
   assert.ok(
-    design.includes("ui/TaskContextMenu.qml") &&
+    readme.includes("`unarchive`") && readme.includes("`purgeArchived`") && readme.includes("**25 shell commands**"),
+    "README must document the archive commands and the updated command count"
+  );
+  assert.ok(
+    design.includes("ui/ContextActionMenu.qml") &&
       design.includes("ui/ArchiveModal.qml") &&
       design.includes("virtualized `ListView`"),
     "DESIGN.md must document both new components and the archive virtualization strategy"
@@ -1041,5 +1049,115 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
   assert.ok(
     bindingsTemplate.includes("task_menu"),
     "the bindings template must document the task_menu action"
+  );
+});
+
+test("Right-click, archive menu/delete, and data-loss safeguards: contracts", () => {
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const archiveModal = fs.readFileSync(path.join(repoDir, "ui", "ArchiveModal.qml"), "utf8");
+  const contextMenu = fs.readFileSync(path.join(repoDir, "ui", "ContextActionMenu.qml"), "utf8");
+  const gitModal = fs.readFileSync(path.join(repoDir, "ui", "GitModal.qml"), "utf8");
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const todoStore = fs.readFileSync(path.join(repoDir, "TodoStore.js"), "utf8");
+  const panelLogicContent = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
+  const design = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
+
+  // Right-click opens the task menu; openTaskMenuAt is the single entry point.
+  assert.ok(
+    panelContent.includes("function openTaskMenuAt(index, x, y)") &&
+      panelContent.includes("acceptedButtons: Qt.RightButton") &&
+      panelContent.includes("root.openTaskMenuAt(delegateRoot.index, p.x, p.y)"),
+    "PanelContent must open the task context menu on right-click at the click point"
+  );
+
+  // Reused, renamed context menu component.
+  assert.ok(
+    archiveModal.includes("ContextActionMenu {") &&
+      contextMenu.includes("function clampedX()") &&
+      contextMenu.includes("HoldActionButton {") &&
+      contextMenu.includes("modelData.hold"),
+    "the shared ContextActionMenu must render hold items and be reused by the archive modal"
+  );
+
+  // Archive search button for mouse users.
+  assert.ok(
+    archiveModal.includes("id: archiveSearchBtn") &&
+      archiveModal.includes('iconText: "󰍉"') &&
+      archiveModal.includes("root.activateSearch()"),
+    "ArchiveModal must expose a magnifier button that activates search"
+  );
+
+  // Permanent delete: hold-to-confirm via HoldActionButton, plus x/Delete hold.
+  assert.ok(
+    archiveModal.includes("id: purgeHold") &&
+      archiveModal.includes("purgeHold.startCharging()") &&
+      !archiveModal.includes("root.purgeHold") &&
+      archiveModal.includes("Keys.onReleased") &&
+      archiveModal.includes("purgeHold.stopCharging()"),
+    "ArchiveModal must wire a HoldActionButton state machine to x/Delete press and release"
+  );
+
+  // The menu-level hold is centralized in ContextActionMenu and driven by both
+  // hosts for mouse and keyboard.
+  assert.ok(
+    contextMenu.includes("function startSelectedHold()") &&
+      contextMenu.includes("function startHoldFor(actionId)") &&
+      contextMenu.includes("function stopHold()") &&
+      contextMenu.includes("readonly property real holdProgress") &&
+      contextMenu.includes("id: holdState"),
+    "ContextActionMenu must own the menu-level hold state machine"
+  );
+  assert.ok(
+    panelLogicContent.includes("root.taskMenu.startSelectedHold()") &&
+      panelLogicContent.includes("root.taskMenu.startHoldFor(\"delete_task\")") &&
+      panelLogicContent.includes("root.taskMenu.stopHold()"),
+    "PanelLogic must route Enter/x/release through the task menu hold"
+  );
+  assert.ok(
+    panelLogicContent.includes('{ id: "delete_task", icon: "󰅙", label: "Delete task", shortcut: "hold x", desc: "Hold to confirm", hold: true }'),
+    "the task menu's delete item must be a hold-to-confirm item"
+  );
+  assert.ok(
+    archiveModal.includes("contextMenu.startSelectedHold()") &&
+      archiveModal.includes('contextMenu.startHoldFor("delete_permanent")') &&
+      archiveModal.includes("contextMenu.stopHold()"),
+    "ArchiveModal must route the archive menu's hold through ContextActionMenu"
+  );
+
+  // GitModal / ArchiveModal context menus open with uppercase K only.
+  // A bare `event.key === Qt.Key_K` would also match lowercase k, which is
+  // list navigation - the bug this guards.
+  const shiftedK = '(event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier))';
+  assert.ok(
+    gitModal.includes('event.text === "K" || ' + shiftedK),
+    "GitModal must open its contextual menu with uppercase K only"
+  );
+  assert.ok(
+    archiveModal.includes('event.text === "K" || ' + shiftedK),
+    "ArchiveModal must open its contextual menu with uppercase K only"
+  );
+  assert.ok(
+    !archiveModal.includes('if (event.key === Qt.Key_K || event.text === "K")'),
+    "ArchiveModal must not open the menu on lowercase k (navigation)"
+  );
+
+  // Data-loss safeguards: pure store helpers + durable BarWidget path.
+  assert.ok(
+    todoStore.includes("function purgeArchived(archiveRawText, id)") &&
+      todoStore.includes("function reconcileArchive(store, archiveRawText)"),
+    "TodoStore must expose purgeArchived and reconcileArchive"
+  );
+  assert.ok(
+    barWidget.includes("function readFile(path, cb)") &&
+      barWidget.includes("function _writeArchiveUntilGone(") &&
+      barWidget.includes("function maybeReconcileArchive()") &&
+      barWidget.includes("root._storeHasId(id, function(present)") &&
+      barWidget.includes("function purgeArchivedTask(id)") &&
+      barWidget.includes("function purgeArchived(id: string): string"),
+    "BarWidget must read files fresh, confirm the active write before removing from the archive, and reconcile on load"
+  );
+  assert.ok(
+    design.includes("purgeArchived") && design.includes("reconcileArchive"),
+    "DESIGN.md must document the archive data-loss safeguards"
   );
 });

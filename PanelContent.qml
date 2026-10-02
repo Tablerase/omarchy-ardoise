@@ -316,6 +316,18 @@ Item {
     }
   }
 
+  onShowArchiveModalChanged: {
+    if (showArchiveModal) {
+      if (typeof archiveModal !== "undefined" && archiveModal) {
+        archiveModal.open()
+      }
+    } else {
+      if (typeof archiveModal !== "undefined" && archiveModal) {
+        archiveModal.close()
+      }
+    }
+  }
+
   onExpandedTaskIdChanged: {
     expandedSubSection = "header"
     expandedReminderIndex = 0
@@ -801,10 +813,12 @@ Item {
     return null
   }
 
-  function openTaskMenu() {
-    if (root.focusSection !== "tasks") return
-    var task = root.currentTask()
+  function openTaskMenuAt(index, x, y) {
+    var task = (root.filteredTodos && index >= 0 && index < root.filteredTodos.length) ? root.filteredTodos[index] : null
     if (!task) return
+    root.cursorIndex = index
+    root.focusSection = "tasks"
+    root.cursorActive = true
     root.savePendingNotes()
     root.taskMenuItems = Logic.getTaskMenuItems(task)
     root.taskMenuIndex = 0
@@ -813,18 +827,27 @@ Item {
     if (task.profile) meta.push("#" + task.profile)
     if (task.repo) meta.push(root.cleanRepoName(task.repo))
     root.taskMenuMeta = meta.join("  ")
-    var item = (typeof todoListRepeater !== "undefined" && todoListRepeater && root.cursorIndex < todoListRepeater.count)
-      ? todoListRepeater.itemAt(root.cursorIndex)
-      : null
-    if (item) {
-      var p = item.mapToItem(root, item.width, item.height / 2)
-      root.taskMenuAnchorX = p.x
-      root.taskMenuAnchorY = p.y
+    if (x !== undefined && y !== undefined && !isNaN(x) && !isNaN(y)) {
+      root.taskMenuAnchorX = x
+      root.taskMenuAnchorY = y
     } else {
-      root.taskMenuAnchorX = root.width
-      root.taskMenuAnchorY = root.height / 2
+      var item = (typeof todoListRepeater !== "undefined" && todoListRepeater && index < todoListRepeater.count)
+        ? todoListRepeater.itemAt(index)
+        : null
+      if (item) {
+        var p = item.mapToItem(root, item.width, item.height / 2)
+        root.taskMenuAnchorX = p.x
+        root.taskMenuAnchorY = p.y
+      } else {
+        root.taskMenuAnchorX = root.width
+        root.taskMenuAnchorY = root.height / 2
+      }
     }
     root.showTaskMenu = true
+  }
+
+  function openTaskMenu() {
+    root.openTaskMenuAt(root.cursorIndex)
   }
 
   function closeTaskMenu() {
@@ -863,6 +886,7 @@ Item {
   // ---- Archive browser (d) ---------------------------------------------------
   function openArchiveModal() {
     root.savePendingNotes()
+    root.releaseFocus()
     root.showArchiveModal = true
   }
 
@@ -2093,6 +2117,20 @@ Item {
                 }
               }
 
+              // Right-click anywhere on the row opens the task context menu.
+              // Accepting only the right button lets every left-click action
+              // (checkbox, chips, drawer fields) pass through untouched.
+              MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                hoverEnabled: false
+                z: 50
+                onClicked: function(mouse) {
+                  var p = mapToItem(root, mouse.x, mouse.y)
+                  root.openTaskMenuAt(delegateRoot.index, p.x, p.y)
+                }
+              }
+
               Column {
                 id: expandedContent
                 anchors.left: parent.left
@@ -3003,7 +3041,7 @@ Item {
   }
 
   // Task context menu overlay (K). Non-modal: keys stay in PanelLogic.
-  Ui.TaskContextMenu {
+  Ui.ContextActionMenu {
     id: taskMenu
     isOpen: root.showTaskMenu
     items: root.taskMenuItems

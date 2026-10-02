@@ -83,7 +83,7 @@ var DEFAULT_BINDINGS = {
 /**
  * Contextual menu actions offered on the focused task. `getTaskMenuItems`
  * drops entries that cannot apply to the task (no notes, no local path).
- * @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>}
+ * @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold?: boolean}>}
  */
 var TASK_MENU_ITEMS = [
   { id: "copy_llm", icon: "󰆏", label: "Copy for LLM", shortcut: "y", desc: "Compact markdown for an AI agent" },
@@ -91,16 +91,16 @@ var TASK_MENU_ITEMS = [
   { id: "copy_notes", icon: "󰆏", label: "Copy notes", shortcut: "n", desc: "" },
   { id: "open_codebase", icon: "󰏫", label: "Open codebase", shortcut: "o", desc: "Open the task's local path in the editor" },
   { id: "edit_title", icon: "󰏫", label: "Edit title", shortcut: "e", desc: "" },
-  { id: "delete_task", icon: "󰅙", label: "Delete task", shortcut: "x", desc: "" }
+  { id: "delete_task", icon: "󰅙", label: "Delete task", shortcut: "hold x", desc: "Hold to confirm", hold: true }
 ];
 
 /**
  * Returns the contextual menu items that apply to a task.
  * @param {any} task
- * @returns {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>}
+ * @returns {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold?: boolean}>}
  */
 function getTaskMenuItems(task) {
-  /** @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>} */
+  /** @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold?: boolean}>} */
   var items = [];
   for (var i = 0; i < TASK_MENU_ITEMS.length; i++) {
     var item = TASK_MENU_ITEMS[i];
@@ -125,6 +125,53 @@ function taskMenuActionForKey(text) {
   if (t === "o") return "open_codebase";
   if (t === "e") return "edit_title";
   if (t === "x") return "delete_task";
+  return null;
+}
+
+/**
+ * Contextual menu actions offered on an archived task. `hold: true` items
+ * require the hold-to-confirm charge (permanent delete).
+ * @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold: boolean}>}
+ */
+var ARCHIVE_MENU_ITEMS = [
+  { id: "restore", icon: "󰅍", label: "Restore to active list", shortcut: "r", desc: "Move the task back, keeping its id and notes", hold: false },
+  { id: "copy_llm", icon: "󰆏", label: "Copy for LLM", shortcut: "y", desc: "Compact markdown for an AI agent", hold: false },
+  { id: "copy_title", icon: "󰆏", label: "Copy title", shortcut: "t", desc: "", hold: false },
+  { id: "copy_notes", icon: "󰆏", label: "Copy notes", shortcut: "n", desc: "", hold: false },
+  { id: "open_file", icon: "󰏫", label: "Open todos-archive.json", shortcut: "e", desc: "In the editor", hold: false },
+  { id: "delete_permanent", icon: "󰅙", label: "Delete permanently", shortcut: "hold x", desc: "Irreversible except via git history", hold: true }
+];
+
+/**
+ * Returns the contextual menu items that apply to an archived task.
+ * @param {any} task
+ * @returns {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold: boolean}>}
+ */
+function getArchiveMenuItems(task) {
+  /** @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string, hold: boolean}>} */
+  var items = [];
+  for (var i = 0; i < ARCHIVE_MENU_ITEMS.length; i++) {
+    var item = ARCHIVE_MENU_ITEMS[i];
+    if (item.id === "copy_notes" && !(task && String(task.description || "").trim())) continue;
+    items.push(item);
+  }
+  return items;
+}
+
+/**
+ * Maps an archive menu keypress to an action id, or null.
+ * @param {string} text
+ * @returns {string|null}
+ */
+function archiveMenuActionForKey(text) {
+  if (!text || typeof text !== "string") return null;
+  var t = text.toLowerCase();
+  if (t === "r") return "restore";
+  if (t === "y") return "copy_llm";
+  if (t === "t") return "copy_title";
+  if (t === "n") return "copy_notes";
+  if (t === "e") return "open_file";
+  if (t === "x") return "delete_permanent";
   return null;
 }
 
@@ -688,8 +735,10 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
       return;
     }
     var menuAction = taskMenuActionForKey(text);
-    if (menuAction && typeof root.activateTaskMenuItem === "function") {
-      root.activateTaskMenuItem(menuAction);
+    if (menuAction) {
+      // Hold actions charge the menu row; others activate immediately.
+      if (root.taskMenu && typeof root.taskMenu.startHoldFor === "function" && root.taskMenu.startHoldFor(menuAction)) return;
+      if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem(menuAction);
     }
     return;
   }
@@ -839,6 +888,8 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
  */
 function handleActivate(root, TodoStore) {
   if (root.showTaskMenu) {
+    // A hold item (e.g. delete) charges instead of activating immediately.
+    if (root.taskMenu && typeof root.taskMenu.startSelectedHold === "function" && root.taskMenu.startSelectedHold()) return;
     if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem();
     return;
   }
@@ -962,6 +1013,8 @@ function handleDelete(root) {
   // PanelKeyCatcher routes x/X here before handleTextKey, so a menu-open x
   // must run the menu's delete item rather than acting blindly.
   if (root.showTaskMenu) {
+    // x targets delete: charge the hold item instead of deleting at once.
+    if (root.taskMenu && typeof root.taskMenu.startHoldFor === "function" && root.taskMenu.startHoldFor("delete_task")) return;
     if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem("delete_task");
     return;
   }
@@ -990,6 +1043,11 @@ function handleDelete(root) {
  * @param {string} key
  */
 function handleKeyRelease(root, key) {
+  // Releasing a held key cancels an in-progress context-menu hold.
+  if (root.showTaskMenu && root.taskMenu && typeof root.taskMenu.stopHold === "function") {
+    root.taskMenu.stopHold();
+    return;
+  }
   if (key === "x" || key === "X") {
     if (typeof root.stopDeleteHold === "function") root.stopDeleteHold();
   } else if (key === "c" || key === "C") {
@@ -1023,6 +1081,9 @@ if (typeof module !== "undefined" && module.exports) {
     TASK_MENU_ITEMS: TASK_MENU_ITEMS,
     getTaskMenuItems: getTaskMenuItems,
     taskMenuActionForKey: taskMenuActionForKey,
+    ARCHIVE_MENU_ITEMS: ARCHIVE_MENU_ITEMS,
+    getArchiveMenuItems: getArchiveMenuItems,
+    archiveMenuActionForKey: archiveMenuActionForKey,
     normalizeKey: normalizeKey,
     resolveBindings: resolveBindings
   };

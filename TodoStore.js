@@ -1697,8 +1697,7 @@ function purgeArchived(archiveRawText, id) {
  * @returns {{updatedArchive: ArchiveData, removedCount: number}}
  */
 function reconcileArchive(store, archiveRawText) {
-  var s = (store && typeof store === "object") ? store : {}
-  var todos = Array.isArray(s.todos) ? s.todos : []
+  var todos = (store && Array.isArray(store.todos)) ? store.todos : []
   /** @type {Record<string, boolean>} */
   var activeIds = {}
   for (var i = 0; i < todos.length; i++) {

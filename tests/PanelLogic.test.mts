@@ -26,6 +26,8 @@ const {
   DEFAULT_BINDINGS,
   getTaskMenuItems,
   taskMenuActionForKey,
+  getArchiveMenuItems,
+  archiveMenuActionForKey,
   normalizeKey,
   resolveBindings
 } = PanelLogic;
@@ -831,4 +833,77 @@ test("task context menu: K is a documented default action that does not collide 
   const menuItem = list.find((item: any) => item.desc.includes("context menu"));
   assert.ok(menuItem, "the help catalog must document the task menu action");
   assert.ok(menuItem.key.includes("K"));
+});
+
+test("archive context menu: items adapt to the task and keys map to actions", () => {
+  const bare = getArchiveMenuItems({ title: "Bare", description: "" });
+  const ids = bare.map((i: any) => i.id);
+  assert.ok(ids.includes("restore"));
+  assert.ok(ids.includes("copy_llm"));
+  assert.ok(ids.includes("delete_permanent"));
+  assert.ok(!ids.includes("copy_notes"), "no notes -> no copy-notes item");
+  const del = bare.find((i: any) => i.id === "delete_permanent");
+  assert.equal(del.hold, true, "permanent delete must be a hold-to-confirm item");
+
+  const rich = getArchiveMenuItems({ title: "Rich", description: "notes" });
+  assert.ok(rich.map((i: any) => i.id).includes("copy_notes"));
+
+  assert.equal(archiveMenuActionForKey("r"), "restore");
+  assert.equal(archiveMenuActionForKey("y"), "copy_llm");
+  assert.equal(archiveMenuActionForKey("T"), "copy_title");
+  assert.equal(archiveMenuActionForKey("n"), "copy_notes");
+  assert.equal(archiveMenuActionForKey("e"), "open_file");
+  assert.equal(archiveMenuActionForKey("x"), "delete_permanent");
+  assert.equal(archiveMenuActionForKey("z"), null);
+});
+
+test("task menu hold: Enter/x/release route through the menu hold instead of deleting at once", () => {
+  let activated = 0;
+  let startedSelected = 0;
+  let startedFor: string[] = [];
+  let stopped = 0;
+
+  const mockRoot: any = {
+    store: TodoStore.defaultStore(),
+    filteredTodos: [{ id: 7, title: "T", done: false, profile: "personal" }],
+    cursorIndex: 0,
+    cursorActive: true,
+    mouseMovementDetected: false,
+    focusSection: "tasks",
+    expandedTaskId: -1,
+    expandedSubSection: "header",
+    showTaskMenu: true,
+    taskMenuIndex: 1,
+    taskMenuItems: [
+      { id: "copy_llm", hold: false },
+      { id: "delete_task", hold: true }
+    ],
+    taskMenu: {
+      startSelectedHold: () => { startedSelected++; return true; },
+      startHoldFor: (id: string) => { startedFor.push(id); return id === "delete_task"; },
+      stopHold: () => { stopped++; }
+    },
+    activateTaskMenuItem: () => { activated++; }
+  };
+
+  // Enter on a hold item charges it (does not activate).
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(startedSelected, 1);
+  assert.equal(activated, 0);
+
+  // x targets delete and charges the hold.
+  handleDelete(mockRoot);
+  assert.deepEqual(startedFor, ["delete_task"]);
+  assert.equal(activated, 0);
+
+  // Release stops the hold.
+  handleKeyRelease(mockRoot, "action");
+  assert.equal(stopped, 1);
+
+  // A non-hold selected item still activates normally.
+  mockRoot.taskMenuItems = [{ id: "copy_llm", hold: false }];
+  mockRoot.taskMenuIndex = 0;
+  mockRoot.taskMenu.startSelectedHold = () => false;
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(activated, 1);
 });

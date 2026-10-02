@@ -4,6 +4,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "../TodoStore.js" as TodoStore
+import "../PanelLogic.js" as Logic
 
 // Archive browser: restores completed/archived tasks back into the active
 // store. Opened with `d` or the footer Archive button.
@@ -27,6 +28,15 @@ Rectangle {
   property bool searchActive: false
   property string searchQuery: ""
 
+  // Contextual menu state (K / right-click).
+  property bool showMenu: false
+  property int menuIndex: 0
+  property var menuItems: []
+  property real menuAnchorX: 0
+  property real menuAnchorY: 0
+  property string menuTitle: ""
+  property string menuMeta: ""
+
   readonly property var filteredArchived: TodoStore.filterArchivedTasks(root.archivedTasks, root.searchQuery)
   readonly property var selectedTask: (root.filteredArchived && root.filteredArchived.length > root.selectedIndex)
     ? root.filteredArchived[root.selectedIndex]
@@ -44,6 +54,11 @@ Rectangle {
 
   function open() {
     isOpen = true
+    selectedIndex = 0
+    searchActive = false
+    searchQuery = ""
+    refresh()
+    Qt.callLater(function() { root.forceActiveFocus() })
   }
 
   onIsOpenChanged: {
@@ -126,7 +141,109 @@ Rectangle {
     root.close()
   }
 
+  function openMenuAt(index, x, y) {
+    var task = (root.filteredArchived && index >= 0 && index < root.filteredArchived.length) ? root.filteredArchived[index] : null
+    if (!task) return
+    root.selectedIndex = index
+    root.menuItems = Logic.getArchiveMenuItems(task)
+    root.menuIndex = 0
+    root.menuTitle = TodoStore.capitalizeTitle(String(task.title || ""))
+    var meta = []
+    if (task.profile) meta.push("#" + task.profile)
+    if (task.repo) meta.push(String(task.repo))
+    root.menuMeta = meta.join("  ")
+    if (x !== undefined && y !== undefined && !isNaN(x) && !isNaN(y)) {
+      root.menuAnchorX = x
+      root.menuAnchorY = y
+    } else {
+      var item = (archiveList && archiveList.itemAtIndex) ? archiveList.itemAtIndex(index) : null
+      if (item) {
+        var p = item.mapToItem(root, item.width, item.height / 2)
+        root.menuAnchorX = p.x
+        root.menuAnchorY = p.y
+      } else {
+        root.menuAnchorX = root.width / 2
+        root.menuAnchorY = root.height / 2
+      }
+    }
+    root.showMenu = true
+  }
+
+  function openMenu() {
+    root.openMenuAt(root.selectedIndex)
+  }
+
+  function closeMenu() {
+    root.showMenu = false
+    root.menuIndex = 0
+  }
+
+  function activateMenuAction(id) {
+    var task = root.selectedTask
+    root.closeMenu()
+    if (!task) return
+    if (id === "restore") root.restoreSelected()
+    else if (id === "copy_llm") root.copyToClipboard(TodoStore.formatTaskForLLM(task), "Task copied for LLM")
+    else if (id === "copy_title") root.copyToClipboard(TodoStore.capitalizeTitle(String(task.title || "")), "Title copied")
+    else if (id === "copy_notes") root.copyToClipboard(String(task.description || ""), "Notes copied")
+    else if (id === "open_file") root.openRawFile()
+    else if (id === "delete_permanent") root.purgeSelected()
+  }
+
+  // Permanent delete (hold-to-confirm). Removes the task from the archive and
+  // splices it out of the in-memory list; the disk write is verified by
+  // BarWidget.purgeArchivedTask.
+  function purgeSelected() {
+    var task = root.selectedTask
+    root.closeMenu()
+    if (!task) return
+    if (root.barWidget && typeof root.barWidget.purgeArchivedTask === "function" && root.barWidget.purgeArchivedTask(task.id)) {
+      var next = []
+      for (var i = 0; i < root.archivedTasks.length; i++) {
+        if (String(root.archivedTasks[i].id) !== String(task.id)) next.push(root.archivedTasks[i])
+      }
+      root.archivedTasks = next
+      if (root.selectedIndex >= root.filteredArchived.length) {
+        root.selectedIndex = Math.max(0, root.filteredArchived.length - 1)
+      }
+      root.forceActiveFocus()
+    }
+  }
+
   function handleKey(event) {
+    // The contextual menu owns the keyboard while open.
+    if (root.showMenu) {
+      if (event.key === Qt.Key_Escape || event.text === "q") {
+        event.accepted = true
+        root.closeMenu()
+        return
+      }
+      if (event.key === Qt.Key_Down || event.text === "j") {
+        event.accepted = true
+        root.menuIndex = Math.min(root.menuItems.length - 1, root.menuIndex + 1)
+        return
+      }
+      if (event.key === Qt.Key_Up || event.text === "k") {
+        event.accepted = true
+        root.menuIndex = Math.max(0, root.menuIndex - 1)
+        return
+      }
+      if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+        event.accepted = true
+        var sel = root.menuItems[root.menuIndex]
+        if (sel && sel.hold) contextMenu.startSelectedHold()
+        else root.activateMenuAction(sel ? sel.id : "")
+        return
+      }
+      var menuAct = Logic.archiveMenuActionForKey(event.text)
+      if (menuAct) {
+        event.accepted = true
+        if (menuAct === "delete_permanent") contextMenu.startHoldFor("delete_permanent")
+        else root.activateMenuAction(menuAct)
+      }
+      return
+    }
+
     if (event.key === Qt.Key_Escape) {
       event.accepted = true
       root.close()
@@ -138,6 +255,21 @@ Rectangle {
       return
     }
     if (searchActive) return
+
+    // K opens the contextual menu (uppercase only: lowercase k is navigation).
+    if (event.text === "K" || (event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier))) {
+      event.accepted = true
+      root.openMenu()
+      return
+    }
+    // x/Delete starts the permanent-delete hold.
+    if (event.key === Qt.Key_X || event.key === Qt.Key_Delete || event.text === "x" || event.text === "X") {
+      event.accepted = true
+      if (typeof purgeHold !== "undefined" && purgeHold && typeof purgeHold.startCharging === "function") {
+        purgeHold.startCharging()
+      }
+      return
+    }
 
     if (event.key === Qt.Key_Down || event.text === "j") {
       event.accepted = true
@@ -205,6 +337,17 @@ Rectangle {
   focus: true
 
   Keys.onPressed: function(event) { root.handleKey(event) }
+  Keys.onReleased: function(event) {
+    // Releasing the hold key cancels an in-progress permanent delete, whether
+    // it is the context-menu hold or the direct x-hold on the selected row.
+    if (root.showMenu && contextMenu && typeof contextMenu.stopHold === "function") {
+      contextMenu.stopHold()
+      return
+    }
+    if (typeof purgeHold !== "undefined" && purgeHold && purgeHold.progress > 0 && typeof purgeHold.stopCharging === "function") {
+      purgeHold.stopCharging()
+    }
+  }
 
   // Unconditional mouse blocker so clicks/hover never bleed to the panel below.
   MouseArea {
@@ -255,6 +398,30 @@ Rectangle {
           color: Color.muted
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
+        }
+      }
+
+      // Mouse-accessible search trigger, mirroring the panel header.
+      PanelActionButton {
+        id: archiveSearchBtn
+        anchors.right: closeBtn.left
+        anchors.rightMargin: Style.space(4)
+        anchors.verticalCenter: parent.verticalCenter
+        size: Style.space(26)
+        iconText: "󰍉"
+        fontSize: Style.font.subtitle
+        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+        foreground: root.searchActive ? Color.accent : Color.muted
+        hoverColor: Color.accent
+        tooltipText: ""
+        onClicked: root.searchActive ? root.closeSearch() : root.activateSearch()
+
+        HoverHandler { id: archiveSearchHover }
+        ShortcutToolTip {
+          visible: archiveSearchHover.hovered
+          description: "Filter archived tasks"
+          shortcut: "/ or Ctrl+F"
+          fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
         }
       }
 
@@ -355,15 +522,63 @@ Rectangle {
           border.color: isSelected ? Color.accent : Color.menu.border
           border.width: isSelected ? 1.5 : 1
 
+          // Hold-to-confirm permanent-delete charge, shown on the selected row.
+          Rectangle {
+            anchors.fill: parent
+            radius: archiveItem.radius
+            color: Color.urgent
+            opacity: ((archiveItem.isSelected && typeof purgeHold !== "undefined" && purgeHold) ? purgeHold.progress : 0) * 0.16
+            visible: opacity > 0
+            z: 0
+          }
+
+          Rectangle {
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            height: Style.space(3)
+            width: parent.width * ((archiveItem.isSelected && typeof purgeHold !== "undefined" && purgeHold) ? purgeHold.progress : 0)
+            color: Color.urgent
+            radius: archiveItem.radius
+            visible: width > 0
+            z: 10
+          }
+
           MouseArea {
             id: itemHover
             anchors.fill: parent
             hoverEnabled: true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
             onEntered: root.selectedIndex = archiveItem.index
+            onClicked: function(mouse) {
+              root.selectedIndex = archiveItem.index
+              if (mouse.button === Qt.RightButton) {
+                var p = itemHover.mapToItem(root, mouse.x, mouse.y)
+                root.openMenuAt(archiveItem.index, p.x, p.y)
+              } else {
+                root.restoreSelected()
+              }
+            }
+          }
+
+          // Hover options button (contextual menu trigger).
+          PanelActionButton {
+            id: archiveMoreBtn
+            anchors.right: parent.right
+            anchors.rightMargin: Style.space(4)
+            anchors.verticalCenter: parent.verticalCenter
+            visible: itemHover.containsMouse || archiveItem.isSelected
+            size: Style.space(22)
+            iconText: "󰇙"
+            fontSize: Style.font.caption
+            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            foreground: Color.muted
+            hoverColor: Color.accent
+            tooltipText: "Task options"
             onClicked: {
               root.selectedIndex = archiveItem.index
-              root.restoreSelected()
+              var pos = archiveMoreBtn.mapToItem(root, archiveMoreBtn.width / 2, archiveMoreBtn.height)
+              root.openMenuAt(archiveItem.index, pos.x - Style.space(240), pos.y)
             }
           }
 
@@ -382,7 +597,7 @@ Rectangle {
             }
 
             Column {
-              width: parent.width - Style.space(22) - parent.spacing
+              width: parent.width - Style.space(22) - parent.spacing - Style.space(28)
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(1)
 
@@ -437,7 +652,7 @@ Rectangle {
       spacing: Style.space(8)
 
       Text {
-        text: "Enter restore  y copy  e open file  / filter"
+        text: "K options  Enter restore  x hold delete  y copy  / filter"
         color: Color.muted
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: Style.font.caption * 0.8
@@ -445,5 +660,32 @@ Rectangle {
         width: parent.width
       }
     }
+  }
+
+  // Invisible hold-to-confirm state machine for the keyboard/row permanent
+  // delete. The visible charge is painted on the selected row.
+  HoldActionButton {
+    id: purgeHold
+    visible: false
+    width: 0
+    height: 0
+    visualsEnabled: false
+    holdDuration: 600
+    onConfirmed: root.purgeSelected()
+  }
+
+  // Contextual menu (K / right-click / hover options button).
+  ContextActionMenu {
+    id: contextMenu
+    isOpen: root.showMenu
+    items: root.menuItems
+    selectedIndex: root.menuIndex
+    anchorX: root.menuAnchorX
+    anchorY: root.menuAnchorY
+    title: root.menuTitle
+    meta: root.menuMeta
+    bar: root.bar
+    onItemActivated: function(actionId) { root.activateMenuAction(actionId) }
+    onCloseRequested: root.closeMenu()
   }
 }

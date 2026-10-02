@@ -39,6 +39,8 @@ const {
   getArchivedTasks,
   filterArchivedTasks,
   unarchive,
+  purgeArchived,
+  reconcileArchive,
   formatTaskForLLM,
   formatKeybind,
   formatRelativeDiff,
@@ -442,6 +444,53 @@ test("unarchive: moves the task back to the active store, preserving id and fiel
   const dup = unarchive(res.updatedStore, archiveRaw, restoreId);
   assert.equal(dup.updatedStore.todos.length, 2, "an already-active task must not be duplicated");
   assert.equal(dup.updatedArchive.archived.length, 0);
+});
+
+test("purgeArchived: permanently removes one entry and leaves the rest untouched", () => {
+  const raw = JSON.stringify({
+    version: 1,
+    archived: [
+      { id: 1, title: "A", createdAt: 1, completedAt: 1 },
+      { id: 2, title: "B", createdAt: 2, completedAt: 2 },
+      { id: 3, title: "C", createdAt: 3, completedAt: 3 }
+    ]
+  });
+  const res = purgeArchived(raw, 2);
+  assert.ok(res.purged);
+  assert.equal(res.purged!.id, 2);
+  assert.deepEqual(res.updatedArchive.archived.map((t: any) => t.id), [1, 3]);
+
+  const noop = purgeArchived(raw, 999);
+  assert.equal(noop.purged, null);
+  assert.equal(noop.updatedArchive.archived.length, 3);
+});
+
+test("reconcileArchive: drops archived ids that are already active, self-healing duplicates", () => {
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: 10, title: "Active", done: false, profile: "personal" },
+      { id: 11, title: "Also active", done: false, profile: "personal" }
+    ]
+  };
+  const raw = JSON.stringify({
+    version: 1,
+    archived: [
+      { id: 10, title: "Duplicate of active", createdAt: 1, completedAt: 1 },
+      { id: 20, title: "Legitimately archived", createdAt: 2, completedAt: 2 },
+      { id: 11, title: "Duplicate too", createdAt: 3, completedAt: 3 }
+    ]
+  });
+
+  const res = reconcileArchive(store, raw);
+  assert.equal(res.removedCount, 2);
+  assert.deepEqual(res.updatedArchive.archived.map((t: any) => t.id), [20]);
+
+  // Clean state is a no-op.
+  const clean = reconcileArchive(store, JSON.stringify(res.updatedArchive));
+  assert.equal(clean.removedCount, 0);
 });
 
 test("formatTaskForLLM: compact markdown, omits empty fields", () => {

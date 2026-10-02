@@ -276,7 +276,7 @@ Rectangle {
           }
           return
         }
-        if (event.key === Qt.Key_M || event.text === "m" || event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Menu) {
+        if (event.text === "K" || (event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier)) || event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Menu) {
           event.accepted = true
           if (root.selectedSnapshot) {
             root.openContextMenuForSelected()

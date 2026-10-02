@@ -50,8 +50,87 @@ BarWidget {
   property string recoveringHash: ""
   property string lastArchiveText: ""
 
+  // Durable archive-operation state. Restore/purge read both files fresh from
+  // disk (never the possibly-stale lastArchiveText), write the active store
+  // before touching the archive, and confirm each write landed.
+  property bool _storeLoaded: false
+  property bool _archiveLoaded: false
+  property bool _archiveOpInFlight: false
+  property var _readCb: null
+  property var _writeCb: null
+
   function getArchiveText() {
     return root.lastArchiveText || archiveFile.text() || "{\"version\":1,\"archived\":[]}"
+  }
+
+  // Reads a file from disk, bypassing FileView's cached text. Authoritative.
+  function readFile(path, cb) {
+    root._readCb = cb
+    readProc.readPath = path
+    readProc.running = true
+  }
+
+  function _completeWrite(ok) {
+    var cb = root._writeCb
+    root._writeCb = null
+    writeTimeout.stop()
+    if (cb) cb(ok)
+  }
+
+  function writeFileAndConfirm(fileView, json, cb) {
+    root._writeCb = cb
+    fileView.setText(json)
+    writeTimeout.restart()
+  }
+
+  function _storeHasId(id, cb) {
+    root.readFile(root.todoFilePath, function(raw) {
+      var s = TodoStore.normalize(raw)
+      for (var i = 0; i < s.todos.length; i++) {
+        if (String(s.todos[i].id) === String(id)) { cb(true); return }
+      }
+      cb(false)
+    })
+  }
+
+  function _archiveHasId(id, cb) {
+    root.readFile(root.archiveFilePath, function(raw) {
+      var arc = TodoStore.normalizeArchive(raw)
+      for (var i = 0; i < arc.archived.length; i++) {
+        if (String(arc.archived[i].id) === String(id)) { cb(true); return }
+      }
+      cb(false)
+    })
+  }
+
+  // Writes the archive and confirms the id is gone, retrying a bounded number
+  // of times to absorb any lost write.
+  function _writeArchiveUntilGone(id, archiveJson, actionName, attempts) {
+    root.writeFileAndConfirm(archiveFile, archiveJson, function(ok) {
+      root._archiveHasId(id, function(still) {
+        if (still && attempts > 0) {
+          root._writeArchiveUntilGone(id, archiveJson, actionName, attempts - 1)
+          return
+        }
+        root.lastArchiveText = archiveJson
+        root.lastCommitAction = actionName || "Update archive"
+        commitProcess.running = true
+        root._archiveOpInFlight = false
+      })
+    })
+  }
+
+  // Self-heal duplicates left by a crash between the two restore writes: any
+  // archived id that is also active is dropped from the archive.
+  function maybeReconcileArchive() {
+    if (!root._storeLoaded || !root._archiveLoaded) return
+    var res = TodoStore.reconcileArchive(root.store, root.getArchiveText())
+    if (res.removedCount > 0) {
+      var json = JSON.stringify(res.updatedArchive, null, 2) + "\n"
+      root.lastArchiveText = json
+      archiveFile.setText(json)
+      root.triggerAutoCommit("Reconcile archive (" + res.removedCount + " duplicate" + (res.removedCount === 1 ? "" : "s") + ")")
+    }
   }
 
   function loadTodos(raw) {
@@ -94,16 +173,56 @@ BarWidget {
     archiveFile.setText(json)
   }
 
-  // Moves one archived task back into the active store (id and fields
-  // preserved, removed from the archive so it cannot be duplicated) and
-  // commits both files together.
+  // Moves one archived task back into the active store. Idempotent and
+  // data-loss safe: both files are read fresh, the active store is written and
+  // confirmed to contain the id BEFORE the archive entry is removed, and the
+  // archive write is verified with bounded retries. If any step fails the
+  // archive is left untouched, so the task can never vanish.
   function unarchiveTask(id) {
-    var result = TodoStore.unarchive(root.store, root.getArchiveText(), id)
-    if (!result.restored) return false
-    saveStore(result.updatedStore, "Restore task from archive: " + result.restored.title)
-    var json = JSON.stringify(result.updatedArchive, null, 2) + "\n"
-    root.lastArchiveText = json
-    archiveFile.setText(json)
+    if (root._archiveOpInFlight) return false
+    root._archiveOpInFlight = true
+    root.readFile(root.todoFilePath, function(storeRaw) {
+      root.readFile(root.archiveFilePath, function(archiveRaw) {
+        var result = TodoStore.unarchive(TodoStore.normalize(storeRaw), archiveRaw, id)
+        if (!result.restored) {
+          root._archiveOpInFlight = false
+          return
+        }
+        var storeJson = JSON.stringify(result.updatedStore, null, 2) + "\n"
+        var archiveJson = JSON.stringify(result.updatedArchive, null, 2) + "\n"
+        root.writeFileAndConfirm(todoFile, storeJson, function(ok) {
+          if (!ok) {
+            root._archiveOpInFlight = false
+            return
+          }
+          root._storeHasId(id, function(present) {
+            if (!present) {
+              // The active write did not land: never remove the archive entry.
+              root._archiveOpInFlight = false
+              return
+            }
+            root._writeArchiveUntilGone(id, archiveJson, "Restore task from archive", 3)
+          })
+        })
+      })
+    })
+    return true
+  }
+
+  // Permanently removes one task from the archive (hold-to-confirm in the
+  // archive browser). Irreversible except through git history.
+  function purgeArchivedTask(id) {
+    if (root._archiveOpInFlight) return false
+    root._archiveOpInFlight = true
+    root.readFile(root.archiveFilePath, function(archiveRaw) {
+      var result = TodoStore.purgeArchived(archiveRaw, id)
+      if (!result.purged) {
+        root._archiveOpInFlight = false
+        return
+      }
+      var archiveJson = JSON.stringify(result.updatedArchive, null, 2) + "\n"
+      root._writeArchiveUntilGone(id, archiveJson, "Delete archived task permanently", 3)
+    })
     return true
   }
 
@@ -550,8 +669,17 @@ BarWidget {
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onLoaded: root.loadTodos(text())
-    onLoadFailed: root.loadTodos("{}")
+    onLoaded: {
+      root.loadTodos(text())
+      root._storeLoaded = true
+      root.maybeReconcileArchive()
+    }
+    onLoadFailed: {
+      root.loadTodos("{}")
+      root._storeLoaded = true
+    }
+    onSaved: root._completeWrite(true)
+    onSaveFailed: root._completeWrite(false)
     onFileChanged: reload()
   }
 
@@ -561,12 +689,46 @@ BarWidget {
     watchChanges: true
     atomicWrites: true
     printErrors: false
-    onLoaded: root.lastArchiveText = text()
-    onLoadFailed: root.lastArchiveText = "{\"version\":1,\"archived\":[]}"
+    onLoaded: {
+      root.lastArchiveText = text()
+      root._archiveLoaded = true
+      root.maybeReconcileArchive()
+    }
+    onLoadFailed: {
+      root.lastArchiveText = "{\"version\":1,\"archived\":[]}"
+      root._archiveLoaded = true
+    }
+    onSaved: root._completeWrite(true)
+    onSaveFailed: root._completeWrite(false)
     onFileChanged: {
       reload()
       root.lastArchiveText = text()
     }
+  }
+
+  // Authoritative disk reads for archive operations. `cat` is used (rather
+  // than FileView.text()) so a restore can never act on stale cached text.
+  Process {
+    id: readProc
+    property string readPath: ""
+    command: ["cat", readPath]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var cb = root._readCb
+        root._readCb = null
+        if (cb) cb(text)
+      }
+    }
+  }
+
+  // Bounds a write confirmation; if neither saved nor saveFailed arrives the
+  // operation aborts without touching the archive.
+  Timer {
+    id: writeTimeout
+    interval: 2500
+    repeat: false
+    onTriggered: root._completeWrite(false)
   }
 
   Loader {
@@ -706,7 +868,8 @@ BarWidget {
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
     function archived(): string { return root.getArchiveText() }
     function archiveCount(): string { return String(TodoStore.getArchivedCount(root.getArchiveText())) }
-    function unarchive(id: string): string { return root.unarchiveTask(id) ? "ok" : "not_found" }
+    function unarchive(id: string): string { return root.unarchiveTask(id) ? "ok" : "busy" }
+    function purgeArchived(id: string): string { return root.purgeArchivedTask(id) ? "ok" : "busy" }
     function gitHistory(): string { return root.lastGitLog || "[]" }
     function gitRollback(hashStr: string): string { root.rollbackToCommit(hashStr); return "ok" }
     function gitRecover(hashStr: string): string { root.recoverFromCommit(hashStr); return "ok" }

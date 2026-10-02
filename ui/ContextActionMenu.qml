@@ -2,12 +2,12 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Contextual menu for the focused task, opened with K.
+// Contextual menu for the focused task or an archived task.
 //
-// Rendering only: selection and key handling live in PanelLogic.js, because
-// PanelKeyCatcher routes j/k/Enter/Space/x/Esc through the panel state machine
-// before any printable key reaches the menu. This component is a non-modal
-// overlay, so it must never take focus.
+// Rendering only: selection and key handling live in the host (PanelLogic for
+// the task menu, ArchiveModal for the archive menu). Hold items (`hold: true`,
+// e.g. permanent delete) are charged by a single menu-level HoldActionButton so
+// the effect is identical for mouse press-and-hold and a held key.
 Item {
   id: root
 
@@ -21,8 +21,43 @@ Item {
   property var bar: null
   property alias card: card
 
+  // Hold state. `holdIndex` is the row currently charging.
+  property int holdIndex: -1
+  readonly property real holdProgress: holdState.progress
+  readonly property bool selectedIsHold: {
+    var it = (root.items && root.selectedIndex >= 0 && root.selectedIndex < root.items.length) ? root.items[root.selectedIndex] : null
+    return !!(it && it.hold)
+  }
+
   signal itemActivated(string actionId)
   signal closeRequested()
+
+  function holdIndexFor(actionId) {
+    for (var i = 0; i < root.items.length; i++) {
+      if (String(root.items[i].id) === String(actionId) && root.items[i].hold) return i
+    }
+    return -1
+  }
+
+  function startHoldAt(index) {
+    var it = (root.items && index >= 0 && index < root.items.length) ? root.items[index] : null
+    if (!it || !it.hold) return false
+    root.holdIndex = index
+    holdState.startCharging()
+    return true
+  }
+
+  function startSelectedHold() {
+    return root.startHoldAt(root.selectedIndex)
+  }
+
+  function startHoldFor(actionId) {
+    return root.startHoldAt(root.holdIndexFor(actionId))
+  }
+
+  function stopHold() {
+    holdState.stopCharging()
+  }
 
   // The card is clamped inside the panel (and therefore the monitor) with an
   // 8px margin, preferring the right of the focused row and flipping left
@@ -151,7 +186,19 @@ Item {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onEntered: root.selectedIndex = menuItem.index
-              onClicked: root.itemActivated(String(menuItem.modelData.id || ""))
+              // Hold items charge while pressed; normal items activate on click.
+              onPressed: {
+                if (menuItem.modelData.hold) root.startHoldAt(menuItem.index)
+              }
+              onReleased: {
+                if (menuItem.modelData.hold) root.stopHold()
+              }
+              onCanceled: {
+                if (menuItem.modelData.hold) root.stopHold()
+              }
+              onClicked: {
+                if (!menuItem.modelData.hold) root.itemActivated(String(menuItem.modelData.id || ""))
+              }
             }
 
             Item {
@@ -210,9 +257,47 @@ Item {
                 keyText: String(menuItem.modelData.shortcut || "")
               }
             }
+
+            // Hold-to-confirm charge, painted on the row while it charges.
+            Rectangle {
+              anchors.fill: parent
+              radius: Style.cornerRadius * 0.5
+              color: Color.urgent
+              opacity: (root.holdIndex === menuItem.index ? root.holdProgress : 0) * 0.16
+              visible: opacity > 0
+              z: 0
+            }
+
+            Rectangle {
+              anchors.left: parent.left
+              anchors.bottom: parent.bottom
+              height: Style.space(3)
+              width: parent.width * (root.holdIndex === menuItem.index ? root.holdProgress : 0)
+              color: Color.urgent
+              radius: Style.cornerRadius * 0.5
+              visible: width > 0
+              z: 10
+            }
           }
         }
       }
+    }
+  }
+
+  // Single menu-level hold state machine: mouse press-and-hold and a held key
+  // both drive this, so the charge is identical and shown on the menu row.
+  HoldActionButton {
+    id: holdState
+    visible: false
+    width: 0
+    height: 0
+    visualsEnabled: false
+    holdDuration: 600
+    chargeColor: Color.urgent
+    onConfirmed: {
+      var it = (root.items && root.holdIndex >= 0 && root.holdIndex < root.items.length) ? root.items[root.holdIndex] : null
+      root.holdIndex = -1
+      if (it) root.itemActivated(String(it.id || ""))
     }
   }
 }
