@@ -69,6 +69,7 @@ ShellRoot {
     Plugin.PanelContent {
         id: panelContent
         barWidget: barWidget
+        holdDuration: 0
     }
 
     Ui.PanelKeyCatcher {
@@ -853,10 +854,14 @@ test("Quickshell Drawer Fit [local-only]: an expanded long title stays fully vis
     // Eight tasks with the long-title + long-notes + repo task in the middle,
     // so the list is taller than the viewport cap and expansion has to scroll.
     const longTitle = "I want a context menu over panel item/task to allow copy";
+    // Real newlines: the notes area grows to its max height (130), which makes
+    // the expanded drawer taller than the 280px list viewport - the condition
+    // under which the reported clipping happens.
     const notes =
-      "the goal of this tool/menu is to quickly send the info to your llm/ai agents.\\n\\n" +
-      "the key to do that would be K (to open contextual menu from the keyboard) - and y to quickly copy the todo/task info\\n\\n" +
-      "let's discuss the best way to do that together";
+      "the goal of this tool/menu is to quickly send the info to your llm/ai agents.\n\n" +
+      "the key to do that would be K (to open contextual menu from the keyboard) - and y to quickly copy the todo/task info\n\n" +
+      "let's discuss the best way to do that together, and keep going for a while so the notes area reaches its maximum height\n\n" +
+      "and one more paragraph to be sure the drawer is taller than the list viewport";
     const todos = [];
     for (let i = 0; i < 8; i++) {
       const isLong = i === 4;
@@ -988,9 +993,14 @@ ShellRoot {
             panelContent.handleReturn()
         }
     }
-    Timer { interval: 4000; running: true; onTriggered: report("expanded") }
-    Timer { interval: 5200; running: true; onTriggered: report("settled") }
-    Timer { interval: 5600; running: true; onTriggered: { console.log("[FIT] done=1"); Qt.exit(0) } }
+    Timer { interval: 3000; running: true; onTriggered: report("expanded") }
+    // The reported sequence: expand, move up to the previous item, then move
+    // back down onto the still-expanded item. Moving down used to bottom-align
+    // the too-tall expanded row, pushing its wrapped title above the viewport.
+    Timer { interval: 3400; running: true; onTriggered: panelContent.handleMove(0, -1) }
+    Timer { interval: 4000; running: true; onTriggered: panelContent.handleMove(0, 1) }
+    Timer { interval: 4800; running: true; onTriggered: report("settled") }
+    Timer { interval: 5400; running: true; onTriggered: { console.log("[FIT] done=1"); Qt.exit(0) } }
 }
 `;
     fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");

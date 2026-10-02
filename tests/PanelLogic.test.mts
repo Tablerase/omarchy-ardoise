@@ -21,6 +21,7 @@ const {
   handleActivate,
   handleReturn,
   handleDelete,
+  handleKeyRelease,
   handleTextKey,
   DEFAULT_BINDINGS,
   normalizeKey,
@@ -457,8 +458,9 @@ test("handleActivate & handleReturn: apply dynamic reminder on reminder sub-sect
   assert.ok(reminderTime <= after + 30 * 60 * 1000 + 500);
 });
 
-test("handleTextKey: 'c' / 'C' triggers clearCompleted with currentFilter", () => {
+test("handleTextKey: 'c' / 'C' triggers startClearHold when available or clearCompleted fallback", () => {
   let clearedFilter: string | null = null;
+  let holdStarted = false;
   const mockRoot: any = {
     focusSection: "tasks",
     currentFilter: "work",
@@ -467,15 +469,66 @@ test("handleTextKey: 'c' / 'C' triggers clearCompleted with currentFilter", () =
     }
   };
 
-  // Lowercase 'c'
+  // Fallback when startClearHold is not provided
   handleTextKey(mockRoot, "c");
   assert.equal(clearedFilter, "work");
 
-  // Uppercase 'C'
-  clearedFilter = null;
-  mockRoot.currentFilter = "all";
-  handleTextKey(mockRoot, "C");
-  assert.equal(clearedFilter, "all");
+  // Uses startClearHold when provided
+  mockRoot.startClearHold = () => {
+    holdStarted = true;
+  };
+  handleTextKey(mockRoot, "c");
+  assert.equal(holdStarted, true);
+});
+
+test("handleDelete: triggers startDeleteHold when available or removeTodo fallback", () => {
+  let removedId: number | null = null;
+  let deleteHoldId: number | null = null;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cursorIndex: 0,
+    filteredTodos: [{ id: 42, title: "Test task" }],
+    removeTodo: (id: number) => {
+      removedId = id;
+    }
+  };
+
+  // Direct fallback
+  handleDelete(mockRoot);
+  assert.equal(removedId, 42);
+
+  // Uses startDeleteHold when provided
+  mockRoot.startDeleteHold = (id: number) => {
+    deleteHoldId = id;
+  };
+  handleDelete(mockRoot);
+  assert.equal(deleteHoldId, 42);
+});
+
+test("handleKeyRelease: stops active holds for x, c, and footer action", () => {
+  let stopDeleteCalled = false;
+  let stopClearCalled = false;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    stopDeleteHold: () => {
+      stopDeleteCalled = true;
+    },
+    stopClearHold: () => {
+      stopClearCalled = true;
+    }
+  };
+
+  handleKeyRelease(mockRoot, "x");
+  assert.equal(stopDeleteCalled, true);
+
+  handleKeyRelease(mockRoot, "c");
+  assert.equal(stopClearCalled, true);
+
+  stopClearCalled = false;
+  mockRoot.focusSection = "footer";
+  mockRoot.footerButtonIndex = 0;
+  handleKeyRelease(mockRoot, "action");
+  assert.equal(stopClearCalled, true);
 });
 
 test("footer activation: Space and Enter on button 0 trigger clearCompleted", () => {

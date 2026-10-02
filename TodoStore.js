@@ -1564,6 +1564,137 @@ function getArchivedCount(archiveRawText) {
 }
 
 /**
+ * Returns the normalized list of archived tasks. Parsing the whole archive is
+ * the expensive step (normalizeArchive over 5,000 tasks stays under 100ms), so
+ * callers should parse once and keep the result rather than re-deriving it in
+ * a per-frame binding.
+ * @param {string} [archiveRawText]
+ * @returns {ArchivedTask[]}
+ */
+function getArchivedTasks(archiveRawText) {
+  return normalizeArchive(archiveRawText).archived
+}
+
+/**
+ * Filters archived tasks by a free-text query with multi-token AND matching
+ * across title, notes, profile, repo, tags, and id. Mirrors
+ * GitSync.filterSnapshots so the archive modal behaves like the snapshot list.
+ * @param {ArchivedTask[]} tasks
+ * @param {string} [query]
+ * @returns {ArchivedTask[]}
+ */
+function filterArchivedTasks(tasks, query) {
+  if (!Array.isArray(tasks)) return []
+  if (!query || typeof query !== "string" || !query.trim()) return tasks
+
+  var tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return tasks
+
+  return tasks.filter(function(t) {
+    if (!t || typeof t !== "object") return false
+    var hay = (
+      String(t.title || "") + "\n" +
+      String(t.description || "") + "\n" +
+      String(t.profile || "") + "\n" +
+      String(t.repo || "") + "\n" +
+      (Array.isArray(t.tags) ? t.tags.join(" ") : "") + "\n" +
+      String(t.id || "")
+    ).toLowerCase()
+    return tokens.every(function(token) { return hay.indexOf(token) !== -1 })
+  })
+}
+
+/**
+ * Moves one archived task back into the active store, preserving its original
+ * id, createdAt, notes, profile, repo, tags, and location. Completion state is
+ * cleared and completedAt dropped; reminder/dueDate are not stored in the
+ * archive, so they cannot be restored. The task is removed from the archive
+ * (never duplicated) and the active list is re-sorted.
+ * @param {TodoStoreData} store
+ * @param {string} archiveRawText
+ * @param {number|string} id
+ * @returns {{updatedStore: TodoStoreData, updatedArchive: ArchiveData, restored: (Task|null)}}
+ */
+function unarchive(store, archiveRawText, id) {
+  var s = cloneStore(store)
+  var arc = normalizeArchive(archiveRawText)
+  var key = String(id)
+
+  /** @type {ArchivedTask|null} */
+  var entry = null
+  /** @type {ArchivedTask[]} */
+  var kept = []
+  for (var i = 0; i < arc.archived.length; i++) {
+    if (entry === null && String(arc.archived[i].id) === key) {
+      entry = arc.archived[i]
+    } else {
+      kept.push(arc.archived[i])
+    }
+  }
+
+  if (entry === null) {
+    return { updatedStore: s, updatedArchive: arc, restored: null }
+  }
+
+  // Rebuild as an active task, carrying forward unknown/future fields.
+  var entryAny = /** @type {Record<string, any>} */ (entry)
+  /** @type {Record<string, any>} */
+  var raw = {}
+  for (var k in entryAny) {
+    if (Object.prototype.hasOwnProperty.call(entryAny, k)) raw[k] = entryAny[k]
+  }
+  raw.done = false
+  raw.updatedAt = Date.now()
+  delete raw.completedAt
+  var task = normalizeTask(raw)
+
+  var exists = false
+  for (var j = 0; j < s.todos.length; j++) {
+    if (String(s.todos[j].id) === key) {
+      exists = true
+      break
+    }
+  }
+  if (!exists && task) {
+    s.todos.push(task)
+    s.todos.sort(compareTasks)
+  }
+
+  arc.archived = kept
+  return { updatedStore: s, updatedArchive: arc, restored: task }
+}
+
+/**
+ * Formats a task as a compact markdown block for pasting into an LLM. Only
+ * non-empty fields are emitted, to keep the token count low.
+ * @param {Task} task
+ * @returns {string}
+ */
+function formatTaskForLLM(task) {
+  if (!task || typeof task !== "object") return ""
+
+  var lines = ["# " + capitalizeTitle(String(task.title || "").trim())]
+
+  /** @type {string[]} */
+  var meta = []
+  var profile = cleanProfileName(task.profile || "")
+  if (profile) meta.push("#" + profile)
+  if (task.repo) meta.push("repo:" + String(task.repo))
+  if (Array.isArray(task.tags) && task.tags.length > 0) meta.push("tags:" + task.tags.join(","))
+  var due = task.reminder || task.dueDate
+  if (due) meta.push("due:" + String(due))
+  if (meta.length > 0) lines.push(meta.join(" "))
+
+  var notes = String(task.description || "").trim()
+  if (notes) {
+    lines.push("")
+    lines.push(notes)
+  }
+
+  return lines.join("\n")
+}
+
+/**
  * Formats Hyprland modmask and key into a human-readable shortcut string.
  * Hyprland bitmasks:
  * - Bit 6 (64): SUPER
@@ -1764,6 +1895,10 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,
+    getArchivedTasks,
+    filterArchivedTasks,
+    unarchive,
+    formatTaskForLLM,
     formatKeybind,
     formatRelativeDiff,
     getTaskUrgencyBreakdown,

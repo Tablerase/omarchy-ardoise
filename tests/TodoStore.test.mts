@@ -36,6 +36,10 @@ const {
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
+  getArchivedTasks,
+  filterArchivedTasks,
+  unarchive,
+  formatTaskForLLM,
   formatKeybind,
   formatRelativeDiff,
   getTaskUrgencyBreakdown,
@@ -374,6 +378,91 @@ test("archiveCompleted & normalizeArchive: archives completed tasks with complet
 
   // Check getArchivedCount
   assert.equal(getArchivedCount(JSON.stringify(res2.updatedArchive)), 2);
+});
+
+test("getArchivedTasks & filterArchivedTasks: parse once and filter with multi-token AND", () => {
+  const archive = {
+    version: 1,
+    archived: [
+      { id: 1, title: "Fix login bug", description: "oauth flow", profile: "work", repo: "omarchy-ardoise", tags: ["auth", "urgent"], createdAt: 100, completedAt: 200 },
+      { id: 2, title: "Buy groceries", description: "milk and eggs", profile: "personal", repo: null, tags: ["shopping"], createdAt: 300, completedAt: 400 },
+      { id: 3, title: "Rotate signing keys", description: "dev and CI", profile: "devops", repo: "infra", tags: [], createdAt: 500, completedAt: 600 }
+    ]
+  };
+  const raw = JSON.stringify(archive);
+  const tasks = getArchivedTasks(raw);
+  assert.equal(tasks.length, 3);
+
+  assert.equal(filterArchivedTasks(tasks, "").length, 3);
+  assert.deepEqual(filterArchivedTasks(tasks, "login").map((t: any) => t.id), [1]);
+  assert.deepEqual(filterArchivedTasks(tasks, "auth").map((t: any) => t.id), [1]);
+  assert.deepEqual(filterArchivedTasks(tasks, "omarchy").map((t: any) => t.id), [1]);
+  assert.deepEqual(filterArchivedTasks(tasks, "devops").map((t: any) => t.id), [3]);
+  // Multi-token AND: "fix oauth" matches only task 1; "fix groceries" matches none.
+  assert.deepEqual(filterArchivedTasks(tasks, "fix oauth").map((t: any) => t.id), [1]);
+  assert.equal(filterArchivedTasks(tasks, "fix groceries").length, 0);
+});
+
+test("unarchive: moves the task back to the active store, preserving id and fields, without duplicating", () => {
+  let store = defaultStore();
+  store = addTodo(store, "Keep me", "still active", "personal", null);
+  store = addTodo(store, "Restore me", "the original notes", "work", null);
+  const restoreId = store.todos[1].id;
+  store.todos[1].repo = "omarchy-ardoise";
+  store.todos[1].tags = ["restore"];
+  store.todos[1].location = { repo: "omarchy-ardoise", subpath: null, localPath: "~/code/ardoise" };
+  store = toggleTodo(store, restoreId);
+  const createdAt = store.todos.find((t: any) => t.id === restoreId)!.createdAt;
+
+  const cleared = archiveCompleted(store, "all", JSON.stringify({ version: 1, archived: [] }));
+  assert.equal(cleared.updatedStore.todos.length, 1);
+  assert.equal(cleared.updatedArchive.archived.length, 1);
+  const archiveRaw = JSON.stringify(cleared.updatedArchive);
+
+  const res = unarchive(cleared.updatedStore, archiveRaw, restoreId);
+  assert.ok(res.restored, "restored task must be returned");
+  assert.equal(res.restored!.id, restoreId, "original id must be preserved");
+  assert.equal(res.restored!.createdAt, createdAt, "createdAt must be preserved");
+  assert.equal(res.restored!.title, "Restore me");
+  assert.equal(res.restored!.description, "the original notes");
+  assert.equal(res.restored!.profile, "work");
+  assert.equal(res.restored!.repo, "omarchy-ardoise");
+  assert.deepEqual(res.restored!.tags, ["restore"]);
+  assert.equal(res.restored!.done, false, "restored task must be active");
+  assert.equal(res.updatedStore.todos.length, 2);
+  assert.equal(res.updatedArchive.archived.length, 0, "restore must remove the archive entry");
+
+  // Restoring an unknown id is a no-op.
+  const noop = unarchive(res.updatedStore, JSON.stringify(res.updatedArchive), 999999);
+  assert.equal(noop.restored, null);
+  assert.equal(noop.updatedStore.todos.length, 2);
+
+  // Restoring when the id is already active must not duplicate it.
+  const dup = unarchive(res.updatedStore, archiveRaw, restoreId);
+  assert.equal(dup.updatedStore.todos.length, 2, "an already-active task must not be duplicated");
+  assert.equal(dup.updatedArchive.archived.length, 0);
+});
+
+test("formatTaskForLLM: compact markdown, omits empty fields", () => {
+  const full = formatTaskForLLM({
+    title: "fix login bug",
+    description: "oauth flow is broken\n\nrepro: ...",
+    profile: "work",
+    repo: "Tablerase/omarchy-ardoise",
+    tags: ["auth", "urgent"],
+    reminder: "2026-10-03T09:00:00.000Z"
+  });
+  assert.equal(
+    full,
+    "# Fix login bug\n" +
+      "#work repo:Tablerase/omarchy-ardoise tags:auth,urgent due:2026-10-03T09:00:00.000Z\n" +
+      "\n" +
+      "oauth flow is broken\n\nrepro: ..."
+  );
+
+  // Title only: no metadata line, no trailing blank line.
+  assert.equal(formatTaskForLLM({ title: "just a title", profile: "personal" }), "# Just a title\n#personal");
+  assert.equal(formatTaskForLLM(null as any), "");
 });
 
 test("addTodo & updateTodo: tracks updatedAt timestamp", () => {
@@ -1270,6 +1359,49 @@ test("scale performance: handles 5,000 archived tasks and merge without degradat
   assert.equal(res.clearedCount, 1);
   assert.equal(res.updatedArchive.archived.length, 5001);
   assert.ok(tClear < 100, `archiveCompleted with 5,000 tasks took ${tClear}ms (expected <100ms)`);
+});
+
+test("scale performance: archive restore path (parse, filter, unarchive) over 5,000 items", () => {
+  const now = Date.now();
+  const archived = [];
+  for (let i = 0; i < 5000; i++) {
+    archived.push({
+      id: now + i,
+      title: `Archived task #${i + 1} ${i % 2 === 0 ? "alpha" : "beta"}`,
+      description: "Archived notes for filtering",
+      profile: i % 3 === 0 ? "work" : "personal",
+      repo: i % 4 === 0 ? "omarchy-ardoise" : null,
+      tags: ["archived", `tag-${i % 5}`],
+      createdAt: now - i * 60000,
+      completedAt: now - i * 1000
+    });
+  }
+  const rawJson = JSON.stringify({ version: 1, archived });
+
+  const t0 = performance.now();
+  const tasks = getArchivedTasks(rawJson);
+  const tParse = performance.now() - t0;
+  assert.equal(tasks.length, 5000);
+  assert.ok(tParse < 100, `getArchivedTasks for 5,000 tasks took ${tParse}ms (expected <100ms)`);
+
+  const t1 = performance.now();
+  const filtered = filterArchivedTasks(tasks, "alpha tag-3");
+  const tFilter = performance.now() - t1;
+  assert.ok(filtered.length > 0, "filter must match something");
+  assert.ok(tFilter < 25, `filterArchivedTasks for 5,000 tasks took ${tFilter}ms (expected <25ms)`);
+
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work"],
+    todos: [{ id: now + 999999, title: "Active", done: false, profile: "personal", createdAt: now }]
+  };
+  const t2 = performance.now();
+  const res = unarchive(store, rawJson, now + 123);
+  const tUnarchive = performance.now() - t2;
+  assert.ok(res.restored, "the requested task must be restored");
+  assert.equal(res.updatedArchive.archived.length, 4999);
+  assert.ok(tUnarchive < 100, `unarchive over 5,000 archived tasks took ${tUnarchive}ms (expected <100ms)`);
 });
 
 test("versioning & extensibility: normalizeTask preserves unknown/future extension fields", () => {

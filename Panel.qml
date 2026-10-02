@@ -166,6 +166,16 @@ Panel {
           panelContent.activateSearch()
         }
       }
+      Keys.onReleased: function(event) {
+        if (event.isAutoRepeat) return
+        if (event.key === Qt.Key_X || event.text === "x" || event.text === "X") {
+          panelContent.handleKeyRelease("x")
+        } else if (event.key === Qt.Key_C || event.text === "c" || event.text === "C") {
+          panelContent.handleKeyRelease("c")
+        } else if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+          panelContent.handleKeyRelease("action")
+        }
+      }
       onCloseRequested: {
         if (panelContent.handleEscape && panelContent.handleEscape()) return
         root.close()

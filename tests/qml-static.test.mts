@@ -412,6 +412,22 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "DESIGN.md must document the expanded drawer multi-line title reveal"
   );
 
+  // 4f. Too-Tall Focused Row Keeps Its Top In View
+  // Motion onto an expanded drawer used to bottom-align it; because the drawer
+  // is taller than the list viewport, that pushed its top (and the wrapped
+  // title) above the viewport where the Flickable's clip cut it off.
+  assert.ok(
+    panelContent.includes("var itemFitsViewport = item.height + Style.space(8) <= todoListFlickable.height") &&
+      panelContent.includes("var target = itemFitsViewport") &&
+      panelContent.includes("? itemBottom - todoListFlickable.height + Style.space(6)") &&
+      panelContent.includes(": itemTop - Style.space(2)"),
+    "ensureTaskVisible must keep the top of a focused item that is taller than the viewport in view"
+  );
+  assert.ok(
+    designContent.includes("Too-tall focused item"),
+    "DESIGN.md must document the too-tall focused item alignment rule"
+  );
+
   const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
   assert.ok(
     barWidgetContent.includes('target: "tablerase.ardoise"') &&
@@ -896,5 +912,39 @@ test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wir
   );
 });
 
+test("Hold-to-Confirm Deletion & Clear Integrity: HoldActionButton component, radial arc, and key release wiring", () => {
+  const holdButtonPath = path.join(repoDir, "ui", "HoldActionButton.qml");
+  assert.ok(fs.existsSync(holdButtonPath), "ui/HoldActionButton.qml must exist");
 
+  const holdButtonContent = fs.readFileSync(holdButtonPath, "utf8");
+  assert.ok(holdButtonContent.includes("holdDuration: 600"), "HoldActionButton must default holdDuration to 600ms");
+  assert.ok(holdButtonContent.includes("drainDuration: 180"), "HoldActionButton must default drainDuration to 180ms");
+  assert.ok(holdButtonContent.includes("signal triggered()"), "HoldActionButton must emit triggered signal on completion");
+  assert.ok(holdButtonContent.includes("function startCharging()"), "HoldActionButton must implement startCharging()");
+  assert.ok(holdButtonContent.includes("function stopCharging()"), "HoldActionButton must implement stopCharging()");
+  assert.ok(holdButtonContent.includes("arcCanvas"), "HoldActionButton must use Canvas for radial progress arc");
+  assert.ok(holdButtonContent.includes("shakeTranslate"), "HoldActionButton must implement micro-shake animation when charging");
 
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  assert.ok(
+    panelContent.includes("Ui.HoldActionButton {\n                        id: rowDeleteBtn"),
+    "PanelContent must use HoldActionButton for rowDeleteBtn"
+  );
+  assert.ok(
+    panelContent.includes("Ui.HoldActionButton {\n          id: clearBtn"),
+    "PanelContent must use HoldActionButton for clearBtn"
+  );
+  assert.ok(
+    panelContent.includes("function startDeleteHold") && panelContent.includes("function stopDeleteHold"),
+    "PanelContent must implement startDeleteHold and stopDeleteHold"
+  );
+  assert.ok(
+    panelContent.includes("function startClearHold") && panelContent.includes("function stopClearHold"),
+    "PanelContent must implement startClearHold and stopClearHold"
+  );
+
+  const panelQml = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
+  assert.ok(panelQml.includes("Keys.onReleased:"), "Panel.qml must implement Keys.onReleased on keyCatcher");
+  assert.ok(panelQml.includes('panelContent.handleKeyRelease("x")'), "Panel.qml must dispatch key release for x");
+  assert.ok(panelQml.includes('panelContent.handleKeyRelease("c")'), "Panel.qml must dispatch key release for c");
+});

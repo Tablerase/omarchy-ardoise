@@ -341,10 +341,19 @@ Item {
       var targetY = Math.max(0, itemTop - Style.space(2))
       todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, targetY))
     } else {
+      // An expanded drawer can be taller than the viewport. The generic
+      // "scroll into view" rule aligns the bottom of a too-tall item, which
+      // pushes its top - and the wrapped title - above the viewport where the
+      // Flickable's clip cuts it off. Whenever the focused item does not fit,
+      // keep its top in view instead; the drawer simply overflows the bottom.
+      var itemFitsViewport = item.height + Style.space(8) <= todoListFlickable.height
       if (itemTop < viewTop) {
         todoListFlickable.contentY = Math.max(0, itemTop - Style.space(6))
       } else if (itemBottom > viewBottom) {
-        todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, itemBottom - todoListFlickable.height + Style.space(6)))
+        var target = itemFitsViewport
+          ? itemBottom - todoListFlickable.height + Style.space(6)
+          : itemTop - Style.space(2)
+        todoListFlickable.contentY = Math.max(0, Math.min(maxContentY, target))
       }
     }
   }
@@ -395,6 +404,50 @@ Item {
     Logic.handleDelete(root)
   }
 
+  property int holdDuration: 600
+
+  function handleKeyRelease(key) {
+    Logic.handleKeyRelease(root, key)
+  }
+
+  function startDeleteHold(taskId) {
+    if (root.holdDuration <= 0) {
+      root.removeTodo(taskId)
+      return
+    }
+    if (root.focusSection === "tasks" && root.cursorIndex >= 0 && todoListRepeater) {
+      var item = todoListRepeater.itemAt(root.cursorIndex)
+      if (item && item.startDeleteCharge) {
+        item.startDeleteCharge()
+      }
+    }
+  }
+
+  function stopDeleteHold() {
+    if (root.cursorIndex >= 0 && todoListRepeater) {
+      var item = todoListRepeater.itemAt(root.cursorIndex)
+      if (item && item.stopDeleteCharge) {
+        item.stopDeleteCharge()
+      }
+    }
+  }
+
+  function startClearHold() {
+    if (root.holdDuration <= 0) {
+      root.clearCompleted(root.currentFilter)
+      return
+    }
+    if (clearBtn && clearBtn.startCharging) {
+      clearBtn.startCharging()
+    }
+  }
+
+  function stopClearHold() {
+    if (clearBtn && clearBtn.stopCharging) {
+      clearBtn.stopCharging()
+    }
+  }
+
   function handleTextKey(text) {
     Logic.handleTextKey(root, text, TodoStore)
   }
@@ -404,7 +457,10 @@ Item {
   }
 
   function triggerFooterButton(idx) {
-    if (idx === 0) root.clearCompleted(root.currentFilter)
+    if (idx === 0) {
+      if (root.holdDuration <= 0) root.clearCompleted(root.currentFilter)
+      else root.startClearHold()
+    }
     else if (idx === 1) root.openArchive()
     else if (idx === 2) root.openEditor()
     else if (idx === 3) root.openQuickAdd()
@@ -1636,6 +1692,16 @@ Item {
                 itemRow.ensureReassignProfileVisible(idx)
               }
             }
+            function startDeleteCharge() {
+              if (itemRow && itemRow.startDeleteCharge) {
+                itemRow.startDeleteCharge()
+              }
+            }
+            function stopDeleteCharge() {
+              if (itemRow && itemRow.stopDeleteCharge) {
+                itemRow.stopDeleteCharge()
+              }
+            }
 
             width: parent.width
             visible: (!isHiddenByFold || isFirstCompleted) && (implicitHeight > 0)
@@ -1767,6 +1833,18 @@ Item {
               function ensureReassignProfileVisible(idx) {
                 if (profReassignFlickable) {
                   profReassignFlickable.ensureVisible(idx)
+                }
+              }
+
+              function startDeleteCharge() {
+                if (rowDeleteBtn && rowDeleteBtn.startCharging) {
+                  rowDeleteBtn.startCharging()
+                }
+              }
+
+              function stopDeleteCharge() {
+                if (rowDeleteBtn && rowDeleteBtn.stopCharging) {
+                  rowDeleteBtn.stopCharging()
                 }
               }
 
@@ -2011,8 +2089,8 @@ Item {
                         }
                       }
 
-                      // Remove button
-                      PanelActionButton {
+                      // Remove button (hold-to-confirm)
+                      Ui.HoldActionButton {
                         id: rowDeleteBtn
                         anchors.verticalCenter: parent.verticalCenter
                         size: Style.space(22)
@@ -2021,16 +2099,18 @@ Item {
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         foreground: Color.muted
                         hoverColor: root.bar ? root.bar.urgent : Color.urgent
+                        chargeColor: root.bar ? root.bar.urgent : Color.urgent
+                        holdDuration: root.holdDuration
                         tooltipText: ""
-                        onClicked: {
+                        onTriggered: {
                           root.removeTodo(itemRow.modelData.id)
                         }
 
                         HoverHandler { id: rowDeleteHover }
                         Ui.ShortcutToolTip {
                           visible: rowDeleteHover.hovered
-                          description: "Delete task"
-                          shortcut: "x"
+                          description: "Hold to delete task"
+                          shortcut: "Hold x"
                           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                         }
                       }
@@ -2678,21 +2758,23 @@ Item {
         spacing: Style.space(4)
         clip: true
 
-        Button {
+        Ui.HoldActionButton {
           id: clearBtn
           iconText: "󰃢"
           text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
+          chargeColor: Color.accent
+          holdDuration: root.holdDuration
           tooltipText: ""
-          onClicked: root.clearCompleted(root.currentFilter)
+          onTriggered: root.clearCompleted(root.currentFilter)
 
           HoverHandler { id: clearBtnHover }
           Ui.ShortcutToolTip {
             visible: clearBtnHover.hovered
-            description: root.currentFilter === "all" ? "Archive and clear completed tasks" : ("Archive and clear completed tasks in #" + root.currentFilter)
-            shortcut: "c"
+            description: root.currentFilter === "all" ? "Hold to archive and clear completed tasks" : ("Hold to archive and clear completed tasks in #" + root.currentFilter)
+            shortcut: "Hold c"
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
         }

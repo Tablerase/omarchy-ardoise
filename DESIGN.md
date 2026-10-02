@@ -85,6 +85,7 @@ To preserve long-term maintainability and visual consistency across the main pan
   - In expanded task drawer, `fadeColor` must be the **opaque composite** of `Color.menu.selectedBackground` (8% alpha tint) over `Color.popups.background`, computed as `root.expandedCardColor` in `PanelContent`. Passing the semi-transparent `selectedBackground` directly results in invisible gradients.
 - **`ui/KeyBadge.qml`**: Reusable keyboard shortcut badge component rendering key representations with pixel-perfect parity to the help guide (`Util.alpha(badgeColor, 0.15)` background fill, `badgeColor` border, monospace bold font, `radius: Style.space(4)`).
 - **`ui/ShortcutToolTip.qml`**: Rich multi-line tooltip component presenting an action description on top and keyboard shortcut badges below separated by a line break, with both the description text and shortcut badge row horizontally centered in their respective lines. Supports automatic regex parsing of legacy parenthesized shortcuts `(key)` or explicit `description` and `shortcut` properties, automatically splitting multi-key combinations (e.g. `"A / SUPER + SHIFT + T"`) into distinct `KeyBadge` pills with subtle `/` separators. Applied across all button tooltips in the panel and modals (Header Help & Shortcut buttons, Input Add button, Task Row Expand & Delete buttons, Footer Action buttons, and Help Modal Close button).
+- **`ui/HoldActionButton.qml`**: Reusable hold-to-confirm button component that eliminates confirmation modals for destructive and batch actions (task deletion and clear completed). Features a 600ms hold timer, hardware-timed progress charging (0.0 -> 1.0) with smooth 180ms cancellation drain, micro-shake animation when charge exceeds 60%, and an anti-aliased radial progress ring rendered via Canvas. Supports mouse pointer hold and keyboard key hold (<kbd>x</kbd>, <kbd>c</kbd>, <kbd>Space</kbd>/<kbd>Enter</kbd>). Utilizes `Color.urgent` for permanent task deletion and `Color.accent` (brand cyan/blue) for archiving and clearing completed tasks.
 
 ---
 
@@ -206,11 +207,12 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 5. **Task List View (`taskListView`)**:
    - Vertically flickable column of tasks (`itemRow`).
    - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
+     - **Too-tall focused item**: an expanded drawer can be taller than the list viewport. Motion onto such an item (`j`/`k` and the other `ensureTaskVisible(..., false)` call sites) keeps its **top** in view instead of the generic bottom-align, because bottom-aligning a too-tall row pushes its top — and the wrapped title's first line — above the viewport where the Flickable's `clip` cuts it off. The drawer is allowed to overflow the bottom edge; the title always stays readable. Regression-guarded by the local-only "Quickshell Drawer Fit" test in `tests/qml-windowed.test.mts` (expand → move up → move back down).
    - Individual task row:
      - **OmaTasks-Inspired Item Layout**:
        - Sizing is deterministic, content-driven, and dynamically compact:
          `implicitHeight: isExpanded ? (expandedContent.implicitHeight + Style.space(16)) : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0))`
-        - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title + Inline Profile badge (`profInlineLabel`, shown in "all" view when the task has no chips) + Action buttons on the right (Expand chevron `󰅀`/`󰅃` and Delete `󰅙`). The pencil icon indicator (`󰏫`) and redundant left-side urgency stripes/gradients are removed in favor of the clean circular checkbox indicator.
+        - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title + Inline Profile badge (`profInlineLabel`, shown in "all" view when the task has no chips) + Action buttons on the right (Expand chevron `󰅀`/`󰅃`, Edit title `󰏫`, and Hold-to-Delete `󰅙` via `Ui.HoldActionButton`). Task deletion requires holding for 600ms, displaying a charging radial ring in `Color.urgent` with micro-shake feedback at >60% charge, canceling cleanly with smooth 180ms drain if released early.
         - **Expanded Drawer Title Reveal (`titleRowItem`)**:
           - Collapsed rows keep the title on one line (`wrapMode: Text.NoWrap`, `elide: Text.ElideRight`, `verticalAlignment: Text.AlignVCenter`) so the list stays scannable; the full text is available on hover via `PanelToolTip` and via the inline title editor.
           - Expanded rows switch the title to `wrapMode: Text.Wrap` + `elide: Text.ElideNone` + `verticalAlignment: Text.AlignTop`, so a long title is revealed in full across the drawer's width instead of being truncated. The row grows through the existing content-driven height chain (`titleLabel.implicitHeight` → `titleRowItem` → `itemHeaderCol` → `expandedContent` → `itemRow.implicitHeight`).
@@ -283,7 +285,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
-   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>c</kbd>, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open todos-archive.json in editor) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
+   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>Hold c</kbd> for 600ms with `Color.accent` radial ring via `Ui.HoldActionButton`, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open todos-archive.json in editor) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`) wrapped in `BorderSurface`.
    - **Universal Input Handling**:
@@ -359,11 +361,11 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
-| **Panel** | `c` / `C` | Archive and clear completed tasks in current profile |
+| **Panel** | `Hold c` / `C` | Archive and clear completed tasks in current profile (hold 600ms) |
 | **Panel** | `d` | Open `todos-archive.json` in editor (Archive button) |
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |
-| **Panel** | `x` / `Delete` | Delete highlighted task |
+| **Panel** | `Hold x` / `Delete` | Delete highlighted task (hold 600ms) |
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
@@ -457,11 +459,11 @@ ardoise.bind("a", "quick_add")
 | `jump_bottom` | `G` | Jump to last task |
 | `toggle_done` | `Space` | Toggle task completion status |
 | `toggle_expand` | `Return` | Expand / collapse task details drawer |
-| `delete_task` | `x` | Delete selected task |
+| `delete_task` | `x` | Delete selected task (hold 600ms) |
 | `edit_title` | `r`, `F2` | In-place edit of task title |
 | `open_editor` | `e` | Open `todos.json` in default editor |
 | `git_undo` | `u` | Toggle Git Snapshots & Undo modal |
-| `clear_completed` | `c` | Archive and clear completed tasks in current profile |
+| `clear_completed` | `c` | Archive and clear completed tasks in current profile (hold 600ms) |
 | `open_archive` | `d` | Open `todos-archive.json` in editor |
 | `focus_input` | `i`, `a` | Focus new task input field |
 | `search` | `/` | Activate panel search bar |

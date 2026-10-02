@@ -223,11 +223,11 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut, act
     { key: fmt("jump_top", "g") + " / " + fmt("jump_bottom", "G"), desc: "Jump to top / bottom of task list", category: "Navigation" },
     { key: fmt("toggle_done", "Space"), desc: "Toggle completed status of selected task", category: "Task Actions" },
     { key: fmt("toggle_expand", "Enter / Return"), desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
-    { key: fmt("delete_task", "x"), desc: "Delete selected task", category: "Task Actions" },
+    { key: fmt("delete_task", "x"), desc: "Delete selected task (hold 600ms)", category: "Task Actions" },
     { key: fmt("edit_title", "r / F2"), desc: "Edit title of selected task", category: "Task Actions" },
     { key: fmt("open_editor", "e"), desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: fmt("git_undo", "u"), desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
-    { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile", category: "Actions & Storage" },
+    { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile (hold 600ms)", category: "Actions & Storage" },
     { key: fmt("open_archive", "d"), desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
     { key: fmt("focus_input", "i / a"), desc: "Focus new task input field", category: "Input & Create" },
     { key: searchDisplay, desc: "Search tasks, notes & profiles", category: "Navigation" },
@@ -695,7 +695,11 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     return;
   }
   if (action === "clear_completed" || (!map && (text === "c" || text === "C"))) {
-    if (typeof root.clearCompleted === "function") root.clearCompleted(root.currentFilter);
+    if (typeof root.startClearHold === "function") {
+      root.startClearHold();
+    } else if (typeof root.clearCompleted === "function") {
+      root.clearCompleted(root.currentFilter);
+    }
     return;
   }
   if (action === "open_archive" || (!map && text === "d")) {
@@ -861,11 +865,32 @@ function handleDelete(root) {
     if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
       var task = root.filteredTodos[root.cursorIndex];
       if (task) {
-        if (typeof root.removeTodo === "function") root.removeTodo(task.id);
-        if (root.cursorIndex >= root.filteredTodos.length) {
-          root.cursorIndex = Math.max(0, root.filteredTodos.length - 1);
+        if (typeof root.startDeleteHold === "function") {
+          root.startDeleteHold(task.id);
+        } else if (typeof root.removeTodo === "function") {
+          root.removeTodo(task.id);
+          if (root.cursorIndex >= root.filteredTodos.length) {
+            root.cursorIndex = Math.max(0, root.filteredTodos.length - 1);
+          }
         }
       }
+    }
+  }
+}
+
+/**
+ * Handles release of hold-action keys (x, c, action).
+ * @param {any} root PanelContent root QML object
+ * @param {string} key
+ */
+function handleKeyRelease(root, key) {
+  if (key === "x" || key === "X") {
+    if (typeof root.stopDeleteHold === "function") root.stopDeleteHold();
+  } else if (key === "c" || key === "C") {
+    if (typeof root.stopClearHold === "function") root.stopClearHold();
+  } else if (key === "action") {
+    if (root.focusSection === "footer" && root.footerButtonIndex === 0) {
+      if (typeof root.stopClearHold === "function") root.stopClearHold();
     }
   }
 }
@@ -886,6 +911,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleActivate: handleActivate,
     handleReturn: handleReturn,
     handleDelete: handleDelete,
+    handleKeyRelease: handleKeyRelease,
     handleTextKey: handleTextKey,
     DEFAULT_BINDINGS: DEFAULT_BINDINGS,
     normalizeKey: normalizeKey,
