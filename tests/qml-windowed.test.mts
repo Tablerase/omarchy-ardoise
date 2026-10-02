@@ -805,3 +805,236 @@ ShellRoot {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("Quickshell Drawer Fit [local-only]: an expanded long title stays fully visible in the panel viewport", (t) => {
+  // LOCAL-ONLY BY DESIGN. This is the reproduction harness for the reported
+  // bug "when expanded with title and notes the UI doesn't fit": a long title
+  // wraps in the drawer, and the wrapped title / the drawer must not be
+  // clipped. It mounts the same structure Panel.qml uses - a real layer-shell
+  // bar window with a BarWidget, a KeyboardPanel whose content height is
+  // fitted from PanelContent.implicitHeight, and a PanelKeyCatcher wrapping
+  // PanelContent - then expands a long-title task through the real
+  // cursor + handleReturn() path a keypress takes.
+  if (process.env.CI) {
+    t.skip("local-only: needs a wlr-layer-shell compositor to mount KeyboardPanel");
+    return;
+  }
+  if (!process.env.WAYLAND_DISPLAY) {
+    t.skip("local-only: no Wayland display, so KeyboardPanel cannot be mounted");
+    return;
+  }
+
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
+    t.skip("quickshell binary not found on system PATH");
+    return;
+  }
+
+  const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
+  const commonsDir = path.join(omarchyPath, "shell", "Commons");
+  const uiDir = path.join(omarchyPath, "shell", "Ui");
+  if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
+    if (process.env.CI) {
+      throw new Error("Omarchy shell Commons/Ui modules must be provided in CI (OMARCHY_PATH=" + omarchyPath + ")");
+    }
+    t.skip("Omarchy shell Commons/Ui modules not found at " + omarchyPath);
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-drawer-fit-"));
+  try {
+    fs.symlinkSync(commonsDir, path.join(tmpDir, "Commons"));
+    fs.symlinkSync(uiDir, path.join(tmpDir, "Ui"));
+    fs.symlinkSync(repoDir, path.join(tmpDir, "plugin"));
+
+    const dataDir = path.join(tmpDir, ".config", "omarchy", "tablerase.ardoise");
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    // Eight tasks with the long-title + long-notes + repo task in the middle,
+    // so the list is taller than the viewport cap and expansion has to scroll.
+    const longTitle = "I want a context menu over panel item/task to allow copy";
+    const notes =
+      "the goal of this tool/menu is to quickly send the info to your llm/ai agents.\\n\\n" +
+      "the key to do that would be K (to open contextual menu from the keyboard) - and y to quickly copy the todo/task info\\n\\n" +
+      "let's discuss the best way to do that together";
+    const todos = [];
+    for (let i = 0; i < 8; i++) {
+      const isLong = i === 4;
+      todos.push({
+        id: 100 + i,
+        title: isLong ? longTitle : "Short " + i,
+        description: isLong ? notes : "",
+        done: false,
+        profile: "personal",
+        reminder: null,
+        tags: [],
+        repo: isLong ? "Tablerase/omarchy-ardoise" : null,
+        createdAt: i,
+        updatedAt: i
+      });
+    }
+    fs.writeFileSync(
+      path.join(dataDir, "todos.json"),
+      JSON.stringify({ version: 1, activeProfile: "personal", profiles: ["personal", "work"], todos }),
+      "utf8"
+    );
+    fs.writeFileSync(
+      path.join(dataDir, "todos-archive.json"),
+      JSON.stringify({ version: 1, archived: [] }),
+      "utf8"
+    );
+
+    const harnessQml = `
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import qs.Ui
+import "plugin" as Plugin
+
+ShellRoot {
+    id: root
+
+    PanelWindow {
+        id: fakeBar
+        anchors { top: true; left: true; right: true }
+        implicitHeight: 30
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        Item { id: anchor; width: 20; height: 30 }
+        Plugin.BarWidget { id: barWidget }
+    }
+
+    QtObject {
+        id: fakeBarObj
+        property string position: "top"
+        property string fontFamily: Style.font.family
+        property color barForeground: Color.foreground
+        property color urgent: Color.urgent
+        function switchPanelFrom() { return false }
+    }
+
+    KeyboardPanel {
+        id: kp
+        anchorItem: anchor
+        bar: fakeBarObj
+        open: true
+        contentWidth: kp.fittedContentWidth(Style.space(400))
+        contentHeight: kp.fittedContentHeight(panelContent.implicitHeight)
+
+        PanelKeyCatcher {
+            id: keyCatcher
+            anchors.fill: parent
+            blocked: panelContent.activeFocusBlocked
+            Plugin.PanelContent {
+                id: panelContent
+                anchors.fill: parent
+                bar: fakeBarObj
+                barWidget: barWidget
+            }
+        }
+    }
+
+    function walk(item, out, depth) {
+        if (!item || depth > 40) return out
+        out.push(item)
+        var kids = item.children
+        if (kids) for (var i = 0; i < kids.length; i++) walk(kids[i], out, depth + 1)
+        if (item.contentItem) walk(item.contentItem, out, depth + 1)
+        if (item.item) walk(item.item, out, depth + 1)
+        return out
+    }
+
+    function findTitle() {
+        var all = walk(panelContent, [], 0)
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].text !== undefined && all[i].lineCount !== undefined &&
+                String(all[i].text).indexOf("I want") === 0) return all[i]
+        }
+        return null
+    }
+
+    function report(tag) {
+        var t = findTitle()
+        if (!t) { console.log("[FIT] " + tag + "=NO_TITLE"); return }
+        var titleRow = t.parent
+        var drawer = titleRow.parent.parent
+        var taskRow = drawer.parent
+        var flick = taskRow
+        while (flick && flick.contentHeight === undefined) flick = flick.parent
+        var vp = t.mapToItem(flick, 0, 0)
+        var drawerBottom = drawer.mapToItem(flick, 0, drawer.implicitHeight).y
+        console.log("[FIT] " + tag
+            + " lines=" + t.lineCount
+            + " titleViewportY=" + Math.round(vp.y)
+            + " titleSlack=" + Math.round(titleRow.height - t.height)
+            + " drawerSlack=" + Math.round(taskRow.height - drawer.implicitHeight)
+            + " drawerBottom=" + Math.round(drawerBottom)
+            + " viewportH=" + Math.round(flick.height))
+    }
+
+    Timer { interval: 1200; running: true; onTriggered: report("collapsed") }
+    Timer {
+        interval: 2000; running: true
+        onTriggered: {
+            var idx = -1
+            for (var i = 0; i < panelContent.filteredTodos.length; i++)
+                if (panelContent.filteredTodos[i].id === 104) idx = i
+            panelContent.cursorIndex = idx
+            panelContent.focusSection = "tasks"
+            panelContent.cursorActive = true
+            panelContent.handleReturn()
+        }
+    }
+    Timer { interval: 4000; running: true; onTriggered: report("expanded") }
+    Timer { interval: 5200; running: true; onTriggered: report("settled") }
+    Timer { interval: 5600; running: true; onTriggered: { console.log("[FIT] done=1"); Qt.exit(0) } }
+}
+`;
+    fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
+
+    const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
+      encoding: "utf8",
+      timeout: 25000,
+      env: {
+        ...process.env,
+        HOME: tmpDir,
+        ARDOISE_DATA_DIR: dataDir
+      }
+    });
+
+    const output = (qsResult.stdout || "") + "\n" + (qsResult.stderr || "");
+    const pick = (str: string, key: string) => {
+      const match = new RegExp("\\[FIT\\] " + key + "(?:=(\\S+)|\\s+([^\r\n]+))").exec(str);
+      return match ? (match[1] || match[2]) : undefined;
+    };
+    const num = (line: string | undefined, key: string) =>
+      Number(new RegExp(key + "=(-?\\d+)").exec(line || "")?.[1]);
+
+    assert.equal(pick(output, "done"), "1", "drawer-fit harness did not run to completion:\n" + output);
+
+    const settled = pick(output, "settled");
+    assert.ok(settled && settled !== "NO_TITLE", "long-title row must be mounted:\n" + output);
+
+    // The wrapped title must fit its own row, and the row must be tall enough
+    // for the whole drawer. Either failure clips the first title line.
+    assert.ok(
+      num(settled, "titleSlack") >= 0,
+      "the title row must be at least as tall as the wrapped title:\n" + output
+    );
+    assert.ok(
+      num(settled, "drawerSlack") >= 0,
+      "the task row must be at least as tall as the drawer content:\n" + output
+    );
+    // The title's top must not sit above the viewport top, or its first line
+    // is cut off by the Flickable's clip.
+    assert.ok(
+      num(settled, "titleViewportY") >= 0,
+      "the expanded title must be scrolled into the viewport, not clipped above it:\n" + output
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

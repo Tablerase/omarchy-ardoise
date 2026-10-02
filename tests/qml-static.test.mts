@@ -93,6 +93,7 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   const panelLogicContent = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
   const panelQmlContent = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
   const taskNotesAreaContent = fs.readFileSync(path.join(repoDir, "TaskNotesArea.qml"), "utf8");
+  const designContent = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
   const uiSubDir = path.join(repoDir, "ui");
   const uiFilesContent = fs.existsSync(uiSubDir)
     ? fs.readdirSync(uiSubDir).filter((f) => f.endsWith(".qml")).map((f) => fs.readFileSync(path.join(uiSubDir, f), "utf8")).join("\n")
@@ -373,6 +374,42 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("refreshReminderPresets") &&
       panelContent.includes("TodoStore.computePresetReminder"),
     "PanelContent must refresh reminder presets dynamically and use computePresetReminder"
+  );
+
+  // 4e. Expanded Drawer Title Reveal (long titles must be readable, not truncated)
+  assert.ok(
+    panelContent.includes("wrapMode: itemRow.isExpanded ? Text.Wrap : Text.NoWrap") &&
+      panelContent.includes("elide: itemRow.isExpanded ? Text.ElideNone : Text.ElideRight") &&
+      panelContent.includes("verticalAlignment: itemRow.isExpanded ? Text.AlignTop : Text.AlignVCenter"),
+    "PanelContent title must stay single-line and elided when collapsed, and wrap to reveal the full title when the drawer is expanded"
+  );
+  assert.ok(
+    panelContent.includes("readonly property bool titleWraps: titleLabel.visible && titleLabel.lineCount > 1") &&
+      panelContent.includes(
+        "readonly property real firstLineHeight: titleLabel.lineCount > 0 ? (titleLabel.height / titleLabel.lineCount) : Style.space(22)"
+      ) &&
+      panelContent.includes("readonly property real firstLineCenterY: titleLabel.y + firstLineHeight / 2"),
+    "titleRowItem must derive wrap state and the first-line center from measured title geometry, never from font metrics"
+  );
+  assert.ok(
+    (panelContent.match(/anchors\.verticalCenterOffset: titleRowItem\.firstLineCenterOffset/g) || []).length === 4,
+    "Checkbox, action buttons, inline profile badge, and title editor must all align to the first title line when it wraps"
+  );
+  assert.ok(
+    panelContent.includes("!itemRow.isExpanded && (titleHover.hovered || titleClickArea.containsMouse) && titleLabel.truncated"),
+    "Title hover tooltip must be suppressed while expanded, where the full title is already visible"
+  );
+  assert.ok(
+    panelContent.includes(
+      "visible: opacity > 0.01 && root.editingTaskId !== itemRow.modelData.id && !titleRowItem.titleWraps"
+    ),
+    "Strikethrough must be suppressed for wrapped multi-line titles in the drawer"
+  );
+  assert.ok(
+    designContent.includes("Expanded Drawer Title Reveal") &&
+      designContent.includes("wrapMode: Text.Wrap") &&
+      designContent.includes("titleRowItem.titleWraps"),
+    "DESIGN.md must document the expanded drawer multi-line title reveal"
   );
 
   const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
@@ -823,5 +860,41 @@ test("Demo & Scenario Runner: tools/demo.sh exists, is executable, and supports 
   assert.equal(helpRes.status, 0, "tools/demo.sh --help must succeed with exit code 0");
   assert.ok(helpRes.stdout.includes("hero"), "tools/demo.sh --help must document usage");
 });
+
+test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wiring", () => {
+  const setupScript = path.join(repoDir, "tools", "setup-git-remote.sh");
+  assert.ok(fs.existsSync(setupScript), "tools/setup-git-remote.sh must exist");
+
+  const stat = fs.statSync(setupScript);
+  assert.ok(Boolean(stat.mode & 0o111), "tools/setup-git-remote.sh must be executable");
+
+  const scriptContent = fs.readFileSync(setupScript, "utf8");
+  assert.ok(scriptContent.includes("--private"), "setup-git-remote.sh must create private repositories by default");
+  assert.ok(scriptContent.includes("MISE_QUIET=1"), "setup-git-remote.sh must suppress mise output");
+
+  const gitModalContent = fs.readFileSync(path.join(repoDir, "ui", "GitModal.qml"), "utf8");
+  assert.ok(gitModalContent.includes("autoCreateRemoteBtn"), "GitModal.qml must declare autoCreateRemoteBtn");
+  assert.ok(
+    gitModalContent.includes("Create GitHub Repo"),
+    "GitModal.qml must have 'Create GitHub Repo' button"
+  );
+  assert.ok(
+    gitModalContent.includes("autoSetupGitRemote"),
+    "GitModal.qml must invoke autoSetupGitRemote"
+  );
+  assert.ok(
+    gitModalContent.includes("root.syncFocusIndex = (root.syncFocusIndex + 1) % 4"),
+    "GitModal.qml must cycle across 4 controls in Tab 1"
+  );
+
+  const barWidgetContent = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  assert.ok(barWidgetContent.includes("setupGitRemoteProc"), "BarWidget.qml must declare setupGitRemoteProc");
+  assert.ok(barWidgetContent.includes("setup-git-remote.sh"), "BarWidget.qml must invoke setup-git-remote.sh");
+  assert.ok(
+    barWidgetContent.includes("function autoSetupGitRemote"),
+    "BarWidget.qml must define autoSetupGitRemote function"
+  );
+});
+
 
 

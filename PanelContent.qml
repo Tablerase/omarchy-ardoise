@@ -1918,6 +1918,18 @@ Item {
                   Item {
                     id: titleRowItem
                     width: parent.width
+
+                    // The expanded drawer reveals the whole title by wrapping it
+                    // across lines. When it does, the checkbox and the action
+                    // buttons stay pinned to the FIRST line (firstLineCenterY)
+                    // instead of floating to the wrapped block's vertical center.
+                    // Anchors cannot target a raw y offset, so they anchor to
+                    // parent and carry firstLineCenterOffset instead.
+                    readonly property bool titleWraps: titleLabel.visible && titleLabel.lineCount > 1
+                    readonly property real firstLineHeight: titleLabel.lineCount > 0 ? (titleLabel.height / titleLabel.lineCount) : Style.space(22)
+                    readonly property real firstLineCenterY: titleLabel.y + firstLineHeight / 2
+                    readonly property real firstLineCenterOffset: titleWraps ? (firstLineCenterY - height / 2) : 0
+
                     implicitHeight: Math.max(Style.space(22), Math.max(checkBtn.implicitHeight, Math.max(titleLabel.implicitHeight, Math.max(titleEditor.implicitHeight, rowActions.implicitHeight))))
                     height: implicitHeight
 
@@ -1926,6 +1938,7 @@ Item {
                       id: checkBtn
                       anchors.left: parent.left
                       anchors.verticalCenter: parent.verticalCenter
+                      anchors.verticalCenterOffset: titleRowItem.firstLineCenterOffset
                       checked: itemRow.isDone
                       isOverdue: itemRow.isOverdueTask
                       isDueToday: itemRow.isDueTodayTask
@@ -1944,6 +1957,7 @@ Item {
                       id: rowActions
                       anchors.right: parent.right
                       anchors.verticalCenter: parent.verticalCenter
+                      anchors.verticalCenterOffset: titleRowItem.firstLineCenterOffset
                       spacing: Style.space(4)
 
                       // Expand / Collapse details button
@@ -2029,6 +2043,7 @@ Item {
                       anchors.right: rowActions.left
                       anchors.rightMargin: Style.space(6)
                       anchors.verticalCenter: parent.verticalCenter
+                      anchors.verticalCenterOffset: titleRowItem.firstLineCenterOffset
                       verticalAlignment: Text.AlignVCenter
                       width: Math.min(implicitWidth, parent.width * 0.28)
                       text: "#" + (itemRow.modelData.profile || "")
@@ -2048,6 +2063,9 @@ Item {
                     }
 
                     // Title text (stretches cleanly between checkBtn and profInlineLabel/rowActions)
+                    // Collapsed: one line, elided, full text on hover. Expanded:
+                    // wraps across the full drawer width so the whole title is
+                    // readable instead of truncated.
                     Text {
                       id: titleLabel
                       visible: root.editingTaskId !== itemRow.modelData.id
@@ -2056,14 +2074,15 @@ Item {
                       anchors.right: profInlineLabel.visible ? profInlineLabel.left : rowActions.left
                       anchors.rightMargin: Style.space(6)
                       anchors.verticalCenter: parent.verticalCenter
-                      verticalAlignment: Text.AlignVCenter
+                      verticalAlignment: itemRow.isExpanded ? Text.AlignTop : Text.AlignVCenter
                       text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                       color: itemRow.isDone ? Color.muted : root.barForeground
                       opacity: itemRow.isDone ? 0.55 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption
                       font.bold: itemRow.isHeaderFocused
-                      elide: Text.ElideRight
+                      wrapMode: itemRow.isExpanded ? Text.Wrap : Text.NoWrap
+                      elide: itemRow.isExpanded ? Text.ElideNone : Text.ElideRight
 
                       Behavior on opacity {
                         NumberAnimation { duration: 180 }
@@ -2094,7 +2113,7 @@ Item {
                       }
 
                       PanelToolTip {
-                        visible: (titleHover.hovered || titleClickArea.containsMouse) && titleLabel.truncated
+                        visible: !itemRow.isExpanded && (titleHover.hovered || titleClickArea.containsMouse) && titleLabel.truncated
                         text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       }
@@ -2109,6 +2128,7 @@ Item {
                       anchors.right: profInlineLabel.visible ? profInlineLabel.left : rowActions.left
                       anchors.rightMargin: Style.space(6)
                       anchors.verticalCenter: parent.verticalCenter
+                      anchors.verticalCenterOffset: titleRowItem.firstLineCenterOffset
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption
                       color: root.barForeground
@@ -2143,7 +2163,11 @@ Item {
                       }
                     }
 
-                    // Strikethrough line that sweeps from left to right on completion
+                    // Strikethrough line that sweeps from left to right on completion.
+                    // Suppressed while the title wraps across several lines in the
+                    // drawer: one rule cannot strike a paragraph, so a completed
+                    // multi-line title relies on the dimmed text, the filled
+                    // TaskCheck, and the row completion tint instead.
                     Rectangle {
                       id: strikeLine
                       anchors.left: titleLabel.left
@@ -2151,7 +2175,7 @@ Item {
                       height: Style.space(1.5)
                       radius: height / 2
                       color: itemRow.isDone ? Color.muted : "transparent"
-                      visible: opacity > 0.01 && root.editingTaskId !== itemRow.modelData.id
+                      visible: opacity > 0.01 && root.editingTaskId !== itemRow.modelData.id && !titleRowItem.titleWraps
                       opacity: itemRow.isDone ? 0.8 : 0.0
                       width: itemRow.isDone ? Math.min(titleLabel.contentWidth, titleLabel.width) : 0
 

@@ -12,7 +12,9 @@ const {
   parseGitLog,
   buildCommitMessage,
   formatRelativeTime,
-  isValidRemoteUrl
+  isValidRemoteUrl,
+  filterSnapshots,
+  diagnoseGitSyncError
 } = GitSync;
 
 test("extractDeviceName: extracts device bracket tag or falls back to author", () => {
@@ -130,8 +132,6 @@ const FIXTURE_SNAPSHOTS = [
   }
 ];
 
-const { filterSnapshots } = GitSync;
-
 test("filterSnapshots: empty / whitespace query returns original array unchanged", () => {
   assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, ""), FIXTURE_SNAPSHOTS);
   assert.strictEqual(filterSnapshots(FIXTURE_SNAPSHOTS, "   "), FIXTURE_SNAPSHOTS);
@@ -221,3 +221,57 @@ test("filterSnapshots: query matching multiple snapshots", () => {
 test("filterSnapshots: empty snapshot array returns []", () => {
   assert.deepStrictEqual(filterSnapshots([], "omarchy"), []);
 });
+
+test("diagnoseGitSyncError: handles passphrase prompt output", () => {
+  const output = "Enter passphrase for key '/home/user/.ssh/id_ed25519':\nPermission denied (publickey).";
+  assert.equal(
+    diagnoseGitSyncError(output, 1),
+    "SSH key locked. Run 'ssh-add' in terminal to load key."
+  );
+});
+
+test("diagnoseGitSyncError: handles Permission denied (publickey)", () => {
+  const output = "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.";
+  assert.equal(
+    diagnoseGitSyncError(output, 1),
+    "SSH auth failed (Permission denied). Run 'ssh-add' or check GitHub keys."
+  );
+});
+
+test("diagnoseGitSyncError: handles couldn't find remote ref (empty repo)", () => {
+  const output = "fatal: couldn't find remote ref main";
+  assert.equal(
+    diagnoseGitSyncError(output, 128),
+    "Remote branch not found (empty remote repository)."
+  );
+});
+
+test("diagnoseGitSyncError: handles network disconnection", () => {
+  const output = "fatal: Could not resolve host: github.com";
+  assert.equal(
+    diagnoseGitSyncError(output, 1),
+    "Network offline: Could not connect to remote host."
+  );
+});
+
+test("diagnoseGitSyncError: handles repository not found", () => {
+  const output = "ERROR: Repository not found.\nfatal: Could not read from remote repository.";
+  assert.equal(
+    diagnoseGitSyncError(output, 1),
+    "Remote repository not found on GitHub."
+  );
+});
+
+test("diagnoseGitSyncError: handles general fatal error", () => {
+  const output = "fatal: unable to access 'https://github.com/repo': Failed to connect";
+  assert.equal(
+    diagnoseGitSyncError(output, 1),
+    "Network offline: Could not connect to remote host."
+  );
+});
+
+test("diagnoseGitSyncError: falls back cleanly on empty output", () => {
+  assert.equal(diagnoseGitSyncError("", 1), "Sync failed (exit code 1)");
+  assert.equal(diagnoseGitSyncError("", undefined), "Sync failed (check connection/auth)");
+});
+

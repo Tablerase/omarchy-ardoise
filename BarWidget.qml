@@ -46,6 +46,7 @@ BarWidget {
   property string remoteUrl: ""
   property string gitSyncStatus: "idle" // "idle" | "syncing" | "success" | "error"
   property string gitSyncMessage: ""
+  property string lastSyncOutput: ""
   property string recoveringHash: ""
   property string lastArchiveText: ""
 
@@ -319,15 +320,37 @@ BarWidget {
       "bash", "-c",
       "cd \"" + root.dataDirPath + "\" && " +
       "if git remote get-url origin >/dev/null 2>&1; then " +
-      "  git fetch origin main 2>&1 || exit 1; " +
-      "  LOCAL_HEAD=$(git rev-parse HEAD); " +
-      "  REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo \"$LOCAL_HEAD\"); " +
-      "  if [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then " +
-      "    git push origin main 2>&1 || exit 2; " +
-      "  elif [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ]; then " +
-      "    echo \"NEEDS_MERGE\"; " +
+      "  FETCH_OUT=$(git fetch origin main 2>&1); " +
+      "  FETCH_CODE=$?; " +
+      "  if [ $FETCH_CODE -ne 0 ]; then " +
+      "    if echo \"$FETCH_OUT\" | grep -qE \"couldn't find remote ref\"; then " +
+      "      PUSH_INIT_OUT=$(git push -u origin main 2>&1); " +
+      "      if [ $? -eq 0 ]; then " +
+      "        echo \"INITIALIZED_AND_PUSHED\"; " +
+      "      else " +
+      "        echo \"$PUSH_INIT_OUT\"; " +
+      "        exit 2; " +
+      "      fi; " +
+      "    else " +
+      "      echo \"$FETCH_OUT\"; " +
+      "      exit 1; " +
+      "    fi; " +
       "  else " +
-      "    echo \"UP_TO_DATE\"; " +
+      "    LOCAL_HEAD=$(git rev-parse HEAD); " +
+      "    REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo \"$LOCAL_HEAD\"); " +
+      "    if [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then " +
+      "      PUSH_OUT=$(git push origin main 2>&1); " +
+      "      if [ $? -eq 0 ]; then " +
+      "        echo \"UP_TO_DATE\"; " +
+      "      else " +
+      "        echo \"$PUSH_OUT\"; " +
+      "        exit 3; " +
+      "      fi; " +
+      "    elif [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ]; then " +
+      "      echo \"NEEDS_MERGE\"; " +
+      "    else " +
+      "      echo \"UP_TO_DATE\"; " +
+      "    fi; " +
       "  fi; " +
       "else " +
       "  echo \"NO_REMOTE\"; " +
@@ -337,8 +360,13 @@ BarWidget {
       waitForEnd: true
       onStreamFinished: {
         var out = text.trim()
+        root.lastSyncOutput = out
         if (out.indexOf("NEEDS_MERGE") !== -1) {
           mergeRemoteChangesProc.running = true
+        } else if (out.indexOf("INITIALIZED_AND_PUSHED") !== -1) {
+          root.gitSyncStatus = "success"
+          root.gitSyncMessage = "Initialized remote & pushed tasks"
+          root.refreshGitHistory()
         } else if (out.indexOf("UP_TO_DATE") !== -1 || out.indexOf("Everything up-to-date") !== -1) {
           root.gitSyncStatus = "success"
           root.gitSyncMessage = "Up to date"
@@ -352,7 +380,7 @@ BarWidget {
     onExited: function(code) {
       if (code !== 0) {
         root.gitSyncStatus = "error"
-        root.gitSyncMessage = "Sync failed (check connection/auth)"
+        root.gitSyncMessage = GitSync.diagnoseGitSyncError(root.lastSyncOutput, code)
       }
     }
   }
@@ -456,6 +484,52 @@ BarWidget {
     root.gitSyncMessage = "Syncing..."
     syncProcess.running = true
   }
+
+  Process {
+    id: setupGitRemoteProc
+    property string targetRepoName: "ardoise-tasks"
+    command: [
+      "bash", "-c",
+      "\"" + Qt.resolvedUrl("tools/setup-git-remote.sh").toString().replace(/^file:\/\//, "") +
+      "\" \"" + targetRepoName + "\" \"" + root.dataDirPath + "\""
+    ]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var res = JSON.parse(text)
+          if (res && res.success) {
+            root.remoteUrl = res.remoteUrl || ""
+            root.gitSyncStatus = "success"
+            root.gitSyncMessage = res.message || "Synced with GitHub"
+            root.refreshGitHistory()
+          } else {
+            root.gitSyncStatus = "error"
+            root.gitSyncMessage = (res && res.message) ? res.message : "GitHub setup failed"
+          }
+        } catch (_e) {
+          root.gitSyncStatus = "error"
+          root.gitSyncMessage = "Unexpected response from setup script"
+        }
+      }
+    }
+    onExited: function(code) {
+      if (code !== 0 && root.gitSyncStatus === "syncing") {
+        root.gitSyncStatus = "error"
+        root.gitSyncMessage = "GitHub setup failed (code " + code + ")"
+      }
+    }
+  }
+
+  function autoSetupGitRemote(repoName) {
+    if (setupGitRemoteProc.running) return "already_running"
+    root.gitSyncStatus = "syncing"
+    root.gitSyncMessage = "Setting up GitHub repository..."
+    setupGitRemoteProc.targetRepoName = (repoName && String(repoName).trim()) ? String(repoName).trim() : "ardoise-tasks"
+    setupGitRemoteProc.running = true
+    return "started"
+  }
+
 
   FileView {
     id: todoFile
@@ -628,6 +702,8 @@ BarWidget {
     function gitSearch(queryStr: string): string {
       return JSON.stringify(GitSync.filterSnapshots(root.gitSnapshots, queryStr || ""))
     }
+    function autoSetupGitRemote(repoName: string): string { return root.autoSetupGitRemote(repoName) }
+    function gitAutoSetup(repoName: string): string { return root.autoSetupGitRemote(repoName) }
   }
 
   WidgetButton {

@@ -18,7 +18,7 @@ Rectangle {
   property var snapshots: (root.barWidget && root.barWidget.gitSnapshots) ? root.barWidget.gitSnapshots : []
   property int selectedIndex: 0
   property int activeTab: 0 // 0: Snapshots & Rollback, 1: Sync Settings
-  property int syncFocusIndex: 0 // 0: remoteField, 1: saveRemoteBtn, 2: syncNowBtn
+  property int syncFocusIndex: 0 // 0: remoteField, 1: autoCreateRemoteBtn, 2: saveRemoteBtn, 3: syncNowBtn
   property string snapshotSection: "snapshots" // "snapshots" | "actions"
   property int actionButtonIndex: 0 // 0: rollback, 1: recover
   property alias contextMenu: contextMenu
@@ -336,12 +336,12 @@ Rectangle {
     } else if (root.activeTab === 1) {
       if (event.key === Qt.Key_Tab) {
         event.accepted = true
-        root.syncFocusIndex = (root.syncFocusIndex + 1) % 3
+        root.syncFocusIndex = (root.syncFocusIndex + 1) % 4
         return
       }
       if (event.key === Qt.Key_Backtab) {
         event.accepted = true
-        root.syncFocusIndex = (root.syncFocusIndex + 2) % 3
+        root.syncFocusIndex = (root.syncFocusIndex + 3) % 4
         return
       }
       if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
@@ -362,12 +362,16 @@ Rectangle {
         event.accepted = true
         if (root.syncFocusIndex === 1) {
           root.syncFocusIndex = 2
+        } else if (root.syncFocusIndex === 2) {
+          root.syncFocusIndex = 3
         }
         return
       }
       if (event.key === Qt.Key_H || event.key === Qt.Key_Left || event.text === "h") {
         event.accepted = true
-        if (root.syncFocusIndex === 2) {
+        if (root.syncFocusIndex === 3) {
+          root.syncFocusIndex = 2
+        } else if (root.syncFocusIndex === 2) {
           root.syncFocusIndex = 1
         } else {
           root.activeTab = 0
@@ -386,8 +390,10 @@ Rectangle {
         if (root.syncFocusIndex === 0) {
           remoteField.forceActiveFocus()
         } else if (root.syncFocusIndex === 1) {
-          saveRemoteBtn.clicked()
+          autoCreateRemoteBtn.clicked()
         } else if (root.syncFocusIndex === 2) {
+          saveRemoteBtn.clicked()
+        } else if (root.syncFocusIndex === 3) {
           syncNowBtn.clicked()
         }
         return
@@ -1043,11 +1049,33 @@ Rectangle {
           spacing: Style.space(8)
 
           Button {
+            id: autoCreateRemoteBtn
+            text: "󰊤 Create GitHub Repo"
+            fontSize: Style.font.caption
+            bordered: true
+            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 1)
+            onClicked: {
+              if (root.barWidget && typeof root.barWidget.autoSetupGitRemote === "function") {
+                root.barWidget.autoSetupGitRemote(remoteField.text)
+              }
+              root.forceActiveFocus()
+            }
+
+            HoverHandler { id: autoCreateHover }
+            ShortcutToolTip {
+              visible: autoCreateHover.hovered
+              description: "Create private repository on GitHub and push"
+              shortcut: "Enter"
+              fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            }
+          }
+
+          Button {
             id: saveRemoteBtn
             text: "Save Remote"
             fontSize: Style.font.caption
             bordered: true
-            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 1)
+            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 2)
             onClicked: {
               if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
                 root.barWidget.setRemoteUrl(remoteField.text)
@@ -1069,7 +1097,7 @@ Rectangle {
             text: "Sync Now"
             fontSize: Style.font.caption
             bordered: true
-            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 2)
+            hasCursor: (root.activeTab === 1) && (root.syncFocusIndex === 3)
             onClicked: {
               if (root.barWidget && typeof root.barWidget.syncWithRemote === "function") {
                 root.barWidget.syncWithRemote()

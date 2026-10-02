@@ -259,7 +259,7 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | **Queries** | `list`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount` |
 | **Profiles** | `setProfile` |
 | **Panel** | `open`, `close`, `toggle` |
-| **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch` |
+| **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |
 
 Notes:
 

@@ -206,6 +206,50 @@ function filterSnapshots(snapshots, query) {
   })
 }
 
+/**
+ * Diagnoses git sync failure output and returns a helpful, human-readable message.
+ * @param {string} rawOutput
+ * @param {number} [exitCode]
+ * @returns {string}
+ */
+function diagnoseGitSyncError(rawOutput, exitCode) {
+  var text = (rawOutput || "").trim()
+  if (!text) {
+    return exitCode ? "Sync failed (exit code " + exitCode + ")" : "Sync failed (check connection/auth)"
+  }
+  if (/passphrase/i.test(text)) {
+    return "SSH key locked. Run 'ssh-add' in terminal to load key."
+  }
+  if (/permission denied \(publickey\)/i.test(text)) {
+    return "SSH auth failed (Permission denied). Run 'ssh-add' or check GitHub keys."
+  }
+  if (/could not resolve host/i.test(text) || /failed to connect/i.test(text) || /network is unreachable/i.test(text)) {
+    return "Network offline: Could not connect to remote host."
+  }
+  if (/couldn't find remote ref/i.test(text)) {
+    return "Remote branch not found (empty remote repository)."
+  }
+  if (/repository not found/i.test(text)) {
+    return "Remote repository not found on GitHub."
+  }
+  if (/authentication failed/i.test(text) || /invalid username or password/i.test(text)) {
+    return "HTTP authentication failed. Check credentials."
+  }
+  if (/host key verification failed/i.test(text)) {
+    return "Host key verification failed. Connect via SSH once in terminal."
+  }
+  var fatalMatch = text.match(/fatal:\s*([^\n\r]+)/i)
+  if (fatalMatch && fatalMatch[1]) {
+    var msg = fatalMatch[1].trim()
+    return "Sync failed: " + msg.charAt(0).toUpperCase() + msg.slice(1)
+  }
+  var errMatch = text.match(/error:\s*([^\n\r]+)/i)
+  if (errMatch && errMatch[1]) {
+    return "Sync error: " + errMatch[1].trim()
+  }
+  return "Sync failed: " + text.split("\n")[0].substring(0, 80)
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     extractDeviceName,
@@ -215,6 +259,8 @@ if (typeof module !== "undefined" && module.exports) {
     buildCommitMessage,
     formatRelativeTime,
     isValidRemoteUrl,
-    filterSnapshots
+    filterSnapshots,
+    diagnoseGitSyncError
   }
 }
+
