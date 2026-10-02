@@ -416,7 +416,7 @@ Item {
     Logic.handleDelete(root)
   }
 
-  property int holdDuration: 600
+  property int holdDuration: 800
 
   function handleKeyRelease(key) {
     Logic.handleKeyRelease(root, key)

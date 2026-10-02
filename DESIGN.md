@@ -86,7 +86,7 @@ To preserve long-term maintainability and visual consistency across the main pan
 - **`ui/ProfileSelector.qml`**: Horizontal scrollable profile pill selector with profile glyphs, elided labels, active pop, smooth auto-scroll (`ensureVisible`), single-hue alpha fade gradient overlays (`fadeColor`, `z: 1`, 24 px left / 32 px right), and a thin 3 px horizontal `ScrollBar` (`policy: AsNeeded`) for mouse users. `implicitHeight: Style.space(26)`.
   - In expanded task drawer, `fadeColor` must be the **opaque composite** of `Color.menu.selectedBackground` (8% alpha tint) over `Color.popups.background`, computed as `root.expandedCardColor` in `PanelContent`. Passing the semi-transparent `selectedBackground` directly results in invisible gradients.
 - **`ui/KeyBadge.qml`**: Reusable keyboard shortcut badge component rendering key representations with pixel-perfect parity to the help guide (`Util.alpha(badgeColor, 0.15)` background fill, `badgeColor` border, monospace bold font, `radius: Style.space(4)`).
-- **Hold-to-Confirm Deletion & Clear**: Eliminates confirmation modals for destructive and batch actions (task deletion and clear completed) without sizing anomalies or optical misalignment. Features a 600ms hold timer with hardware-timed progress charging (0.0 -> 1.0) and smooth 180ms cancellation drain. For task deletion, holding <kbd>x</kbd> or pressing the remove button charges a 2px glowing red laser bar (`deleteLaserBar`, `Color.urgent`) along the bottom edge of the task card, accompanies it with a subtle warning card tint (`deleteTintOverlay`, `opacity: deleteProgress * 0.16`), and triggers card micro-shake at >60% charge, while keeping the delete button icon (`󰅙`) cleanly centered inside a standard 22x22 `PanelActionButton`. For clear completed, holding <kbd>c</kbd> or pressing Clear charges a 2px glowing accent laser bar (`clearLaserBar`, `Color.accent`) along the bottom edge of `clearBtn` accompanied by a subtle accent surface tint (`clearTintOverlay`), keeping `clearBtn` perfectly matched to adjacent footer buttons in size and padding.
+- **Hold-to-Confirm Deletion & Clear**: Eliminates confirmation modals for destructive and batch actions (task deletion and clear completed) without sizing anomalies or optical misalignment. Features a 800ms hold timer with hardware-timed progress charging (0.0 -> 1.0) and smooth 180ms cancellation drain. For task deletion, holding <kbd>x</kbd> or pressing the remove button charges a 2px glowing red laser bar (`deleteLaserBar`, `Color.urgent`) along the bottom edge of the task card, accompanies it with a subtle warning card tint (`deleteTintOverlay`, `opacity: deleteProgress * 0.16`), and triggers card micro-shake at >60% charge, while keeping the delete button icon (`󰅙`) cleanly centered inside a standard 22x22 `PanelActionButton`. For clear completed, holding <kbd>c</kbd> or pressing Clear charges a 2px glowing accent laser bar (`clearLaserBar`, `Color.accent`) along the bottom edge of `clearBtn` accompanied by a subtle accent surface tint (`clearTintOverlay`), keeping `clearBtn` perfectly matched to adjacent footer buttons in size and padding.
 
 ---
 
@@ -213,7 +213,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - **OmaTasks-Inspired Item Layout**:
        - Sizing is deterministic, content-driven, and dynamically compact:
          `implicitHeight: isExpanded ? (expandedContent.implicitHeight + Style.space(16)) : (Style.space(34) + (hasNotes ? Style.space(18) : 0) + (hasBadges ? Style.space(22) : 0))`
-        - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title + Inline Profile badge (`profInlineLabel`, shown in "all" view when the task has no chips) + Action buttons on the right (Expand chevron `󰅀`/`󰅃`, Edit title `󰏫`, and Hold-to-Delete `󰅙` via standard `PanelActionButton`). Task deletion requires holding for 600ms (<kbd>Hold x</kbd> or pointer press), charging a 2px glowing red laser line (`deleteLaserBar`, `Color.urgent`) along the card's bottom edge, applying a subtle warning card tint (`deleteTintOverlay`), and initiating a horizontal micro-shake at >60% charge, canceling cleanly with smooth 180ms drain if released early.
+        - **Line 1 (Title Row)**: Circular checkmark button (`checkBtn`) + Full-Width Title + Inline Profile badge (`profInlineLabel`, shown in "all" view when the task has no chips) + Action buttons on the right (Expand chevron `󰅀`/`󰅃`, Edit title `󰏫`, and Hold-to-Delete `󰅙` via standard `PanelActionButton`). Task deletion requires holding for 800ms (<kbd>Hold x</kbd> or pointer press), charging a 2px glowing red laser line (`deleteLaserBar`, `Color.urgent`) along the card's bottom edge, applying a subtle warning card tint (`deleteTintOverlay`), and initiating a horizontal micro-shake at >60% charge, canceling cleanly with smooth 180ms drain if released early.
         - **Expanded Drawer Title Reveal (`titleRowItem`)**:
           - Collapsed rows keep the title on one line (`wrapMode: Text.NoWrap`, `elide: Text.ElideRight`, `verticalAlignment: Text.AlignVCenter`) so the list stays scannable; the full text is available on hover via `PanelToolTip` and via the inline title editor.
           - Expanded rows switch the title to `wrapMode: Text.Wrap` + `elide: Text.ElideNone` + `verticalAlignment: Text.AlignTop`, so a long title is revealed in full across the drawer's width instead of being truncated. The row grows through the existing content-driven height chain (`titleLabel.implicitHeight` → `titleRowItem` → `itemHeaderCol` → `expandedContent` → `itemRow.implicitHeight`).
@@ -286,7 +286,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 5. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
-   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>Hold c</kbd> or pointer press for 600ms, charging a 2px `Color.accent` laser line along the bottom of the button with subtle surface tint, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open todos-archive.json in editor) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
+   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>Hold c</kbd> or pointer press for 800ms, charging a 2px `Color.accent` laser line along the bottom of the button with subtle surface tint, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open todos-archive.json in editor) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
 6. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`) wrapped in `BorderSurface`.
    - **Universal Input Handling**:
@@ -368,7 +368,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
 | **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
 | **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
-| **Panel** | `Hold c` / `C` | Archive and clear completed tasks in current profile (hold 600ms) |
+| **Panel** | `Hold c` / `C` | Archive and clear completed tasks in current profile (hold 800ms) |
 | **Panel** | `d` | Open the Archive browser (`ui/ArchiveModal.qml`) — restore completed tasks |
 | **Archive Modal** | `j` / `k` / `↓` / `↑` | Move the archived-task selection |
 | **Archive Modal** | `g` / `G` | Jump to first / last archived task |
@@ -379,7 +379,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Archive Modal** | `Escape` | Two-stage: clear a non-empty filter first, then dismiss the modal |
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |
-| **Panel** | `Hold x` / `Delete` | Delete highlighted task (hold 600ms) |
+| **Panel** | `Hold x` / `Delete` | Delete highlighted task (hold 800ms) |
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
@@ -473,12 +473,12 @@ ardoise.bind("a", "quick_add")
 | `jump_bottom` | `G` | Jump to last task |
 | `toggle_done` | `Space` | Toggle task completion status |
 | `toggle_expand` | `Return` | Expand / collapse task details drawer |
-| `delete_task` | `x` | Delete selected task (hold 600ms) |
+| `delete_task` | `x` | Delete selected task (hold 800ms) |
 | `edit_title` | `r`, `F2` | In-place edit of task title |
 | `task_menu` | `K` | Open the focused task's context menu |
 | `open_editor` | `e` | Open `todos.json` in default editor |
 | `git_undo` | `u` | Toggle Git Snapshots & Undo modal |
-| `clear_completed` | `c` | Archive and clear completed tasks in current profile (hold 600ms) |
+| `clear_completed` | `c` | Archive and clear completed tasks in current profile (hold 800ms) |
 | `open_archive` | `d` | Open the Archive browser (restore completed tasks) |
 | `focus_input` | `i`, `a` | Focus new task input field |
 | `search` | `/` | Activate panel search bar |
