@@ -1932,52 +1932,12 @@ Item {
                 }
               }
 
-              property real deleteProgress: 0.0
-              property bool deleteCharged: false
-
-              NumberAnimation {
-                id: deleteChargeAnim
-                target: itemRow
-                property: "deleteProgress"
-                to: 1.0
-                duration: root.holdDuration
-                easing.type: Easing.Linear
-                onFinished: {
-                  if (itemRow.deleteProgress >= 0.999) {
-                    itemRow.deleteCharged = true
-                    root.removeTodo(itemRow.modelData.id)
-                    itemRow.deleteProgress = 0.0
-                  }
-                }
-              }
-
-              NumberAnimation {
-                id: deleteDrainAnim
-                target: itemRow
-                property: "deleteProgress"
-                to: 0.0
-                duration: 180
-                easing.type: Easing.OutQuad
-              }
-
               function startDeleteCharge() {
-                if (root.holdDuration <= 0) {
-                  root.removeTodo(itemRow.modelData.id)
-                  return
-                }
-                if (deleteChargeAnim.running) {
-                  return
-                }
-                itemRow.deleteCharged = false
-                deleteDrainAnim.stop()
-                deleteChargeAnim.restart()
+                if (rowDeleteBtn) rowDeleteBtn.startCharging()
               }
 
               function stopDeleteCharge() {
-                deleteChargeAnim.stop()
-                if (!itemRow.deleteCharged && itemRow.deleteProgress > 0) {
-                  deleteDrainAnim.restart()
-                }
+                if (rowDeleteBtn) rowDeleteBtn.stopCharging()
               }
 
               width: parent.width
@@ -2016,7 +1976,7 @@ Item {
                 },
                 Translate {
                   id: rowShakeTranslate
-                  x: (itemRow.deleteProgress > 0.6) ? Math.sin(itemRow.deleteProgress * 50) * 1.5 : 0
+                  x: (rowDeleteBtn.progress > 0.6) ? Math.sin(rowDeleteBtn.progress * 50) * 1.5 : 0
                 }
               ]
 
@@ -2025,8 +1985,8 @@ Item {
                 anchors.fill: parent
                 radius: itemRow.radius
                 color: root.bar ? root.bar.urgent : Color.urgent
-                opacity: itemRow.deleteProgress * 0.16
-                visible: itemRow.deleteProgress > 0
+                opacity: rowDeleteBtn.progress * 0.16
+                visible: rowDeleteBtn.progress > 0
                 z: 0
               }
 
@@ -2034,11 +1994,11 @@ Item {
                 id: deleteLaserBar
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
-                height: Style.space(2)
-                width: parent.width * itemRow.deleteProgress
+                height: Style.space(3)
+                width: parent.width * rowDeleteBtn.progress
                 color: root.bar ? root.bar.urgent : Color.urgent
                 radius: Style.cornerRadius
-                visible: itemRow.deleteProgress > 0
+                visible: rowDeleteBtn.progress > 0
                 z: 10
               }
 
@@ -2250,25 +2210,20 @@ Item {
                       }
 
                       // Remove button (hold-to-confirm)
-                      PanelActionButton {
+                      Ui.HoldActionButton {
                         id: rowDeleteBtn
                         anchors.verticalCenter: parent.verticalCenter
-                        size: Style.space(22)
+                        compactSize: Style.space(22)
                         iconText: "󰅙"
-                        fontSize: Style.font.caption
+                        iconSize: Style.font.caption
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                        foreground: itemRow.deleteProgress > 0 ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted
-                        hoverColor: root.bar ? root.bar.urgent : Color.urgent
+                        foreground: rowDeleteBtn.progress > 0 ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted
+                        accent: root.bar ? root.bar.urgent : Color.urgent
                         tooltipText: ""
-
-                        MouseArea {
-                          anchors.fill: parent
-                          hoverEnabled: false
-                          cursorShape: Qt.PointingHandCursor
-                          onPressed: itemRow.startDeleteCharge()
-                          onReleased: itemRow.stopDeleteCharge()
-                          onCanceled: itemRow.stopDeleteCharge()
-                        }
+                        visualsEnabled: false
+                        holdDuration: root.holdDuration
+                        chargeColor: root.bar ? root.bar.urgent : Color.urgent
+                        onConfirmed: root.removeTodo(itemRow.modelData.id)
 
                         HoverHandler { id: rowDeleteHover }
                         Ui.ShortcutToolTip {
@@ -2922,7 +2877,7 @@ Item {
         spacing: Style.space(4)
         clip: true
 
-        Button {
+        Ui.HoldActionButton {
           id: clearBtn
           iconText: "󰃢"
           text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
@@ -2930,85 +2885,9 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
           tooltipText: ""
-
-          property real clearProgress: 0.0
-          property bool clearCharged: false
-
-          NumberAnimation {
-            id: clearChargeAnim
-            target: clearBtn
-            property: "clearProgress"
-            to: 1.0
-            duration: root.holdDuration
-            easing.type: Easing.Linear
-            onFinished: {
-              if (clearBtn.clearProgress >= 0.999) {
-                clearBtn.clearCharged = true
-                root.clearCompleted(root.currentFilter)
-                clearBtn.clearProgress = 0.0
-              }
-            }
-          }
-
-          NumberAnimation {
-            id: clearDrainAnim
-            target: clearBtn
-            property: "clearProgress"
-            to: 0.0
-            duration: 180
-            easing.type: Easing.OutQuad
-          }
-
-          function startCharging() {
-            if (root.holdDuration <= 0) {
-              root.clearCompleted(root.currentFilter)
-              return
-            }
-            if (clearChargeAnim.running) {
-              return
-            }
-            clearBtn.clearCharged = false
-            clearDrainAnim.stop()
-            clearChargeAnim.restart()
-          }
-
-          function stopCharging() {
-            clearChargeAnim.stop()
-            if (!clearBtn.clearCharged && clearBtn.clearProgress > 0) {
-              clearDrainAnim.restart()
-            }
-          }
-
-          Rectangle {
-            id: clearTintOverlay
-            anchors.fill: parent
-            radius: clearBtn.radius
-            color: Color.accent
-            opacity: clearBtn.clearProgress * 0.16
-            visible: clearBtn.clearProgress > 0
-            z: 0
-          }
-
-          Rectangle {
-            id: clearLaserBar
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-            height: Style.space(2)
-            width: parent.width * clearBtn.clearProgress
-            color: Color.accent
-            radius: clearBtn.radius
-            visible: clearBtn.clearProgress > 0
-            z: 10
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            hoverEnabled: false
-            cursorShape: Qt.PointingHandCursor
-            onPressed: clearBtn.startCharging()
-            onReleased: clearBtn.stopCharging()
-            onCanceled: clearBtn.stopCharging()
-          }
+          holdDuration: root.holdDuration
+          chargeColor: Color.accent
+          onConfirmed: root.clearCompleted(root.currentFilter)
 
           HoverHandler { id: clearBtnHover }
           Ui.ShortcutToolTip {

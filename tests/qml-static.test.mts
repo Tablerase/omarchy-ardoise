@@ -912,31 +912,31 @@ test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wir
   );
 });
 
-test("Hold-to-Confirm Deletion & Clear Integrity: Laser progress bar, card tint overlay, and key release wiring", () => {
+test("Hold-to-Confirm Deletion & Clear Integrity: HoldActionButton laser bar, card tint overlay, and key release wiring", () => {
+  const holdButtonPath = path.join(repoDir, "ui", "HoldActionButton.qml");
+  assert.ok(fs.existsSync(holdButtonPath), "ui/HoldActionButton.qml must exist");
+
+  const holdBtn = fs.readFileSync(holdButtonPath, "utf8");
+  assert.ok(holdBtn.includes("signal confirmed()"), "HoldActionButton must emit confirmed() signal on completion");
+  assert.ok(holdBtn.includes("function startCharging()"), "HoldActionButton must implement startCharging()");
+  assert.ok(holdBtn.includes("function stopCharging()"), "HoldActionButton must implement stopCharging()");
+  assert.ok(holdBtn.includes("id: laserBar"), "HoldActionButton must implement bottom laser bar");
+  assert.ok(holdBtn.includes("id: tintOverlay"), "HoldActionButton must implement surface tint overlay");
+  assert.ok(holdBtn.includes("readonly property real progress:"), "HoldActionButton must expose progress");
+  assert.ok(holdBtn.includes("drainAnim"), "HoldActionButton must implement drainAnim for 180ms cancellation drain");
+
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
 
-  // Laser bars and surface tint
+  // Task row delete: laser bar and tint on itemRow, driven by rowDeleteBtn.progress
   assert.ok(panelContent.includes("id: deleteLaserBar"), "PanelContent must implement deleteLaserBar on task row");
   assert.ok(panelContent.includes("id: deleteTintOverlay"), "PanelContent must implement deleteTintOverlay on task row");
-  assert.ok(panelContent.includes("property real deleteProgress: 0.0"), "PanelContent must track deleteProgress on itemRow");
-  assert.ok(panelContent.includes("id: deleteChargeAnim"), "PanelContent must have deleteChargeAnim for linear charge");
-  assert.ok(panelContent.includes("id: deleteDrainAnim"), "PanelContent must have deleteDrainAnim for ease-out cancellation drain");
+  assert.ok(panelContent.includes("rowDeleteBtn.progress"), "PanelContent laser and tint must bind to rowDeleteBtn.progress");
   assert.ok(panelContent.includes("rowShakeTranslate"), "PanelContent must include micro-shake transform on task row");
 
-  assert.ok(panelContent.includes("id: clearLaserBar"), "PanelContent must implement clearLaserBar on clearBtn");
-  assert.ok(panelContent.includes("id: clearTintOverlay"), "PanelContent must implement clearTintOverlay on clearBtn");
-  assert.ok(panelContent.includes("property real clearProgress: 0.0"), "clearBtn must track clearProgress");
-  assert.ok(panelContent.includes("id: clearChargeAnim"), "clearBtn must have clearChargeAnim for linear charge");
-  assert.ok(panelContent.includes("id: clearDrainAnim"), "clearBtn must have clearDrainAnim for ease-out cancellation drain");
-
-  // Buttons use standard kit components without sizing or optical centering anomalies
+  // clearBtn is a HoldActionButton with its own laserBar via visualsEnabled
   assert.ok(
-    panelContent.includes("PanelActionButton {\n                        id: rowDeleteBtn"),
-    "PanelContent must use standard PanelActionButton for rowDeleteBtn"
-  );
-  assert.ok(
-    panelContent.includes("Button {\n          id: clearBtn"),
-    "PanelContent must use standard Button for clearBtn"
+    panelContent.includes("Ui.HoldActionButton {\n          id: clearBtn"),
+    "PanelContent must use HoldActionButton for clearBtn"
   );
 
   assert.ok(
