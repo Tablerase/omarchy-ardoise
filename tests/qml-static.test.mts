@@ -912,28 +912,33 @@ test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wir
   );
 });
 
-test("Hold-to-Confirm Deletion & Clear Integrity: HoldActionButton component, radial arc, and key release wiring", () => {
-  const holdButtonPath = path.join(repoDir, "ui", "HoldActionButton.qml");
-  assert.ok(fs.existsSync(holdButtonPath), "ui/HoldActionButton.qml must exist");
-
-  const holdButtonContent = fs.readFileSync(holdButtonPath, "utf8");
-  assert.ok(holdButtonContent.includes("holdDuration: 600"), "HoldActionButton must default holdDuration to 600ms");
-  assert.ok(holdButtonContent.includes("drainDuration: 180"), "HoldActionButton must default drainDuration to 180ms");
-  assert.ok(holdButtonContent.includes("signal triggered()"), "HoldActionButton must emit triggered signal on completion");
-  assert.ok(holdButtonContent.includes("function startCharging()"), "HoldActionButton must implement startCharging()");
-  assert.ok(holdButtonContent.includes("function stopCharging()"), "HoldActionButton must implement stopCharging()");
-  assert.ok(holdButtonContent.includes("arcCanvas"), "HoldActionButton must use Canvas for radial progress arc");
-  assert.ok(holdButtonContent.includes("shakeTranslate"), "HoldActionButton must implement micro-shake animation when charging");
-
+test("Hold-to-Confirm Deletion & Clear Integrity: Laser progress bar, card tint overlay, and key release wiring", () => {
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+
+  // Laser bars and surface tint
+  assert.ok(panelContent.includes("id: deleteLaserBar"), "PanelContent must implement deleteLaserBar on task row");
+  assert.ok(panelContent.includes("id: deleteTintOverlay"), "PanelContent must implement deleteTintOverlay on task row");
+  assert.ok(panelContent.includes("property real deleteProgress: 0.0"), "PanelContent must track deleteProgress on itemRow");
+  assert.ok(panelContent.includes("id: deleteChargeAnim"), "PanelContent must have deleteChargeAnim for linear charge");
+  assert.ok(panelContent.includes("id: deleteDrainAnim"), "PanelContent must have deleteDrainAnim for ease-out cancellation drain");
+  assert.ok(panelContent.includes("rowShakeTranslate"), "PanelContent must include micro-shake transform on task row");
+
+  assert.ok(panelContent.includes("id: clearLaserBar"), "PanelContent must implement clearLaserBar on clearBtn");
+  assert.ok(panelContent.includes("id: clearTintOverlay"), "PanelContent must implement clearTintOverlay on clearBtn");
+  assert.ok(panelContent.includes("property real clearProgress: 0.0"), "clearBtn must track clearProgress");
+  assert.ok(panelContent.includes("id: clearChargeAnim"), "clearBtn must have clearChargeAnim for linear charge");
+  assert.ok(panelContent.includes("id: clearDrainAnim"), "clearBtn must have clearDrainAnim for ease-out cancellation drain");
+
+  // Buttons use standard kit components without sizing or optical centering anomalies
   assert.ok(
-    panelContent.includes("Ui.HoldActionButton {\n                        id: rowDeleteBtn"),
-    "PanelContent must use HoldActionButton for rowDeleteBtn"
+    panelContent.includes("PanelActionButton {\n                        id: rowDeleteBtn"),
+    "PanelContent must use standard PanelActionButton for rowDeleteBtn"
   );
   assert.ok(
-    panelContent.includes("Ui.HoldActionButton {\n          id: clearBtn"),
-    "PanelContent must use HoldActionButton for clearBtn"
+    panelContent.includes("Button {\n          id: clearBtn"),
+    "PanelContent must use standard Button for clearBtn"
   );
+
   assert.ok(
     panelContent.includes("function startDeleteHold") && panelContent.includes("function stopDeleteHold"),
     "PanelContent must implement startDeleteHold and stopDeleteHold"
@@ -947,4 +952,94 @@ test("Hold-to-Confirm Deletion & Clear Integrity: HoldActionButton component, ra
   assert.ok(panelQml.includes("Keys.onReleased:"), "Panel.qml must implement Keys.onReleased on keyCatcher");
   assert.ok(panelQml.includes('panelContent.handleKeyRelease("x")'), "Panel.qml must dispatch key release for x");
   assert.ok(panelQml.includes('panelContent.handleKeyRelease("c")'), "Panel.qml must dispatch key release for c");
+});
+
+test("Task Context Menu & Archive Browser: contracts for components, IPC, and large-archive handling", () => {
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const panelLogic = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const taskMenu = fs.readFileSync(path.join(repoDir, "ui", "TaskContextMenu.qml"), "utf8");
+  const archiveModal = fs.readFileSync(path.join(repoDir, "ui", "ArchiveModal.qml"), "utf8");
+  const design = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoDir, "README.md"), "utf8");
+  const bindingsTemplate = fs.readFileSync(path.join(repoDir, "tools", "default-bindings.lua"), "utf8");
+
+  // Task context menu: rendered by the component, driven by PanelLogic.
+  assert.ok(
+    taskMenu.includes("function clampedX()") &&
+      taskMenu.includes("function clampedY()") &&
+      taskMenu.includes("x: root.clampedX()") &&
+      taskMenu.includes("y: root.clampedY()") &&
+      taskMenu.includes("KeyBadge"),
+    "TaskContextMenu must clamp its card inside the panel and render key badges"
+  );
+  assert.ok(
+    !/^\s*focus:\s*true/m.test(taskMenu),
+    "TaskContextMenu must stay non-modal so PanelKeyCatcher keeps routing keys to PanelLogic"
+  );
+  assert.ok(
+    panelLogic.includes("task_menu: [\"K\"]") &&
+      panelLogic.includes("var TASK_MENU_ITEMS = [") &&
+      panelLogic.includes("function getTaskMenuItems(task)") &&
+      panelLogic.includes("function taskMenuActionForKey(text)"),
+    "PanelLogic must own the task menu action model and key mapping"
+  );
+  assert.ok(
+    panelLogic.includes("if (root.showTaskMenu) {") &&
+      panelLogic.includes("if (root.showTaskMenu) return;") &&
+      panelLogic.includes("root.activateTaskMenuItem(\"delete_task\")"),
+    "PanelLogic must route move/return/delete/escape through the open task menu"
+  );
+  assert.ok(
+    panelContent.includes("function openTaskMenu()") &&
+      panelContent.includes("function activateTaskMenuItem(actionId)") &&
+      panelContent.includes("TodoStore.formatTaskForLLM(task)") &&
+      panelContent.includes("Quickshell.execDetached([\"bash\", \"-c\", \"printf %s \" + Util.shellQuote(text) + \" | wl-copy\"])") &&
+      panelContent.includes("Ui.TaskContextMenu {") &&
+      panelContent.includes("onItemActivated: function(actionId) { root.activateTaskMenuItem(actionId) }"),
+    "PanelContent must open the menu, dispatch actions, and copy via wl-copy with feedback"
+  );
+
+  // Archive browser: virtualized list + restore IPC + large-archive strategy.
+  assert.ok(
+    archiveModal.includes("ListView {") &&
+      archiveModal.includes("model: root.filteredArchived") &&
+      archiveModal.includes("positionViewAtIndex") &&
+      archiveModal.includes("cacheBuffer") &&
+      !archiveModal.includes("Repeater {"),
+    "ArchiveModal must render through a virtualized ListView, never a Repeater, for large archives"
+  );
+  assert.ok(
+    archiveModal.includes("TodoStore.getArchivedTasks(raw)") &&
+      archiveModal.includes("TodoStore.filterArchivedTasks(root.archivedTasks, root.searchQuery)") &&
+      archiveModal.includes("barWidget.unarchiveTask(task.id)") &&
+      archiveModal.includes("Splice instead of re-parsing"),
+    "ArchiveModal must parse once on open, filter in memory, and splice after a restore"
+  );
+  assert.ok(
+    barWidget.includes("function unarchiveTask(id)") &&
+      barWidget.includes("function unarchive(id: string): string"),
+    "BarWidget must expose the unarchive IPC that restores and commits both files"
+  );
+  assert.ok(
+    panelContent.includes("function openArchiveModal()") &&
+      panelContent.includes("Ui.ArchiveModal {") &&
+      panelContent.includes("root.showArchiveModal ||") &&
+      panelContent.includes("onClicked: root.openArchiveModal()"),
+    "PanelContent must mount the archive modal, block keys while open, and wire the footer button"
+  );
+  assert.ok(
+    readme.includes("`unarchive`") && readme.includes("**24 shell commands**"),
+    "README must document the unarchive command and the updated command count"
+  );
+  assert.ok(
+    design.includes("ui/TaskContextMenu.qml") &&
+      design.includes("ui/ArchiveModal.qml") &&
+      design.includes("virtualized `ListView`"),
+    "DESIGN.md must document both new components and the archive virtualization strategy"
+  );
+  assert.ok(
+    bindingsTemplate.includes("task_menu"),
+    "the bindings template must document the task_menu action"
+  );
 });

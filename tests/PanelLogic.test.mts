@@ -24,6 +24,8 @@ const {
   handleKeyRelease,
   handleTextKey,
   DEFAULT_BINDINGS,
+  getTaskMenuItems,
+  taskMenuActionForKey,
   normalizeKey,
   resolveBindings
 } = PanelLogic;
@@ -716,3 +718,117 @@ test("getKeybindingsList: formats custom keys in catalog dynamically", () => {
 });
 
 
+
+test("task context menu: K opens, j/k navigates, Enter/Space activate, Esc closes, stray keys are swallowed", () => {
+  const store = TodoStore.addTodo(TodoStore.defaultStore(), "Menu task", "some notes", "personal", null);
+  const task = store.todos[0];
+
+  let activated: string[] = [];
+  const mockRoot: any = {
+    store,
+    filteredTodos: store.todos,
+    cursorIndex: 0,
+    cursorActive: true,
+    mouseMovementDetected: false,
+    focusSection: "tasks",
+    expandedTaskId: -1,
+    expandedViaKeyboard: false,
+    expandedSubSection: "header",
+    showTaskMenu: false,
+    taskMenuIndex: 0,
+    taskMenuItems: [],
+    openTaskMenu: () => {
+      mockRoot.taskMenuItems = getTaskMenuItems(task);
+      mockRoot.taskMenuIndex = 0;
+      mockRoot.showTaskMenu = true;
+    },
+    closeTaskMenu: () => { mockRoot.showTaskMenu = false; mockRoot.taskMenuIndex = 0; },
+    activateTaskMenuItem: (id?: string) => {
+      const action = id || (mockRoot.taskMenuItems[mockRoot.taskMenuIndex] || {}).id;
+      activated.push(action);
+      mockRoot.showTaskMenu = false;
+    }
+  };
+
+  // K opens the menu on a focused task.
+  handleTextKey(mockRoot, "K", TodoStore);
+  assert.equal(mockRoot.showTaskMenu, true);
+  assert.ok(mockRoot.taskMenuItems.length >= 4);
+
+  // j/k move the selection and clamp at the ends.
+  handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.taskMenuIndex, 1);
+  handleMove(mockRoot, 0, -1, TodoStore);
+  handleMove(mockRoot, 0, -1, TodoStore);
+  assert.equal(mockRoot.taskMenuIndex, 0, "selection clamps at the top");
+  const last = mockRoot.taskMenuItems.length - 1;
+  for (let i = 0; i < mockRoot.taskMenuItems.length + 3; i++) handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.taskMenuIndex, last, "selection clamps at the bottom");
+
+  // Enter is delivered as return + activate: handleReturn must NOT consume it.
+  mockRoot.taskMenuIndex = 0;
+  handleReturn(mockRoot, TodoStore);
+  assert.equal(mockRoot.showTaskMenu, true, "handleReturn must leave the menu open for handleActivate");
+  assert.equal(activated.length, 0);
+  handleActivate(mockRoot, TodoStore);
+  assert.deepEqual(activated, ["copy_llm"]);
+  assert.equal(mockRoot.showTaskMenu, false, "activation closes the menu");
+
+  // y runs copy-for-LLM directly.
+  handleTextKey(mockRoot, "K", TodoStore);
+  handleTextKey(mockRoot, "y", TodoStore);
+  assert.deepEqual(activated, ["copy_llm", "copy_llm"]);
+
+  // Stray printable keys are swallowed, not routed to task navigation.
+  handleTextKey(mockRoot, "K", TodoStore);
+  mockRoot.focusSection = "tasks";
+  handleTextKey(mockRoot, "z", TodoStore);
+  assert.equal(mockRoot.showTaskMenu, true, "an unknown key must not close or act on the menu");
+
+  // Esc closes the menu first.
+  assert.equal(handleEscape(mockRoot), true);
+  assert.equal(mockRoot.showTaskMenu, false);
+
+  // x is routed through handleDelete while the menu is open.
+  mockRoot.showTaskMenu = true;
+  mockRoot.taskMenuItems = getTaskMenuItems(task);
+  handleDelete(mockRoot);
+  assert.equal(activated[activated.length - 1], "delete_task");
+  assert.equal(mockRoot.showTaskMenu, false);
+});
+
+test("task context menu: getTaskMenuItems adapts to the task and taskMenuActionForKey maps keys", () => {
+  const bare = getTaskMenuItems({ title: "Bare", description: "", location: null });
+  const ids = bare.map((i: any) => i.id);
+  assert.ok(ids.includes("copy_llm"));
+  assert.ok(ids.includes("edit_title"));
+  assert.ok(ids.includes("delete_task"));
+  assert.ok(!ids.includes("copy_notes"), "no notes -> no copy-notes item");
+  assert.ok(!ids.includes("open_codebase"), "no local path -> no open-codebase item");
+
+  const rich = getTaskMenuItems({ title: "Rich", description: "notes", location: { localPath: "/tmp/x" } });
+  const richIds = rich.map((i: any) => i.id);
+  assert.ok(richIds.includes("copy_notes"));
+  assert.ok(richIds.includes("open_codebase"));
+
+  assert.equal(taskMenuActionForKey("y"), "copy_llm");
+  assert.equal(taskMenuActionForKey("T"), "copy_title");
+  assert.equal(taskMenuActionForKey("n"), "copy_notes");
+  assert.equal(taskMenuActionForKey("o"), "open_codebase");
+  assert.equal(taskMenuActionForKey("e"), "edit_title");
+  assert.equal(taskMenuActionForKey("x"), "delete_task");
+  assert.equal(taskMenuActionForKey("z"), null);
+});
+
+test("task context menu: K is a documented default action that does not collide with existing keys", () => {
+  assert.deepEqual(DEFAULT_BINDINGS.task_menu, ["K"]);
+  // resolveBindings must keep uppercase K distinct from lowercase k.
+  const resolved = resolveBindings({});
+  assert.equal(resolved.keyToAction["K"], "task_menu");
+  assert.equal(resolved.keyToAction["k"], "prev_task");
+
+  const list = getKeybindingsList("SUPER+ALT+T", "SUPER+SHIFT+T", resolved);
+  const menuItem = list.find((item: any) => item.desc.includes("context menu"));
+  assert.ok(menuItem, "the help catalog must document the task menu action");
+  assert.ok(menuItem.key.includes("K"));
+});

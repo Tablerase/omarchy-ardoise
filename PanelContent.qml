@@ -36,6 +36,8 @@ Item {
   readonly property var profiles: store ? (store.profiles || ["personal", "work"]) : ["personal", "work"]
   readonly property var visibleProfiles: TodoStore.getSortedProfiles(root.store, true, root.currentFilter)
   property alias gitModal: gitModal
+  property alias archiveModal: archiveModal
+  property alias taskMenu: taskMenu
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   // Late-task severity, read by the header ArdoiseIcon (which owns the theme
@@ -135,6 +137,14 @@ Item {
   property int footerButtonIndex: 0
   property bool showKeyHelp: false
   property bool showGitModal: false
+  property bool showArchiveModal: false
+  property bool showTaskMenu: false
+  property int taskMenuIndex: 0
+  property var taskMenuItems: []
+  property real taskMenuAnchorX: 0
+  property real taskMenuAnchorY: 0
+  property string taskMenuTitle: ""
+  property string taskMenuMeta: ""
   property string keyHelpSearch: ""
   property string searchQuery: ""
   property bool searchActive: false
@@ -263,6 +273,8 @@ Item {
       focusSection = "tasks"
       showKeyHelp = false
       showGitModal = false
+      showArchiveModal = false
+      closeTaskMenu()
       searchActive = false
       searchQuery = ""
       if (typeof searchField !== "undefined" && searchField) {
@@ -575,9 +587,11 @@ Item {
     addingProfile ||
     root.showKeyHelp ||
     root.showGitModal ||
+    root.showArchiveModal ||
     (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
     (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus)) ||
-    (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen)
+    (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen) ||
+    (typeof archiveModal !== "undefined" && archiveModal && archiveModal.isOpen)
   )
 
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
@@ -778,11 +792,93 @@ Item {
     syncFilteredTodos()
   }
 
-  function openArchive() {
+  // ---- Task context menu (K) -------------------------------------------------
+  // Selection/navigation live in PanelLogic; this owns state + action dispatch.
+  function currentTask() {
+    if (root.filteredTodos && root.cursorIndex >= 0 && root.cursorIndex < root.filteredTodos.length) {
+      return root.filteredTodos[root.cursorIndex]
+    }
+    return null
+  }
+
+  function openTaskMenu() {
+    if (root.focusSection !== "tasks") return
+    var task = root.currentTask()
+    if (!task) return
+    root.savePendingNotes()
+    root.taskMenuItems = Logic.getTaskMenuItems(task)
+    root.taskMenuIndex = 0
+    root.taskMenuTitle = TodoStore.capitalizeTitle(String(task.title || ""))
+    var meta = []
+    if (task.profile) meta.push("#" + task.profile)
+    if (task.repo) meta.push(root.cleanRepoName(task.repo))
+    root.taskMenuMeta = meta.join("  ")
+    var item = (typeof todoListRepeater !== "undefined" && todoListRepeater && root.cursorIndex < todoListRepeater.count)
+      ? todoListRepeater.itemAt(root.cursorIndex)
+      : null
+    if (item) {
+      var p = item.mapToItem(root, item.width, item.height / 2)
+      root.taskMenuAnchorX = p.x
+      root.taskMenuAnchorY = p.y
+    } else {
+      root.taskMenuAnchorX = root.width
+      root.taskMenuAnchorY = root.height / 2
+    }
+    root.showTaskMenu = true
+  }
+
+  function closeTaskMenu() {
+    root.showTaskMenu = false
+    root.taskMenuIndex = 0
+  }
+
+  function copyToClipboard(text, label) {
+    if (!text) return
+    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
+    Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", label || ""])
+  }
+
+  function activateTaskMenuItem(actionId) {
+    var task = root.currentTask()
+    var id = actionId || (root.taskMenuItems && root.taskMenuItems[root.taskMenuIndex] ? root.taskMenuItems[root.taskMenuIndex].id : "")
+    root.closeTaskMenu()
+    if (!task || !id) return
+    if (id === "copy_llm") {
+      root.copyToClipboard(TodoStore.formatTaskForLLM(task), "Task copied for LLM")
+    } else if (id === "copy_title") {
+      root.copyToClipboard(TodoStore.capitalizeTitle(String(task.title || "")), "Title copied")
+    } else if (id === "copy_notes") {
+      root.copyToClipboard(String(task.description || ""), "Notes copied")
+    } else if (id === "open_codebase") {
+      root.openCodebase(task)
+    } else if (id === "edit_title") {
+      root.focusSection = "tasks"
+      root.cursorActive = true
+      root.startEditingTask(task.id)
+    } else if (id === "delete_task") {
+      root.removeTodo(task.id)
+    }
+  }
+
+  // ---- Archive browser (d) ---------------------------------------------------
+  function openArchiveModal() {
+    root.savePendingNotes()
+    root.showArchiveModal = true
+  }
+
+  function closeArchiveModal() {
+    root.showArchiveModal = false
+  }
+
+  function openArchiveInEditor() {
     savePendingNotes()
     var p = barWidget ? barWidget.archiveFilePath : (Quickshell.env("HOME") + "/.config/omarchy/tablerase.ardoise/todos-archive.json")
     if (bar) bar.run("omarchy-launch-editor " + p)
     root.closeRequested()
+  }
+
+  function openArchive() {
+    root.openArchiveModal()
   }
 
   function openEditor(taskId) {
@@ -1836,15 +1932,51 @@ Item {
                 }
               }
 
-              function startDeleteCharge() {
-                if (rowDeleteBtn && rowDeleteBtn.startCharging) {
-                  rowDeleteBtn.startCharging()
+              property real deleteProgress: 0.0
+              property bool deleteCharged: false
+
+              NumberAnimation {
+                id: deleteChargeAnim
+                target: itemRow
+                property: "deleteProgress"
+                to: 1.0
+                duration: root.holdDuration
+                easing.type: Easing.Linear
+                onFinished: {
+                  if (itemRow.deleteProgress >= 0.999) {
+                    itemRow.deleteCharged = true
+                    root.removeTodo(itemRow.modelData.id)
+                    itemRow.deleteProgress = 0.0
+                  }
                 }
               }
 
+              NumberAnimation {
+                id: deleteDrainAnim
+                target: itemRow
+                property: "deleteProgress"
+                to: 0.0
+                duration: 180
+                easing.type: Easing.OutQuad
+              }
+
+              function startDeleteCharge() {
+                if (root.holdDuration <= 0) {
+                  root.removeTodo(itemRow.modelData.id)
+                  return
+                }
+                if (deleteChargeAnim.running) {
+                  return
+                }
+                itemRow.deleteCharged = false
+                deleteDrainAnim.stop()
+                deleteChargeAnim.restart()
+              }
+
               function stopDeleteCharge() {
-                if (rowDeleteBtn && rowDeleteBtn.stopCharging) {
-                  rowDeleteBtn.stopCharging()
+                deleteChargeAnim.stop()
+                if (!itemRow.deleteCharged && itemRow.deleteProgress > 0) {
+                  deleteDrainAnim.restart()
                 }
               }
 
@@ -1873,13 +2005,41 @@ Item {
                 NumberAnimation { duration: 220 }
               }
 
-              transform: Translate {
-                id: rowSlideTranslate
-                y: delegateRoot.isSlidingOut ? Style.space(24) : 0
+              transform: [
+                Translate {
+                  id: rowSlideTranslate
+                  y: delegateRoot.isSlidingOut ? Style.space(24) : 0
 
-                Behavior on y {
-                  NumberAnimation { duration: 250; easing.type: Easing.InCubic }
+                  Behavior on y {
+                    NumberAnimation { duration: 250; easing.type: Easing.InCubic }
+                  }
+                },
+                Translate {
+                  id: rowShakeTranslate
+                  x: (itemRow.deleteProgress > 0.6) ? Math.sin(itemRow.deleteProgress * 50) * 1.5 : 0
                 }
+              ]
+
+              Rectangle {
+                id: deleteTintOverlay
+                anchors.fill: parent
+                radius: itemRow.radius
+                color: root.bar ? root.bar.urgent : Color.urgent
+                opacity: itemRow.deleteProgress * 0.16
+                visible: itemRow.deleteProgress > 0
+                z: 0
+              }
+
+              Rectangle {
+                id: deleteLaserBar
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                height: Style.space(2)
+                width: parent.width * itemRow.deleteProgress
+                color: root.bar ? root.bar.urgent : Color.urgent
+                radius: Style.cornerRadius
+                visible: itemRow.deleteProgress > 0
+                z: 10
               }
 
               Component.onCompleted: {
@@ -2090,20 +2250,24 @@ Item {
                       }
 
                       // Remove button (hold-to-confirm)
-                      Ui.HoldActionButton {
+                      PanelActionButton {
                         id: rowDeleteBtn
                         anchors.verticalCenter: parent.verticalCenter
                         size: Style.space(22)
                         iconText: "󰅙"
                         fontSize: Style.font.caption
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                        foreground: Color.muted
+                        foreground: itemRow.deleteProgress > 0 ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted
                         hoverColor: root.bar ? root.bar.urgent : Color.urgent
-                        chargeColor: root.bar ? root.bar.urgent : Color.urgent
-                        holdDuration: root.holdDuration
                         tooltipText: ""
-                        onTriggered: {
-                          root.removeTodo(itemRow.modelData.id)
+
+                        MouseArea {
+                          anchors.fill: parent
+                          hoverEnabled: false
+                          cursorShape: Qt.PointingHandCursor
+                          onPressed: itemRow.startDeleteCharge()
+                          onReleased: itemRow.stopDeleteCharge()
+                          onCanceled: itemRow.stopDeleteCharge()
                         }
 
                         HoverHandler { id: rowDeleteHover }
@@ -2758,17 +2922,93 @@ Item {
         spacing: Style.space(4)
         clip: true
 
-        Ui.HoldActionButton {
+        Button {
           id: clearBtn
           iconText: "󰃢"
           text: footerContainer.wrapNeeded ? "" : (root.currentFilter === "all" ? "Clear" : ("Clear #" + root.currentFilter))
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 0)
-          chargeColor: Color.accent
-          holdDuration: root.holdDuration
           tooltipText: ""
-          onTriggered: root.clearCompleted(root.currentFilter)
+
+          property real clearProgress: 0.0
+          property bool clearCharged: false
+
+          NumberAnimation {
+            id: clearChargeAnim
+            target: clearBtn
+            property: "clearProgress"
+            to: 1.0
+            duration: root.holdDuration
+            easing.type: Easing.Linear
+            onFinished: {
+              if (clearBtn.clearProgress >= 0.999) {
+                clearBtn.clearCharged = true
+                root.clearCompleted(root.currentFilter)
+                clearBtn.clearProgress = 0.0
+              }
+            }
+          }
+
+          NumberAnimation {
+            id: clearDrainAnim
+            target: clearBtn
+            property: "clearProgress"
+            to: 0.0
+            duration: 180
+            easing.type: Easing.OutQuad
+          }
+
+          function startCharging() {
+            if (root.holdDuration <= 0) {
+              root.clearCompleted(root.currentFilter)
+              return
+            }
+            if (clearChargeAnim.running) {
+              return
+            }
+            clearBtn.clearCharged = false
+            clearDrainAnim.stop()
+            clearChargeAnim.restart()
+          }
+
+          function stopCharging() {
+            clearChargeAnim.stop()
+            if (!clearBtn.clearCharged && clearBtn.clearProgress > 0) {
+              clearDrainAnim.restart()
+            }
+          }
+
+          Rectangle {
+            id: clearTintOverlay
+            anchors.fill: parent
+            radius: clearBtn.radius
+            color: Color.accent
+            opacity: clearBtn.clearProgress * 0.16
+            visible: clearBtn.clearProgress > 0
+            z: 0
+          }
+
+          Rectangle {
+            id: clearLaserBar
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            height: Style.space(2)
+            width: parent.width * clearBtn.clearProgress
+            color: Color.accent
+            radius: clearBtn.radius
+            visible: clearBtn.clearProgress > 0
+            z: 10
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            hoverEnabled: false
+            cursorShape: Qt.PointingHandCursor
+            onPressed: clearBtn.startCharging()
+            onReleased: clearBtn.stopCharging()
+            onCanceled: clearBtn.stopCharging()
+          }
 
           HoverHandler { id: clearBtnHover }
           Ui.ShortcutToolTip {
@@ -2787,12 +3027,12 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 1)
           tooltipText: ""
-          onClicked: root.openArchive()
+          onClicked: root.openArchiveModal()
 
           HoverHandler { id: archiveBtnHover }
           Ui.ShortcutToolTip {
             visible: archiveBtnHover.hovered
-            description: "Open todos-archive.json in editor"
+            description: "Open Archive browser (restore completed tasks)"
             shortcut: "d"
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
@@ -2868,5 +3108,33 @@ Item {
       root.showGitModal = false
       root.returnFocusRequested()
     }
+  }
+
+  // Archive browser overlay modal (restore completed tasks)
+  Ui.ArchiveModal {
+    id: archiveModal
+    isOpen: root.showArchiveModal
+    bar: root.bar
+    barWidget: root.barWidget
+    barForeground: root.barForeground
+    onCloseRequested: {
+      root.showArchiveModal = false
+      root.returnFocusRequested()
+    }
+  }
+
+  // Task context menu overlay (K). Non-modal: keys stay in PanelLogic.
+  Ui.TaskContextMenu {
+    id: taskMenu
+    isOpen: root.showTaskMenu
+    items: root.taskMenuItems
+    selectedIndex: root.taskMenuIndex
+    anchorX: root.taskMenuAnchorX
+    anchorY: root.taskMenuAnchorY
+    title: root.taskMenuTitle
+    meta: root.taskMenuMeta
+    bar: root.bar
+    onItemActivated: function(actionId) { root.activateTaskMenuItem(actionId) }
+    onCloseRequested: root.closeTaskMenu()
   }
 }

@@ -69,6 +69,7 @@ var DEFAULT_BINDINGS = {
   toggle_expand: ["Return"],
   delete_task: ["x"],
   edit_title: ["r", "F2"],
+  task_menu: ["K"],
   open_editor: ["e"],
   git_undo: ["u"],
   clear_completed: ["c"],
@@ -78,6 +79,54 @@ var DEFAULT_BINDINGS = {
   quick_add: ["A"],
   help: ["?"]
 };
+
+/**
+ * Contextual menu actions offered on the focused task. `getTaskMenuItems`
+ * drops entries that cannot apply to the task (no notes, no local path).
+ * @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>}
+ */
+var TASK_MENU_ITEMS = [
+  { id: "copy_llm", icon: "󰆏", label: "Copy for LLM", shortcut: "y", desc: "Compact markdown for an AI agent" },
+  { id: "copy_title", icon: "󰆏", label: "Copy title", shortcut: "t", desc: "" },
+  { id: "copy_notes", icon: "󰆏", label: "Copy notes", shortcut: "n", desc: "" },
+  { id: "open_codebase", icon: "󰏫", label: "Open codebase", shortcut: "o", desc: "Open the task's local path in the editor" },
+  { id: "edit_title", icon: "󰏫", label: "Edit title", shortcut: "e", desc: "" },
+  { id: "delete_task", icon: "󰅙", label: "Delete task", shortcut: "x", desc: "" }
+];
+
+/**
+ * Returns the contextual menu items that apply to a task.
+ * @param {any} task
+ * @returns {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>}
+ */
+function getTaskMenuItems(task) {
+  /** @type {Array<{id: string, icon: string, label: string, shortcut: string, desc: string}>} */
+  var items = [];
+  for (var i = 0; i < TASK_MENU_ITEMS.length; i++) {
+    var item = TASK_MENU_ITEMS[i];
+    if (item.id === "copy_notes" && !(task && String(task.description || "").trim())) continue;
+    if (item.id === "open_codebase" && !(task && task.location && task.location.localPath)) continue;
+    items.push(item);
+  }
+  return items;
+}
+
+/**
+ * Maps a menu keypress to a contextual menu action id, or null.
+ * @param {string} text
+ * @returns {string|null}
+ */
+function taskMenuActionForKey(text) {
+  if (!text || typeof text !== "string") return null;
+  var t = text.toLowerCase();
+  if (t === "y") return "copy_llm";
+  if (t === "t") return "copy_title";
+  if (t === "n") return "copy_notes";
+  if (t === "o") return "open_codebase";
+  if (t === "e") return "edit_title";
+  if (t === "x") return "delete_task";
+  return null;
+}
 
 /**
  * Normalizes a raw key string into a standardized token.
@@ -225,10 +274,11 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut, act
     { key: fmt("toggle_expand", "Enter / Return"), desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
     { key: fmt("delete_task", "x"), desc: "Delete selected task (hold 600ms)", category: "Task Actions" },
     { key: fmt("edit_title", "r / F2"), desc: "Edit title of selected task", category: "Task Actions" },
+    { key: fmt("task_menu", "K"), desc: "Open task context menu (copy, edit, open, delete)", category: "Task Actions" },
     { key: fmt("open_editor", "e"), desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: fmt("git_undo", "u"), desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
     { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile (hold 600ms)", category: "Actions & Storage" },
-    { key: fmt("open_archive", "d"), desc: "Open todos-archive.json in editor", category: "Actions & Storage" },
+    { key: fmt("open_archive", "d"), desc: "Open Archive browser (restore completed tasks)", category: "Actions & Storage" },
     { key: fmt("focus_input", "i / a"), desc: "Focus new task input field", category: "Input & Create" },
     { key: searchDisplay, desc: "Search tasks, notes & profiles", category: "Navigation" },
     { key: fmt("quick_add", "A"), desc: "Open Quick Add modal", category: "Input & Create" },
@@ -305,6 +355,16 @@ function getPrevSubSection(current) {
  * @returns {boolean} true if the escape was consumed
  */
 function handleEscape(root) {
+  if (root.showTaskMenu) {
+    if (typeof root.closeTaskMenu === "function") root.closeTaskMenu();
+    else root.showTaskMenu = false;
+    return true;
+  }
+  if (root.showArchiveModal) {
+    if (typeof root.closeArchiveModal === "function") root.closeArchiveModal();
+    else root.showArchiveModal = false;
+    return true;
+  }
   if (root.showGitModal) {
     root.showGitModal = false;
     return true;
@@ -354,6 +414,16 @@ function handleEscape(root) {
  * @param {any} TodoStore TodoStore module
  */
 function handleMove(root, dx, dy, TodoStore) {
+  // While the contextual menu is open, j/k (and arrows) move its selection
+  // instead of the task cursor.
+  if (root.showTaskMenu) {
+    var menuLen = (root.taskMenuItems && root.taskMenuItems.length) ? root.taskMenuItems.length : 0;
+    if (menuLen > 0 && dy !== 0) {
+      root.taskMenuIndex = Math.max(0, Math.min(menuLen - 1, (root.taskMenuIndex || 0) + dy));
+    }
+    return;
+  }
+
   root.cursorActive = true;
   root.mouseMovementDetected = false;
 
@@ -608,6 +678,22 @@ function handleTab(root, direction, TodoStore) {
  * @param {any} [activeBindings]
  */
 function handleTextKey(root, text, TodoStore, activeBindings) {
+  // While the contextual menu is open it owns printable keys: shortcut
+  // actions run their item, everything else is swallowed so stray keys cannot
+  // leak into task navigation.
+  if (root.showTaskMenu) {
+    if (text === "q" || text === "Q") {
+      if (typeof root.closeTaskMenu === "function") root.closeTaskMenu();
+      else root.showTaskMenu = false;
+      return;
+    }
+    var menuAction = taskMenuActionForKey(text);
+    if (menuAction && typeof root.activateTaskMenuItem === "function") {
+      root.activateTaskMenuItem(menuAction);
+    }
+    return;
+  }
+
   root.cursorActive = true;
   root.mouseMovementDetected = false;
 
@@ -690,6 +776,10 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     handleMove(root, 1, 0, TodoStore);
     return;
   }
+  if ((action === "task_menu" || (!map && text === "K")) && root.focusSection === "tasks") {
+    if (typeof root.openTaskMenu === "function") root.openTaskMenu();
+    return;
+  }
   if (action === "quick_add" || (!map && text === "A")) {
     if (typeof root.openQuickAdd === "function") root.openQuickAdd();
     return;
@@ -703,7 +793,8 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     return;
   }
   if (action === "open_archive" || (!map && text === "d")) {
-    if (typeof root.openArchive === "function") root.openArchive();
+    if (typeof root.openArchiveModal === "function") root.openArchiveModal();
+    else if (typeof root.openArchive === "function") root.openArchive();
     return;
   }
   if (action === "open_editor" || (!map && text === "e")) {
@@ -747,6 +838,10 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
  * @param {any} TodoStore TodoStore module
  */
 function handleActivate(root, TodoStore) {
+  if (root.showTaskMenu) {
+    if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem();
+    return;
+  }
   if (root._suppressActivateOnReturn) return;
   root.cursorActive = true;
   root.mouseMovementDetected = false;
@@ -793,6 +888,11 @@ function handleActivate(root, TodoStore) {
  * @param {any} TodoStore TodoStore module
  */
 function handleReturn(root, TodoStore) {
+  // Enter is delivered as both returnRequested and activateRequested. While
+  // the contextual menu is open, let handleActivate run the selection, and do
+  // NOT arm the activate-suppression flag (it would swallow that activation).
+  if (root.showTaskMenu) return;
+
   root._suppressActivateOnReturn = true;
   var resetSuppress = function() { root._suppressActivateOnReturn = false; };
   var _qt = (typeof globalThis !== "undefined" && /** @type {any} */ (globalThis).Qt) ? /** @type {any} */ (globalThis).Qt : null;
@@ -859,6 +959,12 @@ function handleReturn(root, TodoStore) {
  * @param {any} root PanelContent root QML object
  */
 function handleDelete(root) {
+  // PanelKeyCatcher routes x/X here before handleTextKey, so a menu-open x
+  // must run the menu's delete item rather than acting blindly.
+  if (root.showTaskMenu) {
+    if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem("delete_task");
+    return;
+  }
   root.cursorActive = true;
   root.mouseMovementDetected = false;
   if (root.focusSection === "tasks") {
@@ -914,6 +1020,9 @@ if (typeof module !== "undefined" && module.exports) {
     handleKeyRelease: handleKeyRelease,
     handleTextKey: handleTextKey,
     DEFAULT_BINDINGS: DEFAULT_BINDINGS,
+    TASK_MENU_ITEMS: TASK_MENU_ITEMS,
+    getTaskMenuItems: getTaskMenuItems,
+    taskMenuActionForKey: taskMenuActionForKey,
     normalizeKey: normalizeKey,
     resolveBindings: resolveBindings
   };

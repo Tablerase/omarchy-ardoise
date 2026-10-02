@@ -87,12 +87,18 @@ Your data directory is a git repository, so every change is a snapshot.
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
 
-- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **23 shell commands** over `omarchy-shell tablerase.ardoise` — see
+- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **24 shell commands** over `omarchy-shell tablerase.ardoise` — see
   [Scripting](#scripting--automation).
 - <img src="https://api.iconify.design/mdi:file-eye-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **React to writes.** The data file is watched, so external tools, git hooks,
   and AI agents can write to it and the UI updates immediately.
 - <img src="https://api.iconify.design/mdi:shield-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Forward-compatible schema.** A file written by a newer Ardoise is never
   downgraded, so a rollback won't truncate your list.
+- <img src="https://api.iconify.design/mdi:content-copy.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Copy a task for an AI agent.** Press <kbd>K</kbd> on a task for a context
+  menu, then <kbd>y</kbd> to copy a compact markdown block (title, profile, repo,
+  tags, due, notes) to the clipboard — token-frugal and LLM-ready.
+- <img src="https://api.iconify.design/mdi:archive-arrow-up-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Restore from the archive.** Press <kbd>d</kbd> to browse cleared tasks
+  (virtualized for large archives) and restore one back to the active list with
+  its original id, notes, and profile intact.
 
 </details>
 
@@ -256,7 +262,7 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | Group | Commands |
 | :--- | :--- |
 | **Tasks** | `add`, `addDetailed`, `toggleTodo`, `update`, `remove`, `clear` |
-| **Queries** | `list`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount` |
+| **Queries** | `list`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive` |
 | **Profiles** | `setProfile` |
 | **Panel** | `open`, `close`, `toggle` |
 | **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |

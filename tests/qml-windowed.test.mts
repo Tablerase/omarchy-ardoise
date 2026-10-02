@@ -411,13 +411,16 @@ ShellRoot {
                 Qt.exit(126);
                 return;
             }
-            var countBeforeD = closeRequestedCount;
+            // 'd' now opens the Archive browser modal (it no longer opens the
+            // raw JSON in an editor / closes the panel; that moved to 'e'
+            // inside the modal).
             panelContent.handleTextKey("d");
-            if (closeRequestedCount <= countBeforeD) {
-                console.error("[TEST FAIL] handleTextKey('d') failed to trigger openArchive / closeRequested");
+            if (!panelContent.showArchiveModal) {
+                console.error("[TEST FAIL] handleTextKey('d') failed to open the Archive browser modal");
                 Qt.exit(125);
                 return;
             }
+            panelContent.closeArchiveModal();
             // Test Clear Completed via 'c' key and footer button
             // 1. Add and complete a task
             barWidget.addTodo("Completed Task To Clear", "", "personal", "");
@@ -1000,7 +1003,10 @@ ShellRoot {
     Timer { interval: 3400; running: true; onTriggered: panelContent.handleMove(0, -1) }
     Timer { interval: 4000; running: true; onTriggered: panelContent.handleMove(0, 1) }
     Timer { interval: 4800; running: true; onTriggered: report("settled") }
-    Timer { interval: 5400; running: true; onTriggered: { console.log("[FIT] done=1"); Qt.exit(0) } }
+    // Second sample: the whole suite runs several quickshell instances in
+    // parallel, so a loaded machine can report the first sample mid-layout.
+    Timer { interval: 6200; running: true; onTriggered: report("final") }
+    Timer { interval: 6600; running: true; onTriggered: { console.log("[FIT] done=1"); Qt.exit(0) } }
 }
 `;
     fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
@@ -1025,7 +1031,7 @@ ShellRoot {
 
     assert.equal(pick(output, "done"), "1", "drawer-fit harness did not run to completion:\n" + output);
 
-    const settled = pick(output, "settled");
+    const settled = pick(output, "final");
     assert.ok(settled && settled !== "NO_TITLE", "long-title row must be mounted:\n" + output);
 
     // The wrapped title must fit its own row, and the row must be tall enough
@@ -1044,6 +1050,223 @@ ShellRoot {
       num(settled, "titleViewportY") >= 0,
       "the expanded title must be scrolled into the viewport, not clipped above it:\n" + output
     );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Quickshell Task Menu & Archive [local-only]: context menu actions and archive restore over 5,000 items", (t) => {
+  // LOCAL-ONLY: mounts KeyboardPanel, which needs a wlr-layer-shell compositor.
+  // Exercises the two new surfaces on a real window: the K context menu
+  // (PanelLogic-routed) and the archive browser restoring a task out of a
+  // 5,000-item archive, asserting the ListView stays virtualized.
+  if (process.env.CI) {
+    t.skip("local-only: needs a wlr-layer-shell compositor to mount KeyboardPanel");
+    return;
+  }
+  if (!process.env.WAYLAND_DISPLAY) {
+    t.skip("local-only: no Wayland display, so KeyboardPanel cannot be mounted");
+    return;
+  }
+
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
+    t.skip("quickshell binary not found on system PATH");
+    return;
+  }
+
+  const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
+  const commonsDir = path.join(omarchyPath, "shell", "Commons");
+  const uiDir = path.join(omarchyPath, "shell", "Ui");
+  if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
+    if (process.env.CI) {
+      throw new Error("Omarchy shell Commons/Ui modules must be provided in CI (OMARCHY_PATH=" + omarchyPath + ")");
+    }
+    t.skip("Omarchy shell Commons/Ui modules not found at " + omarchyPath);
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-menu-archive-"));
+  try {
+    fs.symlinkSync(commonsDir, path.join(tmpDir, "Commons"));
+    fs.symlinkSync(uiDir, path.join(tmpDir, "Ui"));
+    fs.symlinkSync(repoDir, path.join(tmpDir, "plugin"));
+
+    const dataDir = path.join(tmpDir, ".config", "omarchy", "tablerase.ardoise");
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    const store = {
+      version: 1,
+      activeProfile: "personal",
+      profiles: ["personal", "work"],
+      todos: [
+        {
+          id: 1,
+          title: "Focused task with notes",
+          description: "notes for the LLM",
+          done: false,
+          profile: "work",
+          repo: "Tablerase/omarchy-ardoise",
+          tags: ["copy"],
+          location: { repo: "Tablerase/omarchy-ardoise", subpath: null, localPath: "~/code/ardoise" },
+          createdAt: 1
+        },
+        { id: 2, title: "Second task", done: false, profile: "personal", createdAt: 2 }
+      ]
+    };
+    const now = Date.now();
+    const archived = [{ id: 7000, title: "Restore me from the archive", description: "old notes", profile: "ardoise", repo: "Tablerase/omarchy-ardoise", tags: [], createdAt: 1, completedAt: 2 }];
+    for (let i = 0; i < 5000; i++) {
+      archived.push({ id: 8000 + i, title: "Archived #" + i, description: "notes", profile: "personal", tags: ["archived"], createdAt: now - i, completedAt: now - i });
+    }
+    fs.writeFileSync(path.join(dataDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    fs.writeFileSync(path.join(dataDir, "todos-archive.json"), JSON.stringify({ version: 1, archived }, null, 2), "utf8");
+
+    const harnessQml = `
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import qs.Ui
+import "plugin" as Plugin
+
+ShellRoot {
+    id: root
+
+    PanelWindow {
+        id: fakeBar
+        anchors { top: true; left: true; right: true }
+        implicitHeight: 30
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        Item { id: anchor; width: 20; height: 30 }
+        Plugin.BarWidget { id: barWidget }
+    }
+
+    QtObject {
+        id: fakeBarObj
+        property string position: "top"
+        property string fontFamily: Style.font.family
+        property color barForeground: Color.foreground
+        property color urgent: Color.urgent
+        function switchPanelFrom() { return false }
+    }
+
+    KeyboardPanel {
+        id: kp
+        anchorItem: anchor
+        bar: fakeBarObj
+        open: true
+        contentWidth: kp.fittedContentWidth(Style.space(400))
+        contentHeight: kp.fittedContentHeight(panelContent.implicitHeight)
+
+        PanelKeyCatcher {
+            anchors.fill: parent
+            blocked: panelContent.activeFocusBlocked
+            Plugin.PanelContent {
+                id: panelContent
+                anchors.fill: parent
+                bar: fakeBarObj
+                barWidget: barWidget
+            }
+        }
+    }
+
+    function walk(item, out, depth) {
+        if (!item || depth > 40) return out
+        out.push(item)
+        var kids = item.children
+        if (kids) for (var i = 0; i < kids.length; i++) walk(kids[i], out, depth + 1)
+        if (item.contentItem) walk(item.contentItem, out, depth + 1)
+        if (item.item) walk(item.item, out, depth + 1)
+        return out
+    }
+
+    function findListView(modal) {
+        var all = walk(modal, [], 0)
+        for (var i = 0; i < all.length; i++) {
+            if (all[i] && typeof all[i].count === "number" && all[i].contentItem !== undefined) return all[i]
+        }
+        return null
+    }
+
+    Timer {
+        interval: 1500; running: true
+        onTriggered: {
+            panelContent.cursorIndex = 0
+            panelContent.focusSection = "tasks"
+            panelContent.openTaskMenu()
+            console.log("[TM] menu=" + (panelContent.showTaskMenu ? 1 : 0) + " items=" + panelContent.taskMenuItems.length)
+            panelContent.activateTaskMenuItem("copy_llm")
+            console.log("[TM] closed=" + (panelContent.showTaskMenu ? 0 : 1))
+        }
+    }
+
+    Timer {
+        interval: 2300; running: true
+        onTriggered: panelContent.openArchiveModal()
+    }
+
+    Timer {
+        interval: 3200; running: true
+        onTriggered: {
+            var modal = panelContent.archiveModal
+            var lv = findListView(modal)
+            console.log("[AM] raw=" + barWidget.getArchiveText().length + " last=" + barWidget.lastArchiveText.length)
+            console.log("[AM] open=" + (modal.isOpen ? 1 : 0)
+                + " total=" + modal.archivedTasks.length
+                + " delegates=" + (lv ? lv.contentItem.children.length : -1))
+            modal.selectedIndex = 0
+            modal.restoreSelected()
+        }
+    }
+
+    Timer {
+        interval: 4200; running: true
+        onTriggered: {
+            var modal = panelContent.archiveModal
+            console.log("[AM] restored store=" + barWidget.store.todos.length + " arch=" + modal.archivedTasks.length)
+            console.log("[AM] done=1")
+            Qt.exit(0)
+        }
+    }
+}
+`;
+    fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
+
+    const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
+      encoding: "utf8",
+      timeout: 25000,
+      env: { ...process.env, HOME: tmpDir, ARDOISE_DATA_DIR: dataDir }
+    });
+    const output = (qsResult.stdout || "") + "\n" + (qsResult.stderr || "");
+    const pick = (key: string) => new RegExp("\\[TM\\] " + key + "=(\\S+)").exec(output)?.[1];
+    const tmLine = new RegExp("\\[TM\\] menu=\\S+ items=\\S+").exec(output)?.[0];
+    const pickAm = (key: string) => new RegExp("\\[AM\\] " + key + "=(\\S+)").exec(output)?.[1];
+    const num = (line: string | undefined, key: string) =>
+      Number(new RegExp(key + "=(-?\\d+)").exec(line || "")?.[1]);
+
+    assert.ok(!/Binding loop detected|ReferenceError|is not a type/i.test(output), "harness reported QML errors:\n" + output);
+    assert.equal(pickAm("done"), "1", "menu/archive harness did not run to completion:\n" + output);
+
+    assert.equal(pick("menu"), "1", "K must open the task context menu:\n" + output);
+    assert.ok(num(tmLine, "items") >= 4, "the menu must expose the task actions:\n" + output);
+    assert.equal(pick("closed"), "1", "activating a menu item must close the menu:\n" + output);
+
+    const am = new RegExp("\\[AM\\] open=1 total=(\\d+) delegates=(\\d+)").exec(output);
+    assert.ok(am, "the archive modal must open:\n" + output);
+    assert.equal(Number(am![1]), 5001, "the archive must hold every item:\n" + output);
+    assert.ok(
+      Number(am![2]) < 200,
+      "the archive ListView must virtualize 5,001 items (instantiated " + am![2] + " delegates):\n" + output
+    );
+
+    const restored = new RegExp("\\[AM\\] restored store=(\\d+) arch=(\\d+)").exec(output);
+    assert.ok(restored, "restore result must be reported:\n" + output);
+    assert.equal(Number(restored![1]), 3, "the restored task must be in the active store:\n" + output);
+    assert.equal(Number(restored![2]), 5000, "the restored task must leave the archive:\n" + output);
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

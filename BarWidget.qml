@@ -94,6 +94,19 @@ BarWidget {
     archiveFile.setText(json)
   }
 
+  // Moves one archived task back into the active store (id and fields
+  // preserved, removed from the archive so it cannot be duplicated) and
+  // commits both files together.
+  function unarchiveTask(id) {
+    var result = TodoStore.unarchive(root.store, root.getArchiveText(), id)
+    if (!result.restored) return false
+    saveStore(result.updatedStore, "Restore task from archive: " + result.restored.title)
+    var json = JSON.stringify(result.updatedArchive, null, 2) + "\n"
+    root.lastArchiveText = json
+    archiveFile.setText(json)
+    return true
+  }
+
   function setActiveProfile(profile) {
     var s = TodoStore.cloneStore(root.store)
     s.activeProfile = TodoStore.cleanProfileName(profile)
@@ -693,6 +706,7 @@ BarWidget {
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
     function archived(): string { return root.getArchiveText() }
     function archiveCount(): string { return String(TodoStore.getArchivedCount(root.getArchiveText())) }
+    function unarchive(id: string): string { return root.unarchiveTask(id) ? "ok" : "not_found" }
     function gitHistory(): string { return root.lastGitLog || "[]" }
     function gitRollback(hashStr: string): string { root.rollbackToCommit(hashStr); return "ok" }
     function gitRecover(hashStr: string): string { root.recoverFromCommit(hashStr); return "ok" }

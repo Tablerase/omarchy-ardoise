@@ -27,6 +27,7 @@ local bindings = {
   -- toggle_expand   = "Return",      -- Expand / collapse task details drawer
   -- delete_task     = "x",           -- Delete selected task
   -- edit_title      = "r",           -- or { "r", "F2" } — edit task title in place
+  -- task_menu       = "K",           -- Open the task context menu (copy for LLM, edit, open, delete)
   -- open_editor     = "e",           -- Open todos.json in editor at task line
 
   -- Panel Actions
@@ -35,7 +36,7 @@ local bindings = {
   -- quick_add       = "A",           -- Open fullscreen Quick Add overlay
   -- git_undo        = "u",           -- Open Git Snapshots & Undo modal
   -- clear_completed = "c",           -- Archive and clear completed tasks in current profile
-  -- open_archive    = "d",           -- Open todos-archive.json in editor
+  -- open_archive    = "d",           -- Open the Archive browser (restore completed tasks)
   -- help            = "?",           -- Toggle keyboard shortcuts help modal
 }
 
