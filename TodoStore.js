@@ -1665,6 +1665,62 @@ function unarchive(store, archiveRawText, id) {
 }
 
 /**
+ * Permanently removes one task from the archive. Irreversible except through
+ * git history; used by the archive browser's hold-to-confirm delete.
+ * @param {string} archiveRawText
+ * @param {number|string} id
+ * @returns {{updatedArchive: ArchiveData, purged: (ArchivedTask|null)}}
+ */
+function purgeArchived(archiveRawText, id) {
+  var arc = normalizeArchive(archiveRawText)
+  var key = String(id)
+  /** @type {ArchivedTask|null} */
+  var purged = null
+  /** @type {ArchivedTask[]} */
+  var kept = []
+  for (var i = 0; i < arc.archived.length; i++) {
+    if (purged === null && String(arc.archived[i].id) === key) {
+      purged = arc.archived[i]
+    } else {
+      kept.push(arc.archived[i])
+    }
+  }
+  arc.archived = kept
+  return { updatedArchive: arc, purged: purged }
+}
+
+/**
+ * Drops archive entries whose id is already active. Self-heals the duplicate a
+ * crash between the two restore writes can leave behind (task in both files).
+ * @param {TodoStoreData} store
+ * @param {string} archiveRawText
+ * @returns {{updatedArchive: ArchiveData, removedCount: number}}
+ */
+function reconcileArchive(store, archiveRawText) {
+  var s = (store && typeof store === "object") ? store : {}
+  var todos = Array.isArray(s.todos) ? s.todos : []
+  /** @type {Record<string, boolean>} */
+  var activeIds = {}
+  for (var i = 0; i < todos.length; i++) {
+    activeIds[String(todos[i].id)] = true
+  }
+
+  var arc = normalizeArchive(archiveRawText)
+  /** @type {ArchivedTask[]} */
+  var kept = []
+  var removedCount = 0
+  for (var j = 0; j < arc.archived.length; j++) {
+    if (activeIds[String(arc.archived[j].id)]) {
+      removedCount++
+    } else {
+      kept.push(arc.archived[j])
+    }
+  }
+  arc.archived = kept
+  return { updatedArchive: arc, removedCount: removedCount }
+}
+
+/**
  * Formats a task as a compact markdown block for pasting into an LLM. Only
  * non-empty fields are emitted, to keep the token count low.
  * @param {Task} task
@@ -1898,6 +1954,8 @@ if (typeof module !== "undefined" && module.exports) {
     getArchivedTasks,
     filterArchivedTasks,
     unarchive,
+    purgeArchived,
+    reconcileArchive,
     formatTaskForLLM,
     formatKeybind,
     formatRelativeDiff,
