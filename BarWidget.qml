@@ -412,7 +412,7 @@ BarWidget {
               archiveFile.setText(json)
               Quickshell.execDetached([
                 "bash", "-c",
-                "cd \"" + root.dataDirPath + "\" && git add todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Auto-merge remote changes\" && git push origin main"
+                "cd \"" + root.dataDirPath + "\" && git merge --no-commit -s ours origin/main 2>/dev/null || true; git add todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Auto-merge remote changes\" && git push origin main"
               ])
               root.gitSyncStatus = "success"
               root.gitSyncMessage = "Merged & synced with remote"

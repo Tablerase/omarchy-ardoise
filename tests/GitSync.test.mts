@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const GitSync = require("../GitSync.js");
+const TodoStore = require("../TodoStore.js");
 
 const {
   extractDeviceName,
@@ -274,4 +279,289 @@ test("diagnoseGitSyncError: falls back cleanly on empty output", () => {
   assert.equal(diagnoseGitSyncError("", 1), "Sync failed (exit code 1)");
   assert.equal(diagnoseGitSyncError("", undefined), "Sync failed (check connection/auth)");
 });
+
+// =============================================================================
+// Remote Sync Data Preservation & Non-Regression Tests
+// =============================================================================
+
+function runSyncShellProcess(dataDir: string): { stdout: string; status: number } {
+  const syncScript = `
+cd "${dataDir}" && \\
+if git remote get-url origin >/dev/null 2>&1; then \\
+  FETCH_OUT=$(git fetch origin main 2>&1); \\
+  FETCH_CODE=$?; \\
+  if [ $FETCH_CODE -ne 0 ]; then \\
+    if echo "$FETCH_OUT" | grep -qE "couldn't find remote ref"; then \\
+      PUSH_INIT_OUT=$(git push -u origin main 2>&1); \\
+      if [ $? -eq 0 ]; then \\
+        echo "INITIALIZED_AND_PUSHED"; \\
+      else \\
+        echo "$PUSH_INIT_OUT"; \\
+        exit 2; \\
+      fi; \\
+    else \\
+      echo "$FETCH_OUT"; \\
+      exit 1; \\
+    fi; \\
+  else \\
+    LOCAL_HEAD=$(git rev-parse HEAD); \\
+    REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL_HEAD"); \\
+    if [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then \\
+      PUSH_OUT=$(git push origin main 2>&1); \\
+      if [ $? -eq 0 ]; then \\
+        echo "UP_TO_DATE"; \\
+      else \\
+        echo "$PUSH_OUT"; \\
+        exit 3; \\
+      fi; \\
+    elif [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]; then \\
+      echo "NEEDS_MERGE"; \\
+    else \\
+      echo "UP_TO_DATE"; \\
+    fi; \\
+  fi; \\
+else \\
+  echo "NO_REMOTE"; \\
+fi
+`;
+  const res = spawnSync("bash", ["-c", syncScript], { encoding: "utf8" });
+  return { stdout: (res.stdout || "").trim(), status: res.status ?? -1 };
+}
+
+test("sync safety: connecting an empty remote pushes local tasks without losing any local data", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-sync-test-"));
+  const localDir = path.join(tmpRoot, "local");
+  const remoteDir = path.join(tmpRoot, "remote.git");
+
+  try {
+    fs.mkdirSync(localDir, { recursive: true });
+    fs.mkdirSync(remoteDir, { recursive: true });
+
+    // 1. Initialize bare remote repository (simulates empty GitHub repo)
+    spawnSync("git", ["init", "--bare", remoteDir]);
+
+    // 2. Initialize local repository with existing tasks
+    spawnSync("git", ["init", "-b", "main", localDir]);
+    spawnSync("git", ["-C", localDir, "config", "user.name", "TestUser"]);
+    spawnSync("git", ["-C", localDir, "config", "user.email", "test@example.com"]);
+    spawnSync("git", ["-C", localDir, "config", "commit.gpgsign", "false"]);
+
+    const initialStore = {
+      version: 1,
+      activeProfile: "personal",
+      profiles: ["personal", "work"],
+      todos: [
+        { id: 101, title: "Important Local Task 1", done: false, profile: "personal", createdAt: 1000 },
+        { id: 102, title: "Important Local Task 2", done: false, profile: "work", createdAt: 1001 }
+      ]
+    };
+    fs.writeFileSync(path.join(localDir, "todos.json"), JSON.stringify(initialStore, null, 2), "utf8");
+    fs.writeFileSync(path.join(localDir, "todos-archive.json"), JSON.stringify({ version: 1, archived: [] }), "utf8");
+
+    spawnSync("git", ["-C", localDir, "add", "-A"]);
+    spawnSync("git", ["-C", localDir, "commit", "-m", "[omarchy] Initial local tasks"]);
+
+    // 3. User configures remote origin to the new empty remote
+    spawnSync("git", ["-C", localDir, "remote", "add", "origin", remoteDir]);
+
+    // 4. Run sync process
+    const syncRes = runSyncShellProcess(localDir);
+    assert.equal(syncRes.status, 0, `Sync should succeed on empty remote: ${syncRes.stdout}`);
+    assert.equal(syncRes.stdout, "INITIALIZED_AND_PUSHED");
+
+    // 5. Verify local data is 100% intact (NOT wiped or corrupted)
+    const localStoreAfter = JSON.parse(fs.readFileSync(path.join(localDir, "todos.json"), "utf8"));
+    assert.equal(localStoreAfter.todos.length, 2, "Local tasks must not disappear when connecting remote");
+    assert.equal(localStoreAfter.todos[0].title, "Important Local Task 1");
+    assert.equal(localStoreAfter.todos[1].title, "Important Local Task 2");
+
+    // 6. Verify remote repository received the exact same tasks on main
+    const remoteShow = spawnSync("git", ["--git-dir", remoteDir, "show", "main:todos.json"], { encoding: "utf8" });
+    assert.equal(remoteShow.status, 0, "Remote must have received main branch with todos.json");
+    const remoteStore = JSON.parse(remoteShow.stdout);
+    assert.equal(remoteStore.todos.length, 2, "Remote must contain both pushed tasks");
+    assert.equal(remoteStore.todos[0].title, "Important Local Task 1");
+    assert.equal(remoteStore.todos[1].title, "Important Local Task 2");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("sync safety: newly added local tasks are preserved and pushed incrementally to remote", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-sync-inc-"));
+  const localDir = path.join(tmpRoot, "local");
+  const remoteDir = path.join(tmpRoot, "remote.git");
+
+  try {
+    fs.mkdirSync(localDir, { recursive: true });
+    spawnSync("git", ["init", "--bare", remoteDir]);
+
+    spawnSync("git", ["init", "-b", "main", localDir]);
+    spawnSync("git", ["-C", localDir, "config", "user.name", "TestUser"]);
+    spawnSync("git", ["-C", localDir, "config", "user.email", "test@example.com"]);
+    spawnSync("git", ["-C", localDir, "config", "commit.gpgsign", "false"]);
+
+    let store = {
+      version: 1,
+      activeProfile: "personal",
+      profiles: ["personal"],
+      todos: [
+        { id: 201, title: "Base Task 1", done: false, profile: "personal", createdAt: 1000 }
+      ]
+    };
+    fs.writeFileSync(path.join(localDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    fs.writeFileSync(path.join(localDir, "todos-archive.json"), JSON.stringify({ version: 1, archived: [] }), "utf8");
+    spawnSync("git", ["-C", localDir, "add", "-A"]);
+    spawnSync("git", ["-C", localDir, "commit", "-m", "[omarchy] Base task"]);
+    spawnSync("git", ["-C", localDir, "remote", "add", "origin", remoteDir]);
+
+    // Initial sync initializes remote
+    assert.equal(runSyncShellProcess(localDir).stdout, "INITIALIZED_AND_PUSHED");
+
+    // 1. User adds a second task locally
+    store = TodoStore.addTodo(store, "Second Task Added Later #work");
+    fs.writeFileSync(path.join(localDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    spawnSync("git", ["-C", localDir, "add", "todos.json"]);
+    spawnSync("git", ["-C", localDir, "commit", "-m", "[omarchy] Add second task"]);
+
+    // 2. Incremental sync
+    const incSync = runSyncShellProcess(localDir);
+    assert.equal(incSync.status, 0, `Incremental sync must succeed: ${incSync.stdout}`);
+    assert.equal(incSync.stdout, "UP_TO_DATE");
+
+    // 3. User adds a third task locally
+    store = TodoStore.addTodo(store, "Third Task Added");
+    fs.writeFileSync(path.join(localDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    spawnSync("git", ["-C", localDir, "add", "todos.json"]);
+    spawnSync("git", ["-C", localDir, "commit", "-m", "[omarchy] Add third task"]);
+
+    const thirdSync = runSyncShellProcess(localDir);
+    assert.equal(thirdSync.status, 0);
+    assert.equal(thirdSync.stdout, "UP_TO_DATE");
+
+    // 4. Assert all 3 tasks remain locally intact
+    const finalLocal = JSON.parse(fs.readFileSync(path.join(localDir, "todos.json"), "utf8"));
+    assert.equal(finalLocal.todos.length, 3, "All 3 tasks must remain in local store");
+    assert.ok(finalLocal.todos.some((t: any) => t.title === "Base Task 1"));
+    assert.ok(finalLocal.todos.some((t: any) => t.title.includes("Second Task Added Later")));
+    assert.ok(finalLocal.todos.some((t: any) => t.title === "Third Task Added"));
+
+    // 5. Assert all 3 tasks were pushed to remote
+    const remoteShow = spawnSync("git", ["--git-dir", remoteDir, "show", "main:todos.json"], { encoding: "utf8" });
+    const finalRemote = JSON.parse(remoteShow.stdout);
+    assert.equal(finalRemote.todos.length, 3, "All 3 tasks must be present in remote store");
+    assert.ok(finalRemote.todos.some((t: any) => t.title === "Base Task 1"));
+    assert.ok(finalRemote.todos.some((t: any) => t.title.includes("Second Task Added Later")));
+    assert.ok(finalRemote.todos.some((t: any) => t.title === "Third Task Added"));
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("sync safety: multi-device divergence merges remote changes without dropping local tasks", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-sync-div-"));
+  const devADir = path.join(tmpRoot, "devA");
+  const devBDir = path.join(tmpRoot, "devB");
+  const remoteDir = path.join(tmpRoot, "remote.git");
+
+  try {
+    fs.mkdirSync(devADir, { recursive: true });
+    spawnSync("git", ["init", "--bare", remoteDir]);
+
+    // Device A starts with shared Task 1 and unique Task 2
+    spawnSync("git", ["init", "-b", "main", devADir]);
+    spawnSync("git", ["-C", devADir, "config", "user.name", "DeviceA"]);
+    spawnSync("git", ["-C", devADir, "config", "user.email", "a@example.com"]);
+    spawnSync("git", ["-C", devADir, "config", "commit.gpgsign", "false"]);
+
+    const devAStore = {
+      version: 1,
+      activeProfile: "personal",
+      profiles: ["personal"],
+      todos: [
+        { id: 301, title: "Shared Task", done: false, profile: "personal", createdAt: 1000, updatedAt: 1000 },
+        { id: 302, title: "Local Task from Device A", done: false, profile: "personal", createdAt: 1001, updatedAt: 1001 }
+      ]
+    };
+    fs.writeFileSync(path.join(devADir, "todos.json"), JSON.stringify(devAStore, null, 2), "utf8");
+    fs.writeFileSync(path.join(devADir, "todos-archive.json"), JSON.stringify({ version: 1, archived: [] }), "utf8");
+    spawnSync("git", ["-C", devADir, "add", "-A"]);
+    spawnSync("git", ["-C", devADir, "commit", "-m", "[deviceA] Initial tasks"]);
+    spawnSync("git", ["-C", devADir, "remote", "add", "origin", remoteDir]);
+
+    // Push base commit to remote
+    assert.equal(runSyncShellProcess(devADir).stdout, "INITIALIZED_AND_PUSHED");
+
+    // Device B clones the repo and makes independent edits
+    spawnSync("git", ["clone", remoteDir, devBDir]);
+    spawnSync("git", ["-C", devBDir, "config", "user.name", "DeviceB"]);
+    spawnSync("git", ["-C", devBDir, "config", "user.email", "b@example.com"]);
+    spawnSync("git", ["-C", devBDir, "config", "commit.gpgsign", "false"]);
+
+    let devBStore = JSON.parse(fs.readFileSync(path.join(devBDir, "todos.json"), "utf8"));
+    // Device B updates Shared Task (newer timestamp) and adds Task 303
+    devBStore = TodoStore.updateTodo(devBStore, 301, { description: "Updated description on Device B", updatedAt: 2000 });
+    devBStore = TodoStore.addTodo(devBStore, "Task Created on Device B");
+    fs.writeFileSync(path.join(devBDir, "todos.json"), JSON.stringify(devBStore, null, 2), "utf8");
+    spawnSync("git", ["-C", devBDir, "add", "todos.json"]);
+    spawnSync("git", ["-C", devBDir, "commit", "-m", "[deviceB] Update and add task"]);
+    spawnSync("git", ["-C", devBDir, "push", "origin", "main"]);
+
+    // Meanwhile Device A adds another local task without fetching first (divergence!)
+    let devACurrent = JSON.parse(fs.readFileSync(path.join(devADir, "todos.json"), "utf8"));
+    devACurrent = TodoStore.addTodo(devACurrent, "Another Local Task on Device A");
+    fs.writeFileSync(path.join(devADir, "todos.json"), JSON.stringify(devACurrent, null, 2), "utf8");
+    spawnSync("git", ["-C", devADir, "add", "todos.json"]);
+    spawnSync("git", ["-C", devADir, "commit", "-m", "[deviceA] Another local task"]);
+
+    // Device A runs sync: must detect divergence (NEEDS_MERGE)
+    const divSync = runSyncShellProcess(devADir);
+    assert.equal(divSync.stdout, "NEEDS_MERGE", "Divergent branches must trigger NEEDS_MERGE");
+
+    // Device A runs 3-way store merge (simulating mergeRemoteChangesProc in BarWidget.qml)
+    const remoteShow = spawnSync("git", ["-C", devADir, "show", "origin/main:todos.json"], { encoding: "utf8" });
+    const remoteArchShow = spawnSync("git", ["-C", devADir, "show", "origin/main:todos-archive.json"], { encoding: "utf8" });
+    const mergedStore = TodoStore.mergeStores(devACurrent, remoteShow.stdout);
+    const mergedArch = TodoStore.mergeArchives(
+      fs.readFileSync(path.join(devADir, "todos-archive.json"), "utf8"),
+      remoteArchShow.stdout
+    );
+
+    spawnSync("git", ["-C", devADir, "merge", "--no-commit", "-s", "ours", "origin/main"]);
+    fs.writeFileSync(path.join(devADir, "todos.json"), JSON.stringify(mergedStore, null, 2), "utf8");
+    fs.writeFileSync(path.join(devADir, "todos-archive.json"), JSON.stringify(mergedArch, null, 2), "utf8");
+    spawnSync("git", ["-C", devADir, "add", "todos.json", "todos-archive.json"]);
+    spawnSync("git", ["-C", devADir, "commit", "-m", "[deviceA] Auto-merge remote changes"]);
+    const pushRes = spawnSync("git", ["-C", devADir, "push", "origin", "main"], { encoding: "utf8" });
+    assert.equal(pushRes.status, 0, `Push after auto-merge must succeed: ${pushRes.stderr || pushRes.stdout}`);
+
+    // Run sync again: should now be clean and up-to-date
+    const postMergeSync = runSyncShellProcess(devADir);
+    assert.equal(postMergeSync.stdout, "UP_TO_DATE");
+
+    // CRITICAL ASSERTION: Assert ALL tasks from both sides are preserved!
+    const finalDevA = JSON.parse(fs.readFileSync(path.join(devADir, "todos.json"), "utf8"));
+    assert.equal(finalDevA.todos.length, 4, "Must contain all 4 tasks without any loss");
+
+    // 1. Shared task updated with Device B's changes
+    const shared = finalDevA.todos.find((t: any) => t.id === 301);
+    assert.ok(shared, "Shared task 301 must exist");
+    assert.equal(shared.description, "Updated description on Device B");
+
+    // 2. Local tasks from Device A MUST NOT HAVE DISAPPEARED
+    assert.ok(finalDevA.todos.some((t: any) => t.id === 302 && t.title === "Local Task from Device A"), "Task 302 from Device A must NOT be lost");
+    assert.ok(finalDevA.todos.some((t: any) => t.title === "Another Local Task on Device A"), "Local Task from Device A must NOT be lost");
+
+    // 3. Remote task from Device B must be merged in
+    assert.ok(finalDevA.todos.some((t: any) => t.title === "Task Created on Device B"), "Task from Device B must be merged in");
+
+    // Verify remote also has all 4 tasks
+    const finalRemoteShow = spawnSync("git", ["--git-dir", remoteDir, "show", "main:todos.json"], { encoding: "utf8" });
+    const finalRemote = JSON.parse(finalRemoteShow.stdout);
+    assert.equal(finalRemote.todos.length, 4, "Remote repository must also contain all 4 tasks");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 
