@@ -589,6 +589,23 @@ function removeTodo(store, id) {
 }
 
 /**
+ * Looks up a task by ID in the active store.
+ * @param {TodoStoreData} store
+ * @param {number|string} id
+ * @returns {Task|null}
+ */
+function getTaskById(store, id) {
+  if (!store || !Array.isArray(store.todos)) return null
+  var idStr = String(id)
+  for (var i = 0; i < store.todos.length; i++) {
+    if (store.todos[i] && String(store.todos[i].id) === idStr) {
+      return store.todos[i]
+    }
+  }
+  return null
+}
+
+/**
  * Updates specific fields of an existing task.
  * @param {TodoStoreData} store
  * @param {number|string} id
@@ -1445,6 +1462,221 @@ function computePresetReminder(presetIndexOrId, baseDate) {
 }
 
 /**
+ * Formats an ISO reminder date into a user-friendly preview string with relative diff.
+ * @param {string} isoDate
+ * @param {Date|number|string} [baseDate]
+ * @returns {string}
+ */
+function formatCustomPreview(isoDate, baseDate) {
+  if (!isoDate) return ""
+  var target = new Date(isoDate)
+  if (isNaN(target.getTime())) return ""
+
+  var now = new Date()
+  if (baseDate instanceof Date && !isNaN(baseDate.getTime())) {
+    now = new Date(baseDate.getTime())
+  } else if (typeof baseDate === "number" && !isNaN(baseDate)) {
+    now = new Date(baseDate)
+  } else if (typeof baseDate === "string" && baseDate.length > 0) {
+    var pb = new Date(baseDate)
+    if (!isNaN(pb.getTime())) now = pb
+  }
+
+  var diff = target.getTime() - now.getTime()
+  var timeStr = (target.getHours() < 10 ? "0" : "") + target.getHours() + ":" +
+    (target.getMinutes() < 10 ? "0" : "") + target.getMinutes()
+
+  var isToday = target.toDateString() === now.toDateString()
+  var tomorrow = new Date(now.getTime() + 86400000)
+  var isTomorrow = target.toDateString() === tomorrow.toDateString()
+
+  var rel = diff >= 0 ? formatRelativeDiff(diff, false) : formatRelativeDiff(diff, true)
+
+  if (isToday) {
+    return "Today at " + timeStr + " (" + rel + ")"
+  }
+  if (isTomorrow) {
+    return "Tomorrow at " + timeStr + " (" + rel + ")"
+  }
+  var dayStr = target.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+  return dayStr + " at " + timeStr + " (" + rel + ")"
+}
+
+/**
+ * Parses a custom or natural language reminder string into an ISO timestamp and friendly label.
+ * @param {string|null|undefined} input
+ * @param {Date|number|string} [baseDate]
+ * @returns {{ iso: string, label: string }|null}
+ */
+function parseCustomReminder(input, baseDate) {
+  if (!input) return null
+  var raw = String(input).trim()
+  if (!raw) return null
+  var str = raw.toLowerCase().replace(/^\+/, "").trim()
+
+  var now = new Date()
+  if (baseDate instanceof Date && !isNaN(baseDate.getTime())) {
+    now = new Date(baseDate.getTime())
+  } else if (typeof baseDate === "number" && !isNaN(baseDate)) {
+    now = new Date(baseDate)
+  } else if (typeof baseDate === "string" && baseDate.length > 0) {
+    var pb = new Date(baseDate)
+    if (!isNaN(pb.getTime())) now = pb
+  }
+
+  // 1. Plain number: treat as minutes
+  if (/^\d+$/.test(str)) {
+    var minsNum = Number(str)
+    if (minsNum > 0) {
+      var dMins = new Date(now.getTime() + minsNum * 60000)
+      var isoMins = dMins.toISOString()
+      return { iso: isoMins, label: formatCustomPreview(isoMins, now) }
+    }
+  }
+
+  // 2. Relative units compound match (e.g. "1d 2h 30m", "45m", "2h", "1.5h", "90 mins")
+  var relMatch = str.match(/^(?:(\d+(?:\.\d+)?)\s*(?:d|day|days))?\s*(?:(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours))?\s*(?:(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes))?$/)
+  if (relMatch && (relMatch[1] || relMatch[2] || relMatch[3])) {
+    var dVal = relMatch[1] ? Number(relMatch[1]) : 0
+    var hVal = relMatch[2] ? Number(relMatch[2]) : 0
+    var mVal = relMatch[3] ? Number(relMatch[3]) : 0
+    var totalMs = (dVal * 86400000) + (hVal * 3600000) + (mVal * 60000)
+    if (totalMs > 0) {
+      var dRel = new Date(now.getTime() + totalMs)
+      var isoRel = dRel.toISOString()
+      return { iso: isoRel, label: formatCustomPreview(isoRel, now) }
+    }
+  }
+
+  // 3. Day keyword only
+  if (str === "tomorrow" || str === "tom") {
+    var dTom = new Date(now.getTime() + 86400000)
+    dTom.setHours(9, 0, 0, 0)
+    var isoTom = dTom.toISOString()
+    return { iso: isoTom, label: formatCustomPreview(isoTom, now) }
+  }
+  if (str === "tonight") {
+    var dTonight = new Date(now.getTime())
+    dTonight.setHours(20, 0, 0, 0)
+    if (dTonight.getTime() <= now.getTime()) {
+      dTonight.setDate(dTonight.getDate() + 1)
+    }
+    var isoTonight = dTonight.toISOString()
+    return { iso: isoTonight, label: formatCustomPreview(isoTonight, now) }
+  }
+
+  /**
+   * @param {string} timeStr
+   * @returns {{ hours: number, minutes: number }|null}
+   */
+  function parseTimePart(timeStr) {
+    if (!timeStr) return null
+    var t = timeStr.trim().toLowerCase()
+    var tm = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/)
+    if (!tm) return null
+    var hh = Number(tm[1])
+    var mm = tm[2] ? Number(tm[2]) : 0
+    var ampm = tm[3]
+    if (ampm === "pm" && hh < 12) hh += 12
+    if (ampm === "am" && hh === 12) hh = 0
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+    return { hours: hh, minutes: mm }
+  }
+
+  // 4. Day keyword + time (e.g. "tomorrow 14:00", "today 5pm", "tom 9am")
+  var dayKeyMatch = str.match(/^(today|tomorrow|tom)\s+(.+)$/)
+  if (dayKeyMatch) {
+    var dayWord = dayKeyMatch[1]
+    var tp = parseTimePart(dayKeyMatch[2])
+    if (tp) {
+      var dKey = new Date(now.getTime())
+      if (dayWord === "tomorrow" || dayWord === "tom") {
+        dKey.setDate(dKey.getDate() + 1)
+      }
+      dKey.setHours(tp.hours, tp.minutes, 0, 0)
+      if (dayWord === "today" && dKey.getTime() <= now.getTime()) {
+        dKey.setDate(dKey.getDate() + 1)
+      }
+      var isoKey = dKey.toISOString()
+      return { iso: isoKey, label: formatCustomPreview(isoKey, now) }
+    }
+  }
+
+  // 5. Plain time of day (e.g. "14:30", "9:00", "9am", "5:30pm", "21:15")
+  var plainTime = parseTimePart(str)
+  if (plainTime) {
+    var dTime = new Date(now.getTime())
+    dTime.setHours(plainTime.hours, plainTime.minutes, 0, 0)
+    // If time has passed today, roll over to tomorrow
+    if (dTime.getTime() <= now.getTime()) {
+      dTime.setDate(dTime.getDate() + 1)
+    }
+    var isoTime = dTime.toISOString()
+    return { iso: isoTime, label: formatCustomPreview(isoTime, now) }
+  }
+
+  // 6. ISO Date YYYY-MM-DD [HH:MM]
+  var isoDateMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ t](\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$/)
+  if (isoDateMatch) {
+    var y = Number(isoDateMatch[1])
+    var m = Number(isoDateMatch[2]) - 1
+    var day = Number(isoDateMatch[3])
+    var h = isoDateMatch[4] ? Number(isoDateMatch[4]) : 9
+    var min = isoDateMatch[5] ? Number(isoDateMatch[5]) : 0
+    var ap = isoDateMatch[6]
+    if (ap === "pm" && h < 12) h += 12
+    if (ap === "am" && h === 12) h = 0
+    var dIsoParsed = new Date(y, m, day, h, min, 0, 0)
+    if (!isNaN(dIsoParsed.getTime())) {
+      var isoParsed = dIsoParsed.toISOString()
+      return { iso: isoParsed, label: formatCustomPreview(isoParsed, now) }
+    }
+  }
+
+  // 7. Month name + day (e.g. "oct 15 14:00", "15 oct 9am", "october 15")
+  var monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+  var monthRegex = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+  var mNameMatch1 = str.match(new RegExp("^(" + monthRegex + ")\\s+(\\d{1,2})(?:\\s+(.+))?$"))
+  var mNameMatch2 = str.match(new RegExp("^(\\d{1,2})\\s+(" + monthRegex + ")(?:\\s+(.+))?$"))
+  var mNameMonth = ""
+  var mNameDay = 0
+  var mNameTimePart = ""
+  if (mNameMatch1) {
+    mNameMonth = mNameMatch1[1].slice(0, 3)
+    mNameDay = Number(mNameMatch1[2])
+    mNameTimePart = mNameMatch1[3] || ""
+  } else if (mNameMatch2) {
+    mNameDay = Number(mNameMatch2[1])
+    mNameMonth = mNameMatch2[2].slice(0, 3)
+    mNameTimePart = mNameMatch2[3] || ""
+  }
+  if (mNameMonth && mNameDay >= 1 && mNameDay <= 31) {
+    var monthIdx = monthNames.indexOf(mNameMonth)
+    if (monthIdx !== -1) {
+      var parsedTime = mNameTimePart ? parseTimePart(mNameTimePart) : { hours: 9, minutes: 0 }
+      if (parsedTime) {
+        var dMonth = new Date(now.getFullYear(), monthIdx, mNameDay, parsedTime.hours, parsedTime.minutes, 0, 0)
+        // If date has already passed in current year, schedule for next year
+        if (dMonth.getTime() <= now.getTime()) {
+          dMonth.setFullYear(now.getFullYear() + 1)
+        }
+        var isoMonth = dMonth.toISOString()
+        return { iso: isoMonth, label: formatCustomPreview(isoMonth, now) }
+      }
+    }
+  }
+
+  // 8. General Date fallback (e.g. standard ISO-8601 string)
+  var fallbackDate = new Date(raw)
+  if (!isNaN(fallbackDate.getTime())) {
+    var isoFallback = fallbackDate.toISOString()
+    return { iso: isoFallback, label: formatCustomPreview(isoFallback, now) }
+  }
+
+  return null
+}
+
+/**
  * Normalizes archive data into Schema v1 format.
  * @param {any} raw
  * @returns {ArchiveData}
@@ -1730,8 +1962,17 @@ function formatTaskForLLM(task) {
 
   var lines = ["# " + capitalizeTitle(String(task.title || "").trim())]
 
+  if (task.id !== undefined && task.id !== null) {
+    if (task.done) {
+      lines.push("<!-- ardoise:" + task.id + " | find: omarchy-shell tablerase.ardoise get " + task.id + " | status: completed -->")
+    } else {
+      lines.push("<!-- ardoise:" + task.id + " | find: omarchy-shell tablerase.ardoise get " + task.id + " | plan & complete: omarchy-shell tablerase.ardoise toggleTodo " + task.id + " -->")
+    }
+  }
+
   /** @type {string[]} */
   var meta = []
+  if (task.id !== undefined && task.id !== null) meta.push("id:" + task.id)
   var profile = cleanProfileName(task.profile || "")
   if (profile) meta.push("#" + profile)
   if (task.repo) meta.push("repo:" + String(task.repo))
@@ -1933,6 +2174,7 @@ if (typeof module !== "undefined" && module.exports) {
     addTodo,
     toggleTodo,
     removeTodo,
+    getTaskById,
     updateTodo,
     addProfile,
     removeProfile,
@@ -1947,6 +2189,8 @@ if (typeof module !== "undefined" && module.exports) {
     getProfileGlyph,
     getReminderPresets,
     computePresetReminder,
+    formatCustomPreview,
+    parseCustomReminder,
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,

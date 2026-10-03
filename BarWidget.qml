@@ -861,6 +861,17 @@ BarWidget {
     function clear(): string { root.clearCompleted(); return "ok" }
     function count(): string { return String(root.pendingCount) }
     function list(): string { return JSON.stringify(root.todos) }
+    function get(idStr: string): string {
+      var id = Number(idStr)
+      if (isNaN(id)) return "invalid_id"
+      var task = TodoStore.getTaskById(root.store, id)
+      if (task) return JSON.stringify(task)
+      var arc = TodoStore.getArchivedTasks(root.getArchiveText())
+      for (var i = 0; i < arc.length; i++) {
+        if (arc[i] && String(arc[i].id) === String(id)) return JSON.stringify(arc[i])
+      }
+      return "not_found"
+    }
     function profiles(): string { return JSON.stringify(root.profiles) }
     function searchProfiles(queryStr: string): string {
       return JSON.stringify(TodoStore.searchProfiles(root.store, queryStr || ""))

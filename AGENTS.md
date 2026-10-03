@@ -65,6 +65,7 @@ To move it: update the SHA, then run `npm run test:docker`. Expect the newest-Om
 ## Task & Shell IPC Standards
 - **Use `omarchy-shell` for Task State**: Never use ad-hoc Python, node, or bash scripts to inspect or mutate `~/.config/omarchy/tablerase.ardoise/todos.json`. Instead, interact directly through the plugin's native IPC handler via `omarchy-shell`:
   - List tasks: `omarchy-shell tablerase.ardoise list`
+  - Get task by ID: `omarchy-shell tablerase.ardoise get "<id>"`
   - Get count: `omarchy-shell tablerase.ardoise count`
   - Add task: `omarchy-shell tablerase.ardoise add "<title> [#profile]"`
   - Add task with details: `omarchy-shell tablerase.ardoise addDetailed "<title>" "<notes>" "<reminder>"`

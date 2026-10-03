@@ -243,7 +243,8 @@ omarchy-shell tablerase.ardoise list | jq '[.[] | select(.done == false)]'
 omarchy-shell tablerase.ardoise add "Review PR #work"
 omarchy-shell tablerase.ardoise addDetailed "Fix flake" "CI is red on main" "+1h"
 
-# Update, complete, remove
+# Query single task, update, complete, remove
+omarchy-shell tablerase.ardoise get "<id>"
 omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "2026-09-22T09:00:00.000Z"}'
 omarchy-shell tablerase.ardoise toggleTodo "<id>"
 omarchy-shell tablerase.ardoise remove "<id>"
@@ -264,7 +265,7 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | Group | Commands |
 | :--- | :--- |
 | **Tasks** | `add`, `addDetailed`, `toggleTodo`, `update`, `remove`, `clear` |
-| **Queries** | `list`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived` |
+| **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived` |
 | **Profiles** | `setProfile` |
 | **Panel** | `open`, `close`, `toggle` |
 | **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |

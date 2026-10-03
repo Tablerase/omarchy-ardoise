@@ -19,6 +19,7 @@ const {
   addTodo,
   toggleTodo,
   removeTodo,
+  getTaskById,
   updateTodo,
   addProfile,
   removeProfile,
@@ -33,6 +34,8 @@ const {
   getProfileGlyph,
   getReminderPresets,
   computePresetReminder,
+  formatCustomPreview,
+  parseCustomReminder,
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
@@ -327,6 +330,130 @@ test("getReminderPresets: returns 4 valid presets and dynamically respects baseD
   assert.equal(new Date(computedByLabel!).getTime(), base.getTime() + 60 * 60 * 1000);
 });
 
+test("parseCustomReminder: relative durations and combinations", () => {
+  const base = new Date("2026-10-03T10:00:00.000Z");
+
+  // Minutes
+  const r15m = parseCustomReminder("15m", base);
+  assert.ok(r15m);
+  assert.equal(new Date(r15m.iso).getTime(), base.getTime() + 15 * 60 * 1000);
+  assert.ok(r15m.label.includes("in 15m"));
+
+  // Plus prefix
+  const rPlus2h = parseCustomReminder("+2h", base);
+  assert.ok(rPlus2h);
+  assert.equal(new Date(rPlus2h.iso).getTime(), base.getTime() + 2 * 3600 * 1000);
+
+  // Decimal hours
+  const r1_5h = parseCustomReminder("1.5h", base);
+  assert.ok(r1_5h);
+  assert.equal(new Date(r1_5h.iso).getTime(), base.getTime() + 90 * 60 * 1000);
+
+  // Compound duration
+  const rCompound = parseCustomReminder("1h 30m", base);
+  assert.ok(rCompound);
+  assert.equal(new Date(rCompound.iso).getTime(), base.getTime() + 90 * 60 * 1000);
+
+  // Days
+  const r3d = parseCustomReminder("3d", base);
+  assert.ok(r3d);
+  assert.equal(new Date(r3d.iso).getTime(), base.getTime() + 3 * 86400 * 1000);
+
+  // Plain number defaults to minutes
+  const r45 = parseCustomReminder("45", base);
+  assert.ok(r45);
+  assert.equal(new Date(r45.iso).getTime(), base.getTime() + 45 * 60 * 1000);
+});
+
+test("parseCustomReminder: day keywords and times of day", () => {
+  // 10:00 local time
+  const base = new Date(2026, 9, 3, 10, 0, 0, 0);
+
+  // Tomorrow keyword alone -> tomorrow 9am
+  const rTom = parseCustomReminder("tomorrow", base);
+  assert.ok(rTom);
+  const dTom = new Date(rTom.iso);
+  assert.equal(dTom.getDate(), 4);
+  assert.equal(dTom.getHours(), 9);
+  assert.equal(dTom.getMinutes(), 0);
+
+  // Tomorrow with time
+  const rTom14 = parseCustomReminder("tomorrow 14:30", base);
+  assert.ok(rTom14);
+  const dTom14 = new Date(rTom14.iso);
+  assert.equal(dTom14.getDate(), 4);
+  assert.equal(dTom14.getHours(), 14);
+  assert.equal(dTom14.getMinutes(), 30);
+
+  // Today with later time -> stays today
+  const rToday16 = parseCustomReminder("today 16:00", base);
+  assert.ok(rToday16);
+  const dToday16 = new Date(rToday16.iso);
+  assert.equal(dToday16.getDate(), 3);
+  assert.equal(dToday16.getHours(), 16);
+
+  // Plain time later today -> stays today
+  const rPlainLater = parseCustomReminder("17:45", base);
+  assert.ok(rPlainLater);
+  const dPlainLater = new Date(rPlainLater.iso);
+  assert.equal(dPlainLater.getDate(), 3);
+  assert.equal(dPlainLater.getHours(), 17);
+  assert.equal(dPlainLater.getMinutes(), 45);
+
+  // Plain time earlier today -> rolls over to tomorrow
+  const rPlainEarlier = parseCustomReminder("08:30", base);
+  assert.ok(rPlainEarlier);
+  const dPlainEarlier = new Date(rPlainEarlier.iso);
+  assert.equal(dPlainEarlier.getDate(), 4);
+  assert.equal(dPlainEarlier.getHours(), 8);
+  assert.equal(dPlainEarlier.getMinutes(), 30);
+
+  // 12-hour am/pm
+  const r5pm = parseCustomReminder("5pm", base);
+  assert.ok(r5pm);
+  const d5pm = new Date(r5pm.iso);
+  assert.equal(d5pm.getHours(), 17);
+
+  // Tonight
+  const rTonight = parseCustomReminder("tonight", base);
+  assert.ok(rTonight);
+  const dTonight = new Date(rTonight.iso);
+  assert.equal(dTonight.getHours(), 20);
+});
+
+test("parseCustomReminder: specific dates and fallback ISO parsing", () => {
+  const base = new Date(2026, 9, 3, 10, 0, 0, 0);
+
+  // YYYY-MM-DD HH:MM
+  const rIsoDate = parseCustomReminder("2026-10-15 14:00", base);
+  assert.ok(rIsoDate);
+  const dIso = new Date(rIsoDate.iso);
+  assert.equal(dIso.getFullYear(), 2026);
+  assert.equal(dIso.getMonth(), 9); // Oct is 9
+  assert.equal(dIso.getDate(), 15);
+  assert.equal(dIso.getHours(), 14);
+
+  // Month name e.g. "oct 20 11:30"
+  const rMonthName = parseCustomReminder("oct 20 11:30", base);
+  assert.ok(rMonthName);
+  const dMonthName = new Date(rMonthName.iso);
+  assert.equal(dMonthName.getMonth(), 9);
+  assert.equal(dMonthName.getDate(), 20);
+  assert.equal(dMonthName.getHours(), 11);
+  assert.equal(dMonthName.getMinutes(), 30);
+
+  // Full ISO string fallback
+  const directIso = "2026-12-01T08:00:00.000Z";
+  const rDirect = parseCustomReminder(directIso, base);
+  assert.ok(rDirect);
+  assert.equal(rDirect.iso, directIso);
+
+  // Invalid strings return null
+  assert.equal(parseCustomReminder(""), null);
+  assert.equal(parseCustomReminder(null), null);
+  assert.equal(parseCustomReminder("not a real reminder"), null);
+});
+
 test("normalize: migrates legacy array format and invalid inputs to Schema v1", () => {
   // Invalid string input
   assert.equal(normalize("invalid json").version, 1);
@@ -513,6 +640,61 @@ test("formatTaskForLLM: compact markdown, omits empty fields", () => {
   // Title only: no metadata line, no trailing blank line.
   assert.equal(formatTaskForLLM({ title: "just a title", profile: "personal" }), "# Just a title\n#personal");
   assert.equal(formatTaskForLLM(null as any), "");
+});
+
+test("formatTaskForLLM: includes id directive and metadata when id is present", () => {
+  const activeTask = {
+    id: 1790956259095,
+    title: "Archive issue",
+    description: "the permanent delete still doesnt work\n\nrepro: ...",
+    profile: "ardoise",
+    repo: "Tablerase/omarchy-ardoise",
+    tags: ["bug"],
+    reminder: "2026-10-03T07:00:00.000Z",
+    done: false
+  };
+  const activeMarkdown = formatTaskForLLM(activeTask);
+  assert.equal(
+    activeMarkdown,
+    "# Archive issue\n" +
+      "<!-- ardoise:1790956259095 | find: omarchy-shell tablerase.ardoise get 1790956259095 | plan & complete: omarchy-shell tablerase.ardoise toggleTodo 1790956259095 -->\n" +
+      "id:1790956259095 #ardoise repo:Tablerase/omarchy-ardoise tags:bug due:2026-10-03T07:00:00.000Z\n" +
+      "\n" +
+      "the permanent delete still doesnt work\n\nrepro: ..."
+  );
+
+  const completedTask = {
+    id: 1791018393071,
+    title: "Resolved bug",
+    done: true,
+    profile: "ardoise"
+  };
+  const completedMarkdown = formatTaskForLLM(completedTask);
+  assert.equal(
+    completedMarkdown,
+    "# Resolved bug\n" +
+      "<!-- ardoise:1791018393071 | find: omarchy-shell tablerase.ardoise get 1791018393071 | status: completed -->\n" +
+      "id:1791018393071 #ardoise"
+  );
+});
+
+test("getTaskById: finds task by id or returns null", () => {
+  let store = defaultStore();
+  store = addTodo(store, "Find me #work", "some notes", "work", null);
+  const task = store.todos[0];
+  assert.ok(task && task.id);
+
+  const found = getTaskById(store, task.id);
+  assert.equal(found?.id, task.id);
+  assert.equal(found?.title, "Find me");
+
+  // String lookup matches
+  const foundStr = getTaskById(store, String(task.id));
+  assert.equal(foundStr?.id, task.id);
+
+  // Missing id returns null
+  assert.equal(getTaskById(store, 9999999), null);
+  assert.equal(getTaskById(null as any, task.id), null);
 });
 
 test("addTodo & updateTodo: tracks updatedAt timestamp", () => {

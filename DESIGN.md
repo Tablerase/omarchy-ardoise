@@ -320,6 +320,7 @@ Quickshell taskbar widget placed in the status bar.
   - Scroll: Cycles active profile filter.
 - **Shell IPC Contract (`IpcHandler: tablerase.ardoise`)**:
   - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
+  - `omarchy-shell tablerase.ardoise get "<id>"`: Returns single task JSON matching ID from active tasks or archive, or `not_found`.
   - `omarchy-shell tablerase.ardoise count`: Returns **total** pending task count string. Deliberately *not* rung-scoped: it is a data/scripting contract, whereas the bar badge is a display signal. Do not "fix" this to match the badge — `list` already exposes the full breakdown if a script needs urgency detail.
   - `omarchy-shell tablerase.ardoise add "<title> [#profile]"`: Adds task with optional `#profile`.
   - `omarchy-shell tablerase.ardoise addDetailed "<title>" "<notes>" "<reminder>"`: Adds task with explicit notes/description and optional reminder (e.g. preset `+30m`, `+1h`, `tomorrow 9am` or ISO string; pass `""` if none).
@@ -493,6 +494,14 @@ ardoise.bind("a", "quick_add")
 | `search` | `/` | Activate panel search bar |
 | `quick_add` | `A` | Open Quick Add overlay modal |
 | `help` | `?` | Toggle Help modal |
+
+#### LLM Compact Markdown Format (`y` / `copy_task`)
+When a task is copied using <kbd>y</kbd> or through the contextual menu, `TodoStore.formatTaskForLLM()` produces a compact, self-contained markdown block designed for direct paste into an AI assistant (Antigravity, Claude, ChatGPT, Cursor).
+- **Direct Action Directive**: An HTML comment contains the exact shell commands to query the task and mark it complete upon resolution:
+  - Active: `<!-- ardoise:<id> | find: omarchy-shell tablerase.ardoise get <id> | plan & complete: omarchy-shell tablerase.ardoise toggleTodo <id> -->`
+  - Completed: `<!-- ardoise:<id> | find: omarchy-shell tablerase.ardoise get <id> | status: completed -->`
+- **Metadata**: Line 2 contains `id:<id>`, `#<profile>`, `repo:<repo>`, `tags:<tags>`, `due:<reminder>`.
+- **Token Efficiency**: The directive and metadata add only ~22–25 tokens, while remaining invisible in markdown preview renderers (hidden HTML comment).
 
 #### Dynamic UI Reflection & Live Reload
 - Custom keybindings are watched with `FileView` (`watchChanges: true`), triggering live reload on disk save without restarting Quickshell.
