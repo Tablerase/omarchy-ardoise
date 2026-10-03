@@ -68,6 +68,7 @@ var DEFAULT_BINDINGS = {
   toggle_done: ["Space"],
   toggle_expand: ["Return"],
   delete_task: ["x"],
+  copy_task: ["y"],
   edit_title: ["r", "F2"],
   task_menu: ["K"],
   open_editor: ["e"],
@@ -319,12 +320,13 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut, act
     { key: fmt("jump_top", "g") + " / " + fmt("jump_bottom", "G"), desc: "Jump to top / bottom of task list", category: "Navigation" },
     { key: fmt("toggle_done", "Space"), desc: "Toggle completed status of selected task", category: "Task Actions" },
     { key: fmt("toggle_expand", "Enter / Return"), desc: "Expand or collapse task details (notes & reminders)", category: "Task Actions" },
-    { key: fmt("delete_task", "x"), desc: "Delete selected task (hold 600ms)", category: "Task Actions" },
+    { key: fmt("delete_task", "x"), desc: "Delete selected task (hold 800ms)", category: "Task Actions" },
+    { key: fmt("copy_task", "y"), desc: "Copy selected task for LLM", category: "Task Actions" },
     { key: fmt("edit_title", "r / F2"), desc: "Edit title of selected task", category: "Task Actions" },
     { key: fmt("task_menu", "K"), desc: "Open task context menu (copy, edit, open, delete)", category: "Task Actions" },
     { key: fmt("open_editor", "e"), desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: fmt("git_undo", "u"), desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
-    { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile (hold 600ms)", category: "Actions & Storage" },
+    { key: fmt("clear_completed", "c"), desc: "Archive and clear completed tasks in current profile (hold 800ms)", category: "Actions & Storage" },
     { key: fmt("open_archive", "d"), desc: "Open Archive browser (restore completed tasks)", category: "Actions & Storage" },
     { key: fmt("focus_input", "i / a"), desc: "Focus new task input field", category: "Input & Create" },
     { key: searchDisplay, desc: "Search tasks, notes & profiles", category: "Navigation" },
@@ -795,6 +797,12 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
           return;
         }
       }
+    }
+  }
+  if ((action === "copy_task" || (!map && (text === "y" || text === "Y"))) && root.focusSection === "tasks") {
+    if (typeof root.copySelectedTask === "function") {
+      root.copySelectedTask();
+      return;
     }
   }
   if (action === "delete_task") {

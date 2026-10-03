@@ -979,6 +979,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
   );
   assert.ok(
     panelLogic.includes("task_menu: [\"K\"]") &&
+      panelLogic.includes("copy_task: [\"y\"]") &&
       panelLogic.includes("var TASK_MENU_ITEMS = [") &&
       panelLogic.includes("function getTaskMenuItems(task)") &&
       panelLogic.includes("function taskMenuActionForKey(text)"),
@@ -992,6 +993,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
   );
   assert.ok(
     panelContent.includes("function openTaskMenu()") &&
+      panelContent.includes("function copySelectedTask()") &&
       panelContent.includes("function activateTaskMenuItem(actionId)") &&
       panelContent.includes("TodoStore.formatTaskForLLM(task)") &&
       panelContent.includes("Quickshell.execDetached([\"bash\", \"-c\", \"printf %s \" + Util.shellQuote(text) + \" | wl-copy\"])") &&

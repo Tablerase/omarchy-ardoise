@@ -387,6 +387,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
 | **Panel** | `A` | Open Quick Add overlay modal |
 | **Panel** | `Hold x` / `Delete` | Delete highlighted task (hold 800ms) |
+| **Panel** | `y` | Copy selected task for LLM (compact markdown) |
 | **Panel** | `g` | Jump to first task |
 | **Panel** | `G` | Jump to last task |
 | **Panel** | `?` / `Backspace` (empty search) | Toggle or dismiss searchable keyboard shortcuts modal |
@@ -481,6 +482,7 @@ ardoise.bind("a", "quick_add")
 | `toggle_done` | `Space` | Toggle task completion status |
 | `toggle_expand` | `Return` | Expand / collapse task details drawer |
 | `delete_task` | `x` | Delete selected task (hold 800ms) |
+| `copy_task` | `y` | Copy task for LLM (compact markdown) |
 | `edit_title` | `r`, `F2` | In-place edit of task title |
 | `task_menu` | `K` | Open the focused task's context menu |
 | `open_editor` | `e` | Open `todos.json` in default editor |

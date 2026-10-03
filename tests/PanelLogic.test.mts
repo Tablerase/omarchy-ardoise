@@ -640,10 +640,12 @@ test("resolveBindings: defaults match DEFAULT_BINDINGS and fall back safely", ()
   assert.deepEqual(resolved.bindings.prev_task, ["k", "Up"]);
   assert.deepEqual(resolved.bindings.focus_input, ["i", "a"]);
   assert.deepEqual(resolved.bindings.open_editor, ["e"]);
+  assert.deepEqual(resolved.bindings.copy_task, ["y"]);
   assert.equal(resolved.keyToAction["j"], "next_task");
   assert.equal(resolved.keyToAction["k"], "prev_task");
   assert.equal(resolved.keyToAction["i"], "focus_input");
   assert.equal(resolved.keyToAction["e"], "open_editor");
+  assert.equal(resolved.keyToAction["y"], "copy_task");
 });
 
 test("resolveBindings: custom overrides and alias normalization", () => {
@@ -910,4 +912,23 @@ test("task menu hold: Enter/x/release route through the menu hold instead of del
   mockRoot.taskMenu.startSelectedHold = () => false;
   handleActivate(mockRoot, TodoStore);
   assert.equal(activated, 1);
+});
+
+test("handleTextKey: 'y' / copy_task triggers copySelectedTask on focused task", () => {
+  let copied = false;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    copySelectedTask: () => {
+      copied = true;
+    }
+  };
+
+  handleTextKey(mockRoot, "y", TodoStore);
+  assert.equal(copied, true);
+
+  // If focusSection is not tasks, does not trigger
+  copied = false;
+  mockRoot.focusSection = "input";
+  handleTextKey(mockRoot, "y", TodoStore);
+  assert.equal(copied, false);
 });

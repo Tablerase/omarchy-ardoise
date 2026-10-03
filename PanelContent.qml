@@ -861,6 +861,12 @@ Item {
     Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", label || ""])
   }
 
+  function copySelectedTask() {
+    var task = root.currentTask()
+    if (!task) return
+    root.copyToClipboard(TodoStore.formatTaskForLLM(task), "Task copied for LLM")
+  }
+
   function activateTaskMenuItem(actionId) {
     var task = root.currentTask()
     var id = actionId || (root.taskMenuItems && root.taskMenuItems[root.taskMenuIndex] ? root.taskMenuItems[root.taskMenuIndex].id : "")
