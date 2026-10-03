@@ -52,6 +52,12 @@ Rectangle {
   }
 
   property string search: ""
+  onSearchChanged: {
+    if (helpFlickable) {
+      helpFlickable.selectedIndex = 0
+      helpFlickable.contentY = 0
+    }
+  }
   property string focusSection: "search" // "search" | "list" | "close"
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.search)
@@ -61,6 +67,10 @@ Rectangle {
     search = ""
     focusSection = "search"
     isOpen = true
+    if (helpFlickable) {
+      helpFlickable.selectedIndex = 0
+      helpFlickable.contentY = 0
+    }
     if (keySearchField) keySearchField.focus = false
     Qt.callLater(function() {
       root.forceActiveFocus()
@@ -400,11 +410,15 @@ Rectangle {
       }
 
       function ensureItemVisible() {
-        var itemY = selectedIndex * Style.space(31)
+        if (!helpListRepeater || selectedIndex < 0 || selectedIndex >= helpListRepeater.count) return
+        var item = helpListRepeater.itemAt(selectedIndex)
+        if (!item) return
+        var itemY = item.y
+        var itemH = item.height
         if (itemY < contentY) {
           contentY = itemY
-        } else if (itemY + Style.space(31) > contentY + height) {
-          contentY = Math.max(0, itemY + Style.space(31) - height)
+        } else if (itemY + itemH > contentY + height) {
+          contentY = Math.max(0, itemY + itemH - height)
         }
       }
 
@@ -483,10 +497,11 @@ Rectangle {
 
       Column {
         id: helpListCol
-        width: parent.width
-        spacing: Style.space(5)
+        width: helpFlickable.width - Style.space(8)
+        spacing: Style.space(6)
 
         Repeater {
+          id: helpListRepeater
           model: root.filteredKeybindings
 
           Rectangle {
@@ -495,40 +510,52 @@ Rectangle {
             required property int index
             readonly property bool isSelected: helpFlickable.activeFocus && (helpFlickable.selectedIndex === index)
             width: parent.width
-            implicitHeight: Style.space(26)
+            implicitHeight: cardCol.implicitHeight + Style.space(12)
             radius: Style.cornerRadius
             color: isSelected ? Util.alpha(Color.accent, 0.14) : Color.menu.selectedBackground
             border.color: isSelected ? Color.accent : Color.menu.border
             border.width: isSelected ? 1.5 : 1
 
-            Row {
+            Column {
+              id: cardCol
               anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.top: parent.top
               anchors.leftMargin: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.space(6)
+              anchors.rightMargin: Style.space(8)
+              anchors.topMargin: Style.space(6)
+              spacing: Style.space(4)
 
-              KeyBadge {
-                anchors.verticalCenter: parent.verticalCenter
-                keyText: keyHelpRow.modelData.key
+              Item {
+                width: parent.width
+                implicitHeight: Math.max(badgeItem.implicitHeight, categoryText.implicitHeight)
+
+                KeyBadge {
+                  id: badgeItem
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  keyText: keyHelpRow.modelData.key
+                }
+
+                Text {
+                  id: categoryText
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: keyHelpRow.modelData.category
+                  color: Color.muted
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.space(8.5)
+                }
               }
 
               Text {
-                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
                 text: keyHelpRow.modelData.desc
                 color: root.barForeground
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
               }
-            }
-
-            Text {
-              anchors.right: parent.right
-              anchors.rightMargin: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              text: keyHelpRow.modelData.category
-              color: Color.muted
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.space(8.5)
             }
           }
         }
