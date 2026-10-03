@@ -11,13 +11,13 @@ import qs.Ui
 // rendered on a larger surface (e.g. a whole task row) set
 // `visualsEnabled: false` and bind their own visuals to `progress`.
 //
-// This is the single implementation of the 600ms charge pattern used by the
+// This is the single implementation of the 800ms charge pattern used by the
 // row delete button, the footer clear button, and the archive permanent
 // delete.
 Button {
   id: root
 
-  property int holdDuration: 600
+  property int holdDuration: 800
   property color chargeColor: Color.accent
   property bool visualsEnabled: true
   // When > 0, forces a square icon-only button (PanelActionButton-like).

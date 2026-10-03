@@ -201,6 +201,8 @@ BarWidget {
               root._archiveOpInFlight = false
               return
             }
+            root.store = result.updatedStore
+            root.lastArchiveText = archiveJson
             root._writeArchiveUntilGone(id, archiveJson, "Restore task from archive", 3)
           })
         })
@@ -221,6 +223,7 @@ BarWidget {
         return
       }
       var archiveJson = JSON.stringify(result.updatedArchive, null, 2) + "\n"
+      root.lastArchiveText = archiveJson
       root._writeArchiveUntilGone(id, archiveJson, "Delete archived task permanently", 3)
     })
     return true
@@ -700,10 +703,7 @@ BarWidget {
     }
     onSaved: root._completeWrite(true)
     onSaveFailed: root._completeWrite(false)
-    onFileChanged: {
-      reload()
-      root.lastArchiveText = text()
-    }
+    onFileChanged: reload()
   }
 
   // Authoritative disk reads for archive operations. `cat` is used (rather

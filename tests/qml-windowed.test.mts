@@ -1682,3 +1682,286 @@ ShellRoot {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("Quickshell Restored Task Cycle [local-only]: unarchive synchronizes store, toggle done, clear completed moves back to archive without vanishing", (t) => {
+  if (process.env.CI) {
+    t.skip("local-only: needs a wlr-layer-shell compositor");
+    return;
+  }
+  if (!process.env.WAYLAND_DISPLAY) {
+    t.skip("local-only: no Wayland display");
+    return;
+  }
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
+    t.skip("quickshell binary not found on system PATH");
+    return;
+  }
+  const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
+  const commonsDir = path.join(omarchyPath, "shell", "Commons");
+  const uiDir = path.join(omarchyPath, "shell", "Ui");
+  if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
+    if (process.env.CI) throw new Error("Omarchy shell Commons/Ui modules must be provided in CI");
+    t.skip("Omarchy shell Commons/Ui modules not found at " + omarchyPath);
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-restore-cycle-"));
+  try {
+    fs.symlinkSync(commonsDir, path.join(tmpDir, "Commons"));
+    fs.symlinkSync(uiDir, path.join(tmpDir, "Ui"));
+    fs.symlinkSync(repoDir, path.join(tmpDir, "plugin"));
+
+    const dataDir = path.join(tmpDir, ".config", "omarchy", "tablerase.ardoise");
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    const store = { version: 1, activeProfile: "personal", profiles: ["personal"], todos: [] };
+    const archived = [
+      { id: 500, title: "Cycle task", description: "notes", profile: "personal", createdAt: 100, completedAt: 100 }
+    ];
+    fs.writeFileSync(path.join(dataDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    fs.writeFileSync(path.join(dataDir, "todos-archive.json"), JSON.stringify({ version: 1, archived }, null, 2), "utf8");
+
+    const harnessQml = `
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import "plugin" as Plugin
+
+ShellRoot {
+    id: root
+
+    PanelWindow {
+        id: fakeBar
+        anchors { top: true; left: true; right: true }
+        implicitHeight: 30
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        Plugin.BarWidget { id: barWidget }
+    }
+
+    Timer {
+        interval: 600; running: true
+        onTriggered: {
+            // Restore from archive
+            barWidget.unarchiveTask(500)
+        }
+    }
+
+    Timer {
+        interval: 1800; running: true
+        onTriggered: {
+            var inMemHas500 = barWidget.store && barWidget.store.todos && barWidget.store.todos.some(function(t) { return t.id === 500 })
+            console.log("[CYCLE] inMemHas500=" + (inMemHas500 ? 1 : 0))
+            // Toggle to done
+            barWidget.toggleTodo(500)
+            var isDone = barWidget.store && barWidget.store.todos && barWidget.store.todos.some(function(t) { return t.id === 500 && t.done })
+            console.log("[CYCLE] isDone=" + (isDone ? 1 : 0))
+        }
+    }
+
+    Timer {
+        interval: 2800; running: true
+        onTriggered: {
+            // Clear completed
+            barWidget.clearCompleted("personal")
+            var inMemActiveCount = barWidget.store ? barWidget.store.todos.length : -1
+            console.log("[CYCLE] inMemActiveCount=" + inMemActiveCount)
+        }
+    }
+
+    Timer {
+        interval: 4000; running: true
+        onTriggered: {
+            console.log("[CYCLE] done=1")
+            Qt.exit(0)
+        }
+    }
+}
+`;
+    fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
+
+    const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
+      encoding: "utf8",
+      timeout: 25000,
+      env: { ...process.env, HOME: tmpDir, ARDOISE_DATA_DIR: dataDir }
+    });
+    const output = (qsResult.stdout || "") + "\n" + (qsResult.stderr || "");
+
+    assert.ok(/\[CYCLE\] done=1/.test(output), "restore-cycle harness did not complete:\n" + output);
+    assert.ok(/\[CYCLE\] inMemHas500=1/.test(output), "unarchiveTask must update barWidget.store in memory:\n" + output);
+    assert.ok(/\[CYCLE\] isDone=1/.test(output), "restored task must be toggleable in memory:\n" + output);
+    assert.ok(/\[CYCLE\] inMemActiveCount=0/.test(output), "clearCompleted must clear task from active store:\n" + output);
+
+    const active = JSON.parse(fs.readFileSync(path.join(dataDir, "todos.json"), "utf8"));
+    const archive = JSON.parse(fs.readFileSync(path.join(dataDir, "todos-archive.json"), "utf8"));
+    const activeIds = active.todos.map((x: any) => x.id);
+    const archivedIds = archive.archived.map((x: any) => x.id);
+
+    assert.ok(!activeIds.includes(500), "task 500 must not be in active store after clearCompleted");
+    assert.ok(archivedIds.includes(500), "task 500 MUST be preserved in archive and not vanish!");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("Quickshell ArchiveModal Hold Delete [local-only]: holding x with auto-repeat typematic events completes purge and deletes from disk", (t) => {
+  if (process.env.CI) {
+    t.skip("local-only: needs a wlr-layer-shell compositor");
+    return;
+  }
+  if (!process.env.WAYLAND_DISPLAY) {
+    t.skip("local-only: no Wayland display");
+    return;
+  }
+  const quickshellPath = findOnPath("quickshell");
+  if (!quickshellPath) {
+    t.skip("quickshell binary not found on system PATH");
+    return;
+  }
+  const omarchyPath = process.env.OMARCHY_PATH || "/usr/share/omarchy";
+  const commonsDir = path.join(omarchyPath, "shell", "Commons");
+  const uiDir = path.join(omarchyPath, "shell", "Ui");
+  if (!fs.existsSync(commonsDir) || !fs.existsSync(uiDir)) {
+    if (process.env.CI) throw new Error("Omarchy shell Commons/Ui modules must be provided in CI");
+    t.skip("Omarchy shell Commons/Ui modules not found at " + omarchyPath);
+    return;
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-archive-hold-delete-"));
+  try {
+    fs.symlinkSync(commonsDir, path.join(tmpDir, "Commons"));
+    fs.symlinkSync(uiDir, path.join(tmpDir, "Ui"));
+    fs.symlinkSync(repoDir, path.join(tmpDir, "plugin"));
+
+    const dataDir = path.join(tmpDir, ".config", "omarchy", "tablerase.ardoise");
+    fs.mkdirSync(dataDir, { recursive: true });
+
+    const store = { version: 1, activeProfile: "personal", profiles: ["personal"], todos: [] };
+    const archived = [
+      { id: 700, title: "Purge me with hold", profile: "personal", createdAt: 100, completedAt: 100 }
+    ];
+    fs.writeFileSync(path.join(dataDir, "todos.json"), JSON.stringify(store, null, 2), "utf8");
+    fs.writeFileSync(path.join(dataDir, "todos-archive.json"), JSON.stringify({ version: 1, archived }, null, 2), "utf8");
+
+    const harnessQml = `
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import qs.Ui
+import "plugin" as Plugin
+
+ShellRoot {
+    id: root
+
+    PanelWindow {
+        id: fakeBar
+        anchors { top: true; left: true; right: true }
+        implicitHeight: 30
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        Plugin.BarWidget { id: barWidget }
+    }
+
+    QtObject {
+        id: fakeBarObj
+        property string position: "top"
+        property color foreground: "#ffffff"
+        property string fontFamily: "sans-serif"
+        function run(cmd) {}
+    }
+
+    PanelWindow {
+        id: panelWindow
+        anchors { top: true; left: true; right: true; bottom: true }
+        color: "transparent"
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        PanelKeyCatcher {
+            anchors.fill: parent
+            blocked: panelContent.activeFocusBlocked
+            Plugin.PanelContent {
+                id: panelContent
+                anchors.fill: parent
+                bar: fakeBarObj
+                barWidget: barWidget
+            }
+        }
+    }
+
+    property int repeatTicks: 0
+
+    Timer {
+        id: repeatTimer
+        interval: 80
+        repeat: true
+        running: false
+        onTriggered: {
+            var modal = panelContent.archiveModal
+            root.repeatTicks++
+            // Simulate OS typematic repeat: KeyRelease(isAutoRepeat: true) followed by KeyPress(isAutoRepeat: true)
+            modal.Keys.onReleased({ key: Qt.Key_X, text: "x", modifiers: 0, accepted: false, isAutoRepeat: true })
+            modal.handleKey({ key: Qt.Key_X, text: "x", modifiers: 0, accepted: false, isAutoRepeat: true })
+            if (root.repeatTicks >= 14) {
+                repeatTimer.stop()
+            }
+        }
+    }
+
+    Timer {
+        interval: 400; running: true
+        onTriggered: {
+            panelContent.openArchiveModal()
+            console.log("[PURGE] modalOpen=" + (panelContent.archiveModal.isOpen ? 1 : 0))
+        }
+    }
+
+    Timer {
+        interval: 800; running: true
+        onTriggered: {
+            var modal = panelContent.archiveModal
+            console.log("[PURGE] initialCount=" + modal.filteredArchived.length)
+            // Initial key press (start charge)
+            modal.handleKey({ key: Qt.Key_X, text: "x", modifiers: 0, accepted: false, isAutoRepeat: false })
+            repeatTimer.start()
+        }
+    }
+
+    Timer {
+        interval: 2400; running: true
+        onTriggered: {
+            var modal = panelContent.archiveModal
+            // After 800ms hold charge completes, task 700 should be purged
+            console.log("[PURGE] remainingCount=" + modal.filteredArchived.length)
+            console.log("[PURGE] done=1")
+            Qt.exit(0)
+        }
+    }
+}
+`;
+    fs.writeFileSync(path.join(tmpDir, "shell.qml"), harnessQml, "utf8");
+
+    const qsResult = spawnSync(quickshellPath, ["-p", tmpDir, "--no-color"], {
+      encoding: "utf8",
+      timeout: 25000,
+      env: { ...process.env, HOME: tmpDir, ARDOISE_DATA_DIR: dataDir }
+    });
+    const output = (qsResult.stdout || "") + "\n" + (qsResult.stderr || "");
+
+    assert.ok(/\[PURGE\] done=1/.test(output), "archive hold delete harness did not complete:\n" + output);
+    assert.ok(/\[PURGE\] initialCount=1/.test(output), "archive modal must initially show 1 item:\n" + output);
+    assert.ok(/\[PURGE\] remainingCount=0/.test(output), "holding x with auto-repeat must permanently purge task from UI list:\n" + output);
+
+    const archive = JSON.parse(fs.readFileSync(path.join(dataDir, "todos-archive.json"), "utf8"));
+    const archivedIds = archive.archived.map((x: any) => x.id);
+    assert.ok(!archivedIds.includes(700), "task 700 must be permanently deleted from todos-archive.json on disk");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

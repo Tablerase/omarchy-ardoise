@@ -292,7 +292,7 @@ Item {
     width: 0
     height: 0
     visualsEnabled: false
-    holdDuration: 600
+    holdDuration: 800
     chargeColor: Color.urgent
     onConfirmed: {
       var it = (root.items && root.holdIndex >= 0 && root.holdIndex < root.items.length) ? root.items[root.holdIndex] : null

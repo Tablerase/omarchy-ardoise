@@ -230,6 +230,7 @@ Rectangle {
       }
       if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
         event.accepted = true
+        if (event.isAutoRepeat) return
         var sel = root.menuItems[root.menuIndex]
         if (sel && sel.hold) contextMenu.startSelectedHold()
         else root.activateMenuAction(sel ? sel.id : "")
@@ -238,6 +239,7 @@ Rectangle {
       var menuAct = Logic.archiveMenuActionForKey(event.text)
       if (menuAct) {
         event.accepted = true
+        if (event.isAutoRepeat) return
         if (menuAct === "delete_permanent") contextMenu.startHoldFor("delete_permanent")
         else root.activateMenuAction(menuAct)
       }
@@ -265,6 +267,7 @@ Rectangle {
     // x/Delete starts the permanent-delete hold.
     if (event.key === Qt.Key_X || event.key === Qt.Key_Delete || event.text === "x" || event.text === "X") {
       event.accepted = true
+      if (event.isAutoRepeat) return
       if (typeof purgeHold !== "undefined" && purgeHold && typeof purgeHold.startCharging === "function") {
         purgeHold.startCharging()
       }
@@ -338,6 +341,7 @@ Rectangle {
 
   Keys.onPressed: function(event) { root.handleKey(event) }
   Keys.onReleased: function(event) {
+    if (event.isAutoRepeat) return
     // Releasing the hold key cancels an in-progress permanent delete, whether
     // it is the context-menu hold or the direct x-hold on the selected row.
     if (root.showMenu && contextMenu && typeof contextMenu.stopHold === "function") {
@@ -670,7 +674,7 @@ Rectangle {
     width: 0
     height: 0
     visualsEnabled: false
-    holdDuration: 600
+    holdDuration: 800
     onConfirmed: root.purgeSelected()
   }
 

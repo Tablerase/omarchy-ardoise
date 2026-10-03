@@ -1093,8 +1093,15 @@ test("Right-click, archive menu/delete, and data-loss safeguards: contracts", ()
       archiveModal.includes("purgeHold.startCharging()") &&
       !archiveModal.includes("root.purgeHold") &&
       archiveModal.includes("Keys.onReleased") &&
-      archiveModal.includes("purgeHold.stopCharging()"),
-    "ArchiveModal must wire a HoldActionButton state machine to x/Delete press and release"
+      archiveModal.includes("if (event.isAutoRepeat) return") &&
+      archiveModal.includes("purgeHold.stopCharging()") &&
+      archiveModal.includes("holdDuration: 800"),
+    "ArchiveModal must wire a HoldActionButton state machine to x/Delete press and release with auto-repeat guard and 800ms duration"
+  );
+  assert.ok(
+    barWidget.includes("root.store = result.updatedStore") &&
+      barWidget.includes("root.lastArchiveText = archiveJson"),
+    "BarWidget must synchronize root.store and root.lastArchiveText upon unarchive / purge operations"
   );
 
   // The menu-level hold is centralized in ContextActionMenu and driven by both

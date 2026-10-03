@@ -364,7 +364,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `K` | Open the focused task's context menu (copy for LLM, copy title/notes, open codebase, edit, delete) |
 | **Panel (Task Menu)** | `j` / `k` / `↓` / `↑` | Move the context menu selection |
 | **Panel (Task Menu)** | `y` / `t` / `n` / `o` / `e` | Copy for LLM / copy title / copy notes / open codebase / edit title |
-| **Panel (Task Menu)** | `x` (hold 600ms) | Delete the task (hold-to-confirm charge on the menu row) |
+| **Panel (Task Menu)** | `x` (hold 800ms) | Delete the task (hold-to-confirm charge on the menu row) |
 | **Panel (Task Menu)** | `Enter` / `Space` | Activate the selected item; on the delete item, hold to charge |
 | **Panel (Task Menu)** | `Escape` / `q` | Dismiss the context menu |
 | **Panel (Title Editor)** | `Enter` | Commit edited title (trims input; updates profile/tags if hashtag included) |
@@ -381,7 +381,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Archive Modal** | `/` / `Ctrl+F` / magnifier button | Activate the archive filter bar |
 | **Archive Modal** | `K` / Right-Click / `󰇙` button | Open the archived-task contextual menu (restore, copy, open file, delete) |
 | **Archive Modal (Menu)** | `j` / `k` / `Enter` | Navigate the menu and activate the selected item |
-| **Archive Modal** | `x` / `Delete` (hold 600ms) | Permanently delete the selected archived task (hold-to-confirm) |
+| **Archive Modal** | `x` / `Delete` (hold 800ms) | Permanently delete the selected archived task (hold-to-confirm) |
 | **Archive Modal (Menu)** | `x` (hold) | Permanently delete via the menu's hold-to-confirm item |
 | **Archive Modal** | `Escape` | Two-stage: close the menu/filter first, then dismiss the modal |
 | **Panel** | `i`, `a`, `<slash>` | Jump focus into new task input field |
