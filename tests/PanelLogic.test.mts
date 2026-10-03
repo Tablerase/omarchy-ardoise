@@ -813,10 +813,14 @@ test("task context menu: getTaskMenuItems adapts to the task and taskMenuActionF
   assert.ok(richIds.includes("copy_notes"));
   assert.ok(richIds.includes("open_codebase"));
 
+  const editItem = bare.find((i: any) => i.id === "edit_title");
+  assert.equal(editItem?.shortcut, "r");
+
   assert.equal(taskMenuActionForKey("y"), "copy_llm");
   assert.equal(taskMenuActionForKey("T"), "copy_title");
   assert.equal(taskMenuActionForKey("n"), "copy_notes");
   assert.equal(taskMenuActionForKey("o"), "open_codebase");
+  assert.equal(taskMenuActionForKey("r"), "edit_title");
   assert.equal(taskMenuActionForKey("e"), "edit_title");
   assert.equal(taskMenuActionForKey("x"), "delete_task");
   assert.equal(taskMenuActionForKey("z"), null);
