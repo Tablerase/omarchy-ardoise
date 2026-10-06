@@ -183,7 +183,7 @@ Item {
   }
 
   function cycleReminderPreset(step) {
-    var count = root.reminderPresets.length + (root.selectedReminder ? 1 : 0)
+    var count = root.reminderPresets.length + 1 + (root.selectedReminder ? 1 : 0)
     if (count <= 0) return
     reminderPresetIndex = (reminderPresetIndex + step + count) % count
   }
@@ -248,7 +248,9 @@ Item {
       showNote = false
       showReminderOptions = false
       selectedReminder = ""
-      selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
+      root.detectedContext = null
+      root.attachLocation = false
+      selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
     }
     Qt.callLater(function() {
       taskInput.forceActiveFocus()
@@ -351,10 +353,16 @@ Item {
           } else {
             root.detectedContext = null
             root.attachLocation = false
+            if (!root.hasDraft) {
+              root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
+            }
           }
         } catch (_e) {
           root.detectedContext = null
           root.attachLocation = false
+          if (!root.hasDraft) {
+            root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
+          }
         }
       }
     }
@@ -410,6 +418,10 @@ Item {
       focus: true
 
       Keys.onPressed: function(event) {
+        if (reminderPicker && reminderPicker.isOpen) {
+          return
+        }
+
         if (event.key === Qt.Key_Escape) {
           event.accepted = true
           root.dismiss()
@@ -501,15 +513,38 @@ Item {
           } else if (root.focusSection === "notes") {
             if (descNotesArea) descNotesArea.forceActiveFocus()
           } else if (root.focusSection === "reminders") {
-            if (root.reminderPresetIndex < root.reminderPresets.length) {
-              root.selectedReminder = (typeof TodoStore.computePresetReminder === "function")
-                ? TodoStore.computePresetReminder(root.reminderPresetIndex)
-                : root.reminderPresets[root.reminderPresetIndex].value
+            var isCustomSelQA = Boolean(root.selectedReminder && (!root.reminderPresets || !root.reminderPresets.some(function(p) { return p && p.value === root.selectedReminder; })))
+            var presetsLenQA = root.reminderPresets ? root.reminderPresets.length : 0
+            if (isCustomSelQA) {
+              if (root.reminderPresetIndex === 0) {
+                if (reminderPicker) reminderPicker.open(root.selectedReminder)
+              } else if (root.reminderPresetIndex >= 1 && root.reminderPresetIndex <= presetsLenQA) {
+                var pIdxQA = root.reminderPresetIndex - 1
+                root.selectedReminder = (typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(pIdxQA)
+                  : root.reminderPresets[pIdxQA].value
+                root.showReminderOptions = false
+                root.focusSection = "options"
+              } else {
+                root.selectedReminder = ""
+                root.showReminderOptions = false
+                root.focusSection = "options"
+              }
             } else {
-              root.selectedReminder = ""
+              if (root.reminderPresetIndex < presetsLenQA) {
+                root.selectedReminder = (typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(root.reminderPresetIndex)
+                  : root.reminderPresets[root.reminderPresetIndex].value
+                root.showReminderOptions = false
+                root.focusSection = "options"
+              } else if (root.reminderPresetIndex === presetsLenQA) {
+                if (reminderPicker) reminderPicker.open(root.selectedReminder)
+              } else {
+                root.selectedReminder = ""
+                root.showReminderOptions = false
+                root.focusSection = "options"
+              }
             }
-            root.showReminderOptions = false
-            root.focusSection = "options"
           } else if (root.focusSection === "profiles") {
             // Profile selection confirmed with Space/Enter
           } else if (root.focusSection === "actions") {
@@ -1073,6 +1108,9 @@ Item {
               root.showReminderOptions = false
               root.focusSection = "options"
             }
+            onCustomSelected: function(idx) {
+              if (reminderPicker) reminderPicker.open(root.selectedReminder)
+            }
             onClearSelected: function(idx) {
               root.selectedReminder = ""
               root.showReminderOptions = false
@@ -1241,6 +1279,26 @@ Item {
             }
           }
         }
+      }
+    }
+
+    Ui.ReminderPicker {
+      id: reminderPicker
+      anchors.fill: parent
+      onReminderConfirmed: function(iso) {
+        root.selectedReminder = iso
+        root.showReminderOptions = false
+        root.focusSection = "options"
+        card.forceActiveFocus()
+      }
+      onReminderCleared: function() {
+        root.selectedReminder = ""
+        root.showReminderOptions = false
+        root.focusSection = "options"
+        card.forceActiveFocus()
+      }
+      onCloseRequested: {
+        card.forceActiveFocus()
       }
     }
   }

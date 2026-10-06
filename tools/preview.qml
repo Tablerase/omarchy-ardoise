@@ -22,21 +22,34 @@ ShellRoot {
         visible: true
         implicitWidth: 1600
         implicitHeight: 900
-        color: "#090d16"
+        color: Color.background
 
         Item {
             id: artwork
             anchors.fill: parent
 
-            // Deep slate canvas with subtle radial illumination
+            readonly property bool isLight: (Color.background.r * 0.299 + Color.background.g * 0.587 + Color.background.b * 0.114) > 0.5
+            readonly property color brandPrimaryText: isLight ? Color.foreground : "#f8fafc"
+            readonly property color brandSecondaryText: isLight ? Util.alpha(Color.foreground, 0.8) : "#94a3b8"
+            readonly property color brandMutedText: isLight ? Util.alpha(Color.foreground, 0.55) : "#64748b"
+            readonly property color featureText: isLight ? Color.foreground : "#cbd5e1"
+            readonly property color separatorColor: isLight ? Util.alpha(Color.foreground, 0.12) : "#1e293b"
+
+            // Dynamic theme-aware canvas with subtle radial illumination
             Canvas {
                 anchors.fill: parent
                 onPaint: {
                     var ctx = getContext("2d");
                     var g = ctx.createRadialGradient(1140, 450, 40, 1140, 450, 960);
-                    g.addColorStop(0, "#172554");
-                    g.addColorStop(0.5, "#0b1220");
-                    g.addColorStop(1, "#070a12");
+                    if (artwork.isLight) {
+                        g.addColorStop(0, Qt.tint(Color.background, Util.alpha(Color.accent, 0.12)).toString());
+                        g.addColorStop(0.5, Color.background.toString());
+                        g.addColorStop(1, Qt.darker(Color.background, 1.08).toString());
+                    } else {
+                        g.addColorStop(0, Qt.tint(Color.background, Util.alpha(Color.accent, 0.25)).toString());
+                        g.addColorStop(0.5, Qt.darker(Color.background, 1.25).toString());
+                        g.addColorStop(1, Qt.darker(Color.background, 1.55).toString());
+                    }
                     ctx.fillStyle = g;
                     ctx.fillRect(0, 0, width, height);
                 }
@@ -68,7 +81,7 @@ ShellRoot {
 
                 Text {
                     text: "Your task slate,\nright in the bar."
-                    color: "#f8fafc"
+                    color: artwork.brandPrimaryText
                     font.family: "Inter"
                     font.pixelSize: Style.space(68)
                     font.bold: true
@@ -77,7 +90,7 @@ ShellRoot {
 
                 Text {
                     text: "Instant capture, profile tags, and background reminders.\nWipe the slate clean when you are done."
-                    color: "#94a3b8"
+                    color: artwork.brandSecondaryText
                     font.family: Style.font.family
                     font.pixelSize: Style.space(20)
                     lineHeight: 1.45
@@ -90,11 +103,11 @@ ShellRoot {
                     Repeater {
                         model: [
                             { icon: "󰌌", text: "Vim & keyboard navigation with customizable Lua bindings" },
-                            { icon: "󰍉", text: "In-panel search (/ or Ctrl+F) across tasks, notes, & profiles" },
+                            { icon: "󰥔", text: "Natural-language reminders with calendar picker & presets" },
+                            { icon: "󰅙", text: "Hold-to-confirm laser progress bar for safe deletions" },
                             { icon: "󰊢", text: "Git-backed snapshots: automatic undo, rollback, & sync" },
                             { icon: "󰉋", text: "Context-aware: auto-detects active workspace (Zed, VS Code, Nvim)" },
-                            { icon: "󱫌", text: "Urgency ladder: smart severity escalations without red alert fatigue" },
-                            { icon: "󰆍", text: "23 shell commands over omarchy-shell tablerase.ardoise" }
+                            { icon: "󰆍", text: "31 shell commands over omarchy-shell tablerase.ardoise" }
                         ]
                         Row {
                             required property var modelData
@@ -108,7 +121,7 @@ ShellRoot {
                             }
                             Text {
                                 text: modelData.text
-                                color: "#cbd5e1"
+                                color: artwork.featureText
                                 font.family: Style.font.family
                                 font.pixelSize: Style.space(17)
                                 anchors.verticalCenter: parent.verticalCenter
@@ -121,12 +134,12 @@ ShellRoot {
 
                 Rectangle {
                     width: Style.space(560); height: 1
-                    color: "#1e293b"
+                    color: artwork.separatorColor
                 }
 
                 Text {
                     text: "Ardoise for Omarchy. Native to Quickshell."
-                    color: "#64748b"
+                    color: artwork.brandMutedText
                     font.family: Style.font.family
                     font.pixelSize: Style.space(15)
                 }
@@ -142,13 +155,17 @@ ShellRoot {
                 scale: 1.18
                 transformOrigin: Item.TopLeft
 
-                // Simulated Omarchy Bar Widget Snippet with active underline
-                Item {
+                // Simulated Omarchy Bar Widget Snippet with capsule container & active indicator
+                Rectangle {
                     anchors.right: panelCard.right
                     anchors.rightMargin: Style.space(8)
                     y: 0
-                    width: barReadout.implicitWidth + Style.space(16)
+                    width: barReadout.implicitWidth + Style.space(22)
                     height: Style.space(28)
+                    radius: Style.space(6)
+                    color: artwork.isLight ? Color.popups.background : (Color.bar.background || "#1e293b")
+                    border.color: Color.popups.border
+                    border.width: 1
 
                     Row {
                         id: barReadout
@@ -159,7 +176,7 @@ ShellRoot {
                             id: barIcon
                             iconSize: Style.bar.iconFont
                             store: previewContent.store
-                            forcedKey: "overdue"
+                            forcedKey: "due"
                             anchors.verticalCenter: parent.verticalCenter
                         }
 
@@ -177,7 +194,9 @@ ShellRoot {
                     Rectangle {
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
+                        anchors.leftMargin: Style.space(4)
                         anchors.right: parent.right
+                        anchors.rightMargin: Style.space(4)
                         height: 2
                         radius: 1
                         color: Color.accent || "#1e66f5"
@@ -205,6 +224,7 @@ ShellRoot {
                         quickAddShortcutRegistered: true
                         detectedPanelShortcut: "SUPER + ALT + T"
                         detectedQuickAddShortcut: "SUPER + SHIFT + T"
+                        expandedTaskId: 1
                         store: ({
                             version: 1,
                             activeProfile: "personal",
@@ -218,7 +238,7 @@ ShellRoot {
                                     profile: "work",
                                     repo: "omarchy-ardoise",
                                     tags: ["ui", "parser"],
-                                    reminder: new Date(Date.now() - 3600000).toISOString(),
+                                    reminder: new Date(Date.now() + 2 * 3600000).toISOString(),
                                     location: { repo: "tablerase/omarchy-ardoise", localPath: "~/Work/tries/omarchy-ardoise" },
                                     createdAt: 1726930000000
                                 },
@@ -264,7 +284,7 @@ ShellRoot {
                     anchors.horizontalCenter: panelCard.horizontalCenter
                     y: panelCard.y + panelCard.height + Style.space(16)
                     text: "Your task slate, without leaving your desktop."
-                    color: "#64748b"
+                    color: artwork.brandMutedText
                     font.family: Style.font.family
                     font.pixelSize: Style.space(13)
                 }
@@ -273,7 +293,7 @@ ShellRoot {
     }
 
     Timer {
-        interval: 600
+        interval: 800
         running: true
         onTriggered: {
             var outDir = Quickshell.env("ARDOISE_PREVIEW_OUT") || ".";

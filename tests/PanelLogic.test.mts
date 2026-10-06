@@ -462,6 +462,124 @@ test("handleActivate & handleReturn: apply dynamic reminder on reminder sub-sect
   assert.ok(reminderTime <= after + 30 * 60 * 1000 + 500);
 });
 
+test("handleActivate: activating Custom reminder pill (index 4) calls openCustomReminderPicker", () => {
+  const task = { id: 42, title: "Test", done: false, profile: "personal", reminder: null };
+  let openedTask: any = null;
+  const mockRoot: any = {
+    filteredTodos: [task],
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    expandedTaskId: 42,
+    expandedSubSection: "reminders",
+    expandedReminderIndex: 4, // Custom... pill (index = presets.length)
+    reminderPresets: TodoStore.getReminderPresets(),
+    openCustomReminderPicker: (t: any) => {
+      openedTask = t;
+    },
+    updateTodo: () => {
+      assert.fail("updateTodo should not be called directly on Custom pill activation");
+    }
+  };
+
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(openedTask, task, "openCustomReminderPicker must be called with selected task");
+});
+
+test("handleActivate: when active custom reminder is set, index 0 opens custom reminder picker", () => {
+  const task = { id: 42, title: "Test", done: false, profile: "personal", reminder: "2026-10-15T10:00:00.000Z" };
+  let openedTask: any = null;
+  const mockRoot: any = {
+    filteredTodos: [task],
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    expandedTaskId: 42,
+    expandedSubSection: "reminders",
+    expandedReminderIndex: 0, // Active custom reminder displayed first at index 0
+    reminderPresets: TodoStore.getReminderPresets(),
+    openCustomReminderPicker: (t: any) => {
+      openedTask = t;
+    },
+    updateTodo: () => {
+      assert.fail("updateTodo should not be called when opening picker on index 0");
+    }
+  };
+
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(openedTask, task, "openCustomReminderPicker must be called when activating index 0 with active custom reminder");
+});
+
+test("handleActivate: when active custom reminder is set, index 1 activates first preset (+30m)", () => {
+  const task = { id: 42, title: "Test", done: false, profile: "personal", reminder: "2026-10-15T10:00:00.000Z" };
+  let updatedTodoId: any = null;
+  let updatedFields: any = null;
+  const mockRoot: any = {
+    filteredTodos: [task],
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    expandedTaskId: 42,
+    expandedSubSection: "reminders",
+    expandedReminderIndex: 1, // Preset 0 (+30m) shifted to visual index 1
+    reminderPresets: TodoStore.getReminderPresets(),
+    updateTodo: (id: number, fields: any) => {
+      updatedTodoId = id;
+      updatedFields = fields;
+    }
+  };
+
+  const before = Date.now();
+  handleActivate(mockRoot, TodoStore);
+  const after = Date.now();
+
+  assert.equal(updatedTodoId, 42);
+  assert.ok(updatedFields && updatedFields.reminder);
+  const reminderTime = new Date(updatedFields.reminder).getTime();
+  assert.ok(reminderTime >= before + 30 * 60 * 1000 - 500);
+  assert.ok(reminderTime <= after + 30 * 60 * 1000 + 500);
+});
+
+test("handleActivate: when active custom reminder is set, index 5 clears reminder", () => {
+  const task = { id: 42, title: "Test", done: false, profile: "personal", reminder: "2026-10-15T10:00:00.000Z" };
+  let updatedTodoId: any = null;
+  let updatedFields: any = null;
+  const mockRoot: any = {
+    filteredTodos: [task],
+    cursorIndex: 0,
+    cursorActive: true,
+    focusSection: "tasks",
+    expandedTaskId: 42,
+    expandedSubSection: "reminders",
+    expandedReminderIndex: 5, // Clear button at index 5
+    reminderPresets: TodoStore.getReminderPresets(),
+    updateTodo: (id: number, fields: any) => {
+      updatedTodoId = id;
+      updatedFields = fields;
+    }
+  };
+
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(updatedTodoId, 42);
+  assert.deepEqual(updatedFields, { reminder: null }, "activating index 5 must clear reminder");
+});
+
+test("handleEscape: closes showReminderPickerModal when open", () => {
+  let closed = false;
+  const mockRoot: any = {
+    showReminderPickerModal: true,
+    closeReminderPickerModal: () => {
+      closed = true;
+      mockRoot.showReminderPickerModal = false;
+    }
+  };
+
+  const consumed = handleEscape(mockRoot);
+  assert.equal(consumed, true, "Escape must be consumed by reminder picker modal");
+  assert.equal(closed, true, "closeReminderPickerModal must be invoked");
+  assert.equal(mockRoot.showReminderPickerModal, false);
+});
+
 test("handleTextKey: 'c' / 'C' triggers startClearHold when available or clearCompleted fallback", () => {
   let clearedFilter: string | null = null;
   let holdStarted = false;

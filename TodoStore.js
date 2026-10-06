@@ -31,6 +31,7 @@
  * @property {string|null} [dueDate] - Optional due date string
  * @property {string|null} [reminder] - Optional reminder ISO timestamp string
  * @property {boolean} [notified] - Whether desktop notification was triggered
+ * @property {boolean} [isTutorial] - Whether this is an onboarding quest task
  */
 
 /**
@@ -52,6 +53,8 @@
  * @property {string} activeProfile - Currently active profile
  * @property {string[]} profiles - List of configured profile names
  * @property {Task[]} todos - Active tasks list
+ * @property {boolean} [tutorialSeeded] - Whether onboarding tasks were seeded
+ * @property {string} [lastSeenVersion] - Last viewed release version
  */
 
 /**
@@ -110,18 +113,307 @@
 
 var CURRENT_SCHEMA_VERSION = 1
 var CURRENT_ARCHIVE_VERSION = 1
+var CURRENT_RELEASE_VERSION = "1.0.0"
+
+var RELEASE_HIGHLIGHTS = {
+  version: CURRENT_RELEASE_VERSION,
+  title: "What's new in v" + CURRENT_RELEASE_VERSION,
+  summary: "Welcome to Ardoise! Keyboard-first task management with Vim motions, Quick Add, and automatic Git snapshots.",
+  items: [
+    { icon: "󰞔", title: "Keyboard-First Invariants", desc: "Vim motions (j/k, h/l, g/G), two-stage Escape, and non-blocking modals." },
+    { icon: "󰌌", title: "Zero-Setup Global Shortcuts", desc: "Super+Alt+T to open Panel, Super+Shift+T for instant Quick Add from anywhere." },
+    { icon: "󰊢", title: "Git Snapshots & Recovery", desc: "Automatic local versioning, undo checkpoints, and git remote sync." },
+    { icon: "󰄬", title: "Urgency Ladder & Reminders", desc: "Smart presets, dynamic color escalation, and quiet background notifications." }
+  ],
+  highlights: [
+    "Keyboard-First Task Slate: Full vim motions (j/k, [/], g/G, Tab, Space, Enter)",
+    "Two-Stage Escape: Blurs to container mode without losing draft notes or input text",
+    "Custom Reminder Picker: Natural language parsing ('2h', '17:30', 'tomorrow 9am') & mini-calendar",
+    "Intelligent 3-Tier Profile Resolution: Detects workspace context across Zed, VS Code, Neovim, and Tmux",
+    "Zero-Config Git Snapshots: Automatic background backups, commit diffs, and instant rollback",
+    "Hold-to-Confirm Safeguards: 800ms laser progress bar for deletions without annoying modal dialogs"
+  ]
+}
+
+/**
+ * Returns the sequence of 8 interactive onboarding quest tasks.
+ * @param {number} [baseTime]
+ * @returns {Task[]}
+ */
+function getTutorialTasks(baseTime) {
+  var t0 = baseTime || Date.now()
+  return [
+    {
+      id: t0 + 8,
+      title: "󰞔 Navigate with j / k (or ↓ / ↑)",
+      description: "Ardoise is 100% keyboard-first! Use vim motions j and k to move smoothly through your tasks.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 8,
+      updatedAt: t0 + 8,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 7,
+      title: "󰄬 Press Space to complete this task (not Enter!)",
+      description: "Space toggles task completion. In Ardoise, Space toggles done while Enter expands details.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 7,
+      updatedAt: t0 + 7,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 6,
+      title: "󰭤 Press [ / ] to switch between profiles",
+      description: "Filter tasks by profile (personal, work, #projects). You can also press Tab to focus the profile pills.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 6,
+      updatedAt: t0 + 6,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 5,
+      title: "󰅂 Press Enter to open notes & explore reminders",
+      description: "Enter expands this details drawer. Try typing a note, or pick a reminder preset like '+30m' or '󰃭 Custom...'. Two-stage Escape blurs back to the list without losing your draft!",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 5,
+      updatedAt: t0 + 5,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 4,
+      title: "󰌌 Set up global shortcuts for Panel & QuickAdd (expand for setup)",
+      description: "Summon Ardoise from anywhere in Hyprland!\n\nAdd to ~/.config/hypr/hyprland.conf:\nbind = $mainMod ALT, T, exec, omarchy-shell tablerase.ardoise toggle\nbind = $mainMod SHIFT, T, exec, omarchy-shell shell toggle tablerase.ardoise '{}'",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 4,
+      updatedAt: t0 + 4,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 3,
+      title: "󰐕 Press A (or Super+Shift+T) to open Quick Add modal",
+      description: "Quick Add is Ardoise's premier task entry surface! Try adding a task title, typing a #profile or #tag to route it, or toggling a note/reminder before pressing Enter to submit.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 3,
+      updatedAt: t0 + 3,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 2,
+      title: "󰋖 Press ? to view all keybindings & Lua overrides",
+      description: "Opens the cheat sheet with interactive search filter, and tips for ~/.config/omarchy/tablerase.ardoise/bindings.lua.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 2,
+      updatedAt: t0 + 2,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    },
+    {
+      id: t0 + 1,
+      title: "󰅙 Hold x to permanently delete this tutorial task",
+      description: "Ardoise uses an 800ms hold-to-confirm laser progress bar for permanent deletions, eliminating confirmation modals.",
+      profile: "personal",
+      done: false,
+      isTutorial: true,
+      createdAt: t0 + 1,
+      updatedAt: t0 + 1,
+      repo: null,
+      tags: [],
+      location: null,
+      dueDate: null,
+      reminder: null,
+      notified: false
+    }
+  ]
+}
 
 /**
  * Creates an empty default Schema v1 store.
+ * @param {boolean} [withTutorial=false]
  * @returns {TodoStoreData}
  */
-function defaultStore() {
+function defaultStore(withTutorial) {
   return {
     version: CURRENT_SCHEMA_VERSION,
     activeProfile: "personal",
     profiles: ["personal", "work"],
-    todos: []
+    todos: withTutorial ? getTutorialTasks() : [],
+    tutorialSeeded: Boolean(withTutorial),
+    lastSeenVersion: CURRENT_RELEASE_VERSION
   }
+}
+
+/**
+ * Creates a brand new initial store seeded with interactive onboarding quest tasks.
+ * @returns {TodoStoreData}
+ */
+function createInitialStore() {
+  return defaultStore(true)
+}
+
+/**
+ * Seeds the 8 interactive onboarding tasks into the store, avoiding duplicates.
+ * @param {TodoStoreData} store
+ * @returns {TodoStoreData}
+ */
+function seedTutorialTasks(store) {
+  var s = cloneStore(store)
+  var tutorial = getTutorialTasks()
+  /** @type {Record<string, boolean>} */
+  var existingTitles = {}
+  for (var i = 0; i < s.todos.length; i++) {
+    if (s.todos[i] && s.todos[i].title) {
+      existingTitles[s.todos[i].title] = true
+    }
+  }
+
+  var toAdd = []
+  for (var j = 0; j < tutorial.length; j++) {
+    if (!existingTitles[tutorial[j].title]) {
+      toAdd.push(tutorial[j])
+    }
+  }
+
+  s.todos = toAdd.concat(s.todos)
+  s.tutorialSeeded = true
+  s.lastSeenVersion = CURRENT_RELEASE_VERSION
+  return s
+}
+
+/**
+ * Checks whether there is a new release update to highlight to the user.
+ * Returns true if store is initialized and lastSeenVersion is older than CURRENT_RELEASE_VERSION.
+ * @param {TodoStoreData|null|undefined} store
+ * @returns {boolean}
+ */
+function hasNewRelease(store) {
+  if (!store) return false
+  if (store.lastSeenVersion === CURRENT_RELEASE_VERSION) return false
+  return true
+}
+
+/**
+ * Marks the current release as seen in store metadata.
+ * @param {TodoStoreData} store
+ * @returns {TodoStoreData}
+ */
+function markReleaseSeen(store) {
+  var s = cloneStore(store)
+  s.lastSeenVersion = CURRENT_RELEASE_VERSION
+  return s
+}
+
+/**
+ * Resets release highlights seen state so the banner and indicators appear again.
+ * @param {TodoStoreData} store
+ * @returns {TodoStoreData}
+ */
+function resetReleaseHighlights(store) {
+  var s = cloneStore(store)
+  s.lastSeenVersion = "0.9.0"
+  return s
+}
+
+/**
+ * Returns human-readable command reference and usage signatures for all IPC endpoints.
+ * @returns {string}
+ */
+function getIpcHelp() {
+  return [
+    "Ardoise IPC Commands Reference (omarchy-shell tablerase.ardoise <command> [args])",
+    "",
+    "PANEL & VISIBILITY:",
+    "  toggle                           Toggle main panel on compositor-focused monitor",
+    "  open                             Open main panel on compositor-focused monitor",
+    "  close                            Close all open panel instances",
+    "  help                             Show this CLI and agent command reference",
+    "",
+    "TASKS & LIST LIFECYCLE:",
+    "  list                             Return full JSON array of active tasks",
+    "  get <id>                         Get single task JSON by ID (active or archived)",
+    "  count                            Return total pending task count string",
+    "  add <title>                      Add new task (supports #profile and #tags)",
+    "  addDetailed <title> <notes> <r>  Add task with explicit notes and reminder (+1h, ISO)",
+    "  toggleTodo <id>                  Toggle task completion (done)",
+    "  update <id> <fieldsJson>         Update task properties (reminder, notes, profile)",
+    "  remove <id>                      Delete task by ID",
+    "  clear                            Archive and clear completed tasks in current filter",
+    "",
+    "PROFILES:",
+    "  profiles                         Return array of configured profile names",
+    "  searchProfiles <query>           Search profiles matching substring",
+    "  setProfile <profile>             Switch active profile filter",
+    "",
+    "ARCHIVE BROWSER:",
+    "  archived                         Return raw archive JSON string",
+    "  archiveCount                     Return count of archived tasks",
+    "  unarchive <id>                   Restore archived task back to active store",
+    "  purgeArchived <id>               Permanently delete task from archive",
+    "",
+    "GIT BACKUPS & REMOTE SYNC:",
+    "  gitHistory                       Return JSON array of commit snapshots",
+    "  gitSearch <query>                Search snapshots by query, #device, hash, or author",
+    "  gitRollback <hash>               Revert active and archive stores to commit snapshot",
+    "  gitRecover <hash>                Selectively recover missing tasks from snapshot",
+    "  gitSync                          Sync tasks with remote repository (3-way merge)",
+    "  gitSetRemote <url>               Configure Git remote URL",
+    "  gitGetRemote                     Get configured Git remote URL",
+    "  autoSetupGitRemote [name]        Create private GitHub repository via gh CLI",
+    "  gitAutoSetup [name]              Alias for autoSetupGitRemote",
+    "",
+    "ONBOARDING & RELEASE HIGHLIGHTS:",
+    "  seedTutorial                     Seed 8 interactive onboarding quest tasks into store",
+    "  whatsNew                         Return release highlights metadata JSON",
+    "  markReleaseSeen                  Acknowledge release highlights in store metadata",
+    "  resetReleaseHighlights           Reset seen status to re-display banner & highlights"
+  ].join("\n")
 }
 
 /**
@@ -956,62 +1248,68 @@ function resolveDefaultProfile(store, context) {
   var def = (store && store.activeProfile) ? cleanProfileName(store.activeProfile) : "personal"
   if (!store || !Array.isArray(store.todos)) return def
 
+  // If outside of any workspace context (e.g. browser, desktop apps, or no active location),
+  // directly fallback to the default profile (store.activeProfile || "personal"),
+  // skipping global recency so non-work tasks aren't assigned to the last touched project.
+  if (!context || (!context.repo && !context.localPath)) {
+    return def
+  }
+
   // Tier 1: Check tasks with matching location context (most recent first)
-  if (context && (context.repo || context.localPath)) {
-    var matchRepo = context.repo ? String(context.repo).toLowerCase().trim() : null
-    var matchPath = context.localPath ? String(context.localPath).trim() : null
+  var matchRepo = context.repo ? String(context.repo).toLowerCase().trim() : null
+  var matchPath = context.localPath ? String(context.localPath).trim() : null
 
-    var latestLocTime = -1
-    var latestLocProfile = null
+  var latestLocTime = -1
+  var latestLocProfile = null
 
-    for (var i = 0; i < store.todos.length; i++) {
-      var t = store.todos[i]
-      if (t && t.location) {
-        var tRepo = t.location.repo ? String(t.location.repo).toLowerCase().trim() : null
-        var tPath = t.location.localPath ? String(t.location.localPath).trim() : null
+  for (var i = 0; i < store.todos.length; i++) {
+    var t = store.todos[i]
+    if (t && t.location) {
+      var tRepo = t.location.repo ? String(t.location.repo).toLowerCase().trim() : null
+      var tPath = t.location.localPath ? String(t.location.localPath).trim() : null
 
-        var isMatch = false
-        if (matchRepo && tRepo && matchRepo === tRepo) {
-          isMatch = true
-        } else if (matchPath && tPath && matchPath === tPath) {
-          isMatch = true
-        }
-
-        if (isMatch && t.profile) {
-          var time = Number(t.updatedAt || t.createdAt || 0)
-          if (time > latestLocTime) {
-            latestLocTime = time
-            latestLocProfile = cleanProfileName(t.profile)
-          }
-        }
+      var isMatch = false
+      if (matchRepo && tRepo && matchRepo === tRepo) {
+        isMatch = true
+      } else if (matchPath && tPath && matchPath === tPath) {
+        isMatch = true
       }
-    }
 
-    if (latestLocProfile) {
-      return latestLocProfile
-    }
-
-    // Tier 1b: If no existing tasks for this location, check if repo or repoName directly matches a known profile
-    if (Array.isArray(store.profiles)) {
-      var candidates = []
-      if (context.repo) {
-        var parts = String(context.repo).split("/")
-        candidates.push(cleanProfileName(parts[parts.length - 1]))
-        candidates.push(cleanProfileName(parts[0]))
-      }
-      if (context.repoName) {
-        candidates.push(cleanProfileName(context.repoName))
-      }
-      for (var c = 0; c < candidates.length; c++) {
-        var cand = candidates[c]
-        if (cand && store.profiles.indexOf(cand) !== -1) {
-          return cand
+      if (isMatch && t.profile) {
+        var time = Number(t.updatedAt || t.createdAt || 0)
+        if (time > latestLocTime) {
+          latestLocTime = time
+          latestLocProfile = cleanProfileName(t.profile)
         }
       }
     }
   }
 
-  // Tier 2: Last profile used globally across all tasks (by latest activity timestamp)
+  if (latestLocProfile) {
+    return latestLocProfile
+  }
+
+  // Tier 1b: If no existing tasks for this location, check if repo or repoName directly matches a known profile
+  if (Array.isArray(store.profiles)) {
+    var candidates = []
+    if (context.repo) {
+      var parts = String(context.repo).split("/")
+      candidates.push(cleanProfileName(parts[parts.length - 1]))
+      candidates.push(cleanProfileName(parts[0]))
+    }
+    if (context.repoName) {
+      candidates.push(cleanProfileName(context.repoName))
+    }
+    for (var c = 0; c < candidates.length; c++) {
+      var cand = candidates[c]
+      if (cand && store.profiles.indexOf(cand) !== -1) {
+        return cand
+      }
+    }
+  }
+
+  // Tier 2: Inside an unrecognized workspace without prior tasks/matching profiles:
+  // Fall back to the last profile used globally across all tasks (by latest activity timestamp)
   var latestGlobalTime = -1
   var latestGlobalProfile = null
 
@@ -2214,7 +2512,16 @@ if (typeof module !== "undefined" && module.exports) {
     searchProfiles,
     getAllTags,
     searchTags,
-    resolveDefaultProfile
+    resolveDefaultProfile,
+    CURRENT_RELEASE_VERSION,
+    RELEASE_HIGHLIGHTS,
+    getTutorialTasks,
+    createInitialStore,
+    seedTutorialTasks,
+    hasNewRelease,
+    markReleaseSeen,
+    resetReleaseHighlights,
+    getIpcHelp
   }
 }
 

@@ -3,6 +3,7 @@ import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "../PanelLogic.js" as Logic
+import "../TodoStore.js" as TodoStore
 
 Rectangle {
   id: root
@@ -58,10 +59,34 @@ Rectangle {
       helpFlickable.contentY = 0
     }
   }
-  property string focusSection: "search" // "search" | "list" | "close"
+  property string focusSection: "search" // "search" | "release" | "list" | "close"
+  property bool hasNewRelease: false
+  property bool releaseNotesCollapsed: !hasNewRelease
+  property bool releaseNotesHidden: false
+
+  onHasNewReleaseChanged: {
+    releaseNotesCollapsed = !hasNewRelease
+    if (hasNewRelease) {
+      releaseNotesHidden = false
+    }
+  }
+
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
   readonly property var filteredKeybindings: Logic.filterKeybindings(root.keybindingsList, root.search)
   readonly property bool searchFieldActiveFocus: root.isOpen && (keySearchField.activeFocus || (root.focusSection === "search"))
+
+  function moveToBelowSearch() {
+    keySearchField.focus = false
+    if (root.search.trim().length === 0 && !root.releaseNotesHidden) {
+      root.focusSection = "release"
+      if (helpFlickable) helpFlickable.contentY = 0
+      root.forceActiveFocus()
+    } else {
+      root.focusSection = "list"
+      helpFlickable.focus = true
+      helpFlickable.forceActiveFocus()
+    }
+  }
 
   function open() {
     search = ""
@@ -136,9 +161,7 @@ Rectangle {
       }
       if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab || event.text === "j") {
         event.accepted = true
-        root.focusSection = "list"
-        helpFlickable.focus = true
-        helpFlickable.forceActiveFocus()
+        root.moveToBelowSearch()
         return
       }
       if (event.key === Qt.Key_Up || event.key === Qt.Key_Backtab || event.text === "k") {
@@ -159,6 +182,42 @@ Rectangle {
       }
       if (event.text && event.text.length === 1 && !event.modifiers) {
         event.accepted = true
+        keySearchField.forceActiveFocus()
+        keySearchField.text += event.text
+        keySearchField.cursorPosition = keySearchField.text.length
+        return
+      }
+    }
+    if (root.focusSection === "release") {
+      if (event.key === Qt.Key_Up || event.key === Qt.Key_Backtab || event.text === "k") {
+        event.accepted = true
+        root.focusSection = "search"
+        root.forceActiveFocus()
+        return
+      }
+      if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab || event.text === "j") {
+        event.accepted = true
+        root.focusSection = "list"
+        helpFlickable.focus = true
+        helpFlickable.forceActiveFocus()
+        return
+      }
+      if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+        event.accepted = true
+        root.releaseNotesCollapsed = !root.releaseNotesCollapsed
+        return
+      }
+      if (event.key === Qt.Key_X || event.key === Qt.Key_Delete || event.text === "x" || event.text === "d") {
+        event.accepted = true
+        root.releaseNotesHidden = true
+        root.focusSection = "list"
+        helpFlickable.focus = true
+        helpFlickable.forceActiveFocus()
+        return
+      }
+      if (event.text && event.text.length === 1 && !event.modifiers && event.key !== Qt.Key_Escape) {
+        event.accepted = true
+        root.focusSection = "search"
         keySearchField.forceActiveFocus()
         keySearchField.text += event.text
         keySearchField.cursorPosition = keySearchField.text.length
@@ -343,10 +402,7 @@ Rectangle {
 
       Keys.onDownPressed: function(event) {
         event.accepted = true
-        keySearchField.focus = false
-        root.focusSection = "list"
-        helpFlickable.focus = true
-        helpFlickable.forceActiveFocus()
+        root.moveToBelowSearch()
       }
 
       Keys.onUpPressed: function(event) {
@@ -358,10 +414,7 @@ Rectangle {
 
       Keys.onTabPressed: function(event) {
         event.accepted = true
-        keySearchField.focus = false
-        root.focusSection = "list"
-        helpFlickable.focus = true
-        helpFlickable.forceActiveFocus()
+        root.moveToBelowSearch()
       }
 
       Keys.onBacktabPressed: function(event) {
@@ -373,18 +426,12 @@ Rectangle {
 
       Keys.onReturnPressed: function(event) {
         event.accepted = true
-        keySearchField.focus = false
-        root.focusSection = "list"
-        helpFlickable.focus = true
-        helpFlickable.forceActiveFocus()
+        root.moveToBelowSearch()
       }
 
       Keys.onEnterPressed: function(event) {
         event.accepted = true
-        keySearchField.focus = false
-        root.focusSection = "list"
-        helpFlickable.focus = true
-        helpFlickable.forceActiveFocus()
+        root.moveToBelowSearch()
       }
     }
 
@@ -422,14 +469,24 @@ Rectangle {
         }
       }
 
+      function moveToAboveList() {
+        if (root.search.trim().length === 0 && !root.releaseNotesHidden) {
+          root.focusSection = "release"
+          contentY = 0
+          root.forceActiveFocus()
+        } else {
+          root.focusSection = "search"
+          root.forceActiveFocus()
+        }
+      }
+
       Keys.onUpPressed: function(event) {
         event.accepted = true
         if (selectedIndex > 0) {
           selectedIndex--
           ensureItemVisible()
         } else {
-          root.focusSection = "search"
-          root.forceActiveFocus()
+          moveToAboveList()
         }
       }
 
@@ -454,16 +511,14 @@ Rectangle {
             selectedIndex--
             ensureItemVisible()
           } else {
-            root.focusSection = "search"
-            root.forceActiveFocus()
+            moveToAboveList()
           }
         } else if (event.key === Qt.Key_Escape || event.key === Qt.Key_Backspace || root.isHelpDismissKey(event)) {
           event.accepted = true
           root.close()
         } else if (event.key === Qt.Key_Backtab) {
           event.accepted = true
-          root.focusSection = "search"
-          root.forceActiveFocus()
+          moveToAboveList()
         } else if (event.key === Qt.Key_Tab) {
           event.accepted = true
           root.focusSection = "close"
@@ -499,6 +554,161 @@ Rectangle {
         id: helpListCol
         width: helpFlickable.width - Style.space(8)
         spacing: Style.space(6)
+
+        // What's New Release Highlights Card (collapsible and dismissible)
+        Rectangle {
+          id: whatsNewCard
+          visible: root.search.trim().length === 0 && !root.releaseNotesHidden
+          width: parent.width
+          implicitHeight: whatsNewCol.implicitHeight + Style.space(16)
+          radius: Style.cornerRadius
+          color: Util.alpha(Color.accent, 0.08)
+          border.color: (root.focusSection === "release") ? Color.accent : Util.alpha(Color.accent, 0.35)
+          border.width: (root.focusSection === "release") ? 2 : 1
+
+          Column {
+            id: whatsNewCol
+            anchors.fill: parent
+            anchors.margins: Style.space(8)
+            spacing: Style.space(6)
+
+            Item {
+              id: whatsNewHeader
+              width: parent.width
+              implicitHeight: Math.max(whatsNewTitleRow.implicitHeight, Style.space(22))
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.releaseNotesCollapsed = !root.releaseNotesCollapsed
+              }
+
+              Row {
+                id: whatsNewTitleRow
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(6)
+
+                Text {
+                  text: "󰞋"
+                  color: Color.accent
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+                Text {
+                  text: TodoStore.RELEASE_HIGHLIGHTS.title || "What's New in v1.0"
+                  color: Color.accent
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(4)
+
+                PanelActionButton {
+                  id: toggleCollapseBtn
+                  size: Style.space(20)
+                  iconText: root.releaseNotesCollapsed ? "󰅀" : "󰅃"
+                  fontSize: Style.font.caption
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  foreground: Color.accent
+                  hoverColor: Color.accent
+                  tooltipText: ""
+                  onClicked: root.releaseNotesCollapsed = !root.releaseNotesCollapsed
+
+                  HoverHandler { id: collapseHover }
+                  ShortcutToolTip {
+                    visible: collapseHover.hovered
+                    description: root.releaseNotesCollapsed ? "Expand release highlights" : "Collapse release highlights"
+                    shortcut: "Space / Enter"
+                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  }
+                }
+
+                PanelActionButton {
+                  id: hideReleaseBtn
+                  size: Style.space(20)
+                  iconText: "󰅖"
+                  fontSize: Style.font.caption
+                  fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  foreground: Color.muted
+                  hoverColor: root.bar ? root.bar.urgent : Color.urgent
+                  tooltipText: ""
+                  onClicked: {
+                    root.releaseNotesHidden = true
+                    if (root.focusSection === "release") {
+                      root.focusSection = "list"
+                      helpFlickable.focus = true
+                      helpFlickable.forceActiveFocus()
+                    }
+                  }
+
+                  HoverHandler { id: hideHover }
+                  ShortcutToolTip {
+                    visible: hideHover.hovered
+                    description: "Hide release highlights"
+                    shortcut: "x / Del"
+                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                  }
+                }
+              }
+            }
+
+            Column {
+              id: whatsNewDetailsCol
+              width: parent.width
+              spacing: Style.space(6)
+              visible: !root.releaseNotesCollapsed
+
+              Text {
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: TodoStore.RELEASE_HIGHLIGHTS.summary || ""
+                color: root.barForeground
+                opacity: 0.85
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+
+              Column {
+                width: parent.width
+                spacing: Style.space(4)
+
+                Repeater {
+                  model: TodoStore.RELEASE_HIGHLIGHTS.items || []
+
+                  Row {
+                    id: highlightItemRow
+                    required property var modelData
+                    width: parent.width
+                    spacing: Style.space(6)
+
+                    Text {
+                      text: modelData.icon || "•"
+                      color: Color.accent
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(9.5)
+                    }
+
+                    Text {
+                      width: parent.width - Style.space(20)
+                      wrapMode: Text.Wrap
+                      text: modelData.title + ": " + modelData.desc
+                      color: root.barForeground
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.space(9.5)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
 
         Repeater {
           id: helpListRepeater

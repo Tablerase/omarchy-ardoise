@@ -177,6 +177,7 @@ ShellRoot {
             console.log("[TEST] count=" + barWidget.ladderState.count);
             console.log("[TEST] role=" + barWidget.ladderState.role);
             console.log("[TEST] panelTasks=" + (panelContent.store.todos ? panelContent.store.todos.length : -1));
+            console.log("[TEST] hasPickerModal=" + (typeof panelContent.openCustomReminderPicker === "function" ? 1 : 0));
             console.log("[TEST] done=1");
             Qt.exit(0);
         }
@@ -186,6 +187,7 @@ ShellRoot {
     const output = runHarness(env.quickshellPath, sandbox, harnessQml);
 
     assert.equal(pick(output, "done"), "1", "core harness did not run to completion:\n" + output);
+    assert.equal(pick(output, "hasPickerModal"), "1", "PanelContent should have openCustomReminderPicker method");
     assert.equal(pick(output, "pending"), "3", "bar should report total pending tasks");
     assert.equal(pick(output, "panelTasks"), "3", "PanelContent should load the seeded store");
 

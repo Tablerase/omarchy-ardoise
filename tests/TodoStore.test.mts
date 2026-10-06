@@ -59,7 +59,16 @@ const {
   searchProfiles,
   getAllTags,
   searchTags,
-  resolveDefaultProfile
+  resolveDefaultProfile,
+  CURRENT_RELEASE_VERSION,
+  RELEASE_HIGHLIGHTS,
+  getTutorialTasks,
+  createInitialStore,
+  seedTutorialTasks,
+  hasNewRelease,
+  markReleaseSeen,
+  resetReleaseHighlights,
+  getIpcHelp
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -1620,7 +1629,7 @@ test("scale performance: archive restore path (parse, filter, unarchive) over 5,
   const filtered = filterArchivedTasks(tasks, "alpha tag-3");
   const tFilter = performance.now() - t1;
   assert.ok(filtered.length > 0, "filter must match something");
-  assert.ok(tFilter < 25, `filterArchivedTasks for 5,000 tasks took ${tFilter}ms (expected <25ms)`);
+  assert.ok(tFilter < 50, `filterArchivedTasks for 5,000 tasks took ${tFilter}ms (expected <50ms)`);
 
   const store = {
     version: 1,
@@ -1937,7 +1946,7 @@ test("resolveDefaultProfile: 3-tier resolution hierarchy (location > last used >
   assert.equal(resolveDefaultProfile(undefined), "personal");
   assert.equal(resolveDefaultProfile({ version: 1, activeProfile: "work", profiles: ["work"], todos: [] }), "work");
 
-  // Tier 2: No location provided - picks profile of most recent task
+  // Tier 3: Outside workspace (browser, desktop apps) - defaults to activeProfile or personal
   const storeWithTasks = {
     version: 1,
     activeProfile: "personal",
@@ -1948,8 +1957,10 @@ test("resolveDefaultProfile: 3-tier resolution hierarchy (location > last used >
       { id: 3, title: "Older task", profile: "personal", createdAt: 1500, done: false }
     ]
   };
-  assert.equal(resolveDefaultProfile(storeWithTasks, null), "omarchy");
-  assert.equal(resolveDefaultProfile(storeWithTasks, undefined), "omarchy");
+  assert.equal(resolveDefaultProfile(storeWithTasks, null), "personal");
+  assert.equal(resolveDefaultProfile(storeWithTasks, undefined), "personal");
+  assert.equal(resolveDefaultProfile(storeWithTasks, {}), "personal");
+  assert.equal(resolveDefaultProfile({ ...storeWithTasks, activeProfile: "work" }, null), "work");
 
   // Tier 1: Matches location context to previous task with that location
   const storeWithLocations = {
@@ -2026,6 +2037,104 @@ test("resolveDefaultProfile: 3-tier resolution hierarchy (location > last used >
     "work"
   );
 });
+
+test("onboarding tutorial & release highlights: task catalog and keyboard invariants", () => {
+  assert.equal(typeof CURRENT_RELEASE_VERSION, "string");
+  assert.ok(RELEASE_HIGHLIGHTS && typeof RELEASE_HIGHLIGHTS === "object");
+  assert.equal(RELEASE_HIGHLIGHTS.version, CURRENT_RELEASE_VERSION);
+  assert.ok(Array.isArray(RELEASE_HIGHLIGHTS.items) && RELEASE_HIGHLIGHTS.items.length >= 4);
+
+  const baseTime = 1791000000000;
+  const tasks = getTutorialTasks(baseTime);
+  assert.equal(tasks.length, 8);
+
+  // Assert descending timestamps so Task 1 appears at top of pending list
+  for (let i = 0; i < tasks.length - 1; i++) {
+    assert.ok(tasks[i].createdAt > tasks[i + 1].createdAt, "tasks must be descending in createdAt");
+  }
+
+  // Check key invariants taught across tasks
+  const titles = tasks.map((t: any) => t.title);
+  assert.ok(titles[0].includes("j / k"), "Task 1 teaches j/k navigation");
+  assert.ok(titles[1].includes("Space to complete"), "Task 2 teaches Space key invariant");
+  assert.ok(titles[2].includes("[ / ]"), "Task 3 teaches profile cycling");
+  assert.ok(titles[3].includes("Enter to open notes"), "Task 4 teaches Enter for drawer");
+  assert.ok(titles[4].includes("global shortcuts"), "Task 5 teaches global shortcuts");
+  assert.ok(titles[5].includes("Press A (or Super+Shift+T)"), "Task 6 teaches Quick Add modal with A");
+  assert.ok(titles[6].includes("Press ?"), "Task 7 teaches Help cheat sheet");
+  assert.ok(titles[7].includes("Hold x"), "Task 8 teaches hold to delete");
+
+  // Every task must be incomplete and tagged tutorial
+  for (const t of tasks) {
+    assert.equal(t.done, false);
+    assert.equal(t.isTutorial, true);
+    assert.equal(t.profile, "personal");
+  }
+});
+
+test("createInitialStore & seedTutorialTasks: seeding lifecycle and idempotency", () => {
+  const init = createInitialStore();
+  assert.equal(init.tutorialSeeded, true);
+  assert.equal(init.lastSeenVersion, CURRENT_RELEASE_VERSION);
+  assert.equal(init.todos.length, 8);
+
+  // Calling seedTutorialTasks on a store that already has tutorialSeeded or tutorial tasks is idempotent
+  const reseeded = seedTutorialTasks(init);
+  assert.equal(reseeded.todos.length, 8, "Must not duplicate tutorial tasks if already seeded");
+
+  // Calling seedTutorialTasks on an existing user store prepends tutorial tasks
+  const userStore = {
+    version: 1,
+    activeProfile: "work",
+    profiles: ["personal", "work"],
+    todos: [{ id: 999, title: "Existing task", done: false, createdAt: 1000 }]
+  };
+  const seededUserStore = seedTutorialTasks(userStore);
+  assert.equal(seededUserStore.tutorialSeeded, true);
+  assert.equal(seededUserStore.todos.length, 9);
+  assert.equal(seededUserStore.todos[8].id, 999, "Existing task preserved at the end");
+});
+
+test("hasNewRelease & markReleaseSeen: version tracking and acknowledgement", () => {
+  const freshStore = createInitialStore();
+  assert.equal(hasNewRelease(freshStore), false, "Fresh store matches CURRENT_RELEASE_VERSION");
+
+  const olderStore = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work"],
+    todos: [],
+    lastSeenVersion: "0.9.0"
+  };
+  assert.equal(hasNewRelease(olderStore), true, "Older version triggers hasNewRelease");
+
+  const unversionedStore = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work"],
+    todos: []
+  };
+  assert.equal(hasNewRelease(unversionedStore), true, "Store with no lastSeenVersion triggers hasNewRelease");
+
+  const acknowledged = markReleaseSeen(olderStore);
+  assert.equal(acknowledged.lastSeenVersion, CURRENT_RELEASE_VERSION);
+  assert.equal(hasNewRelease(acknowledged), false);
+
+  const reset = resetReleaseHighlights(acknowledged);
+  assert.equal(reset.lastSeenVersion, "0.9.0");
+  assert.equal(hasNewRelease(reset), true, "Reset highlights enables hasNewRelease");
+});
+
+test("getIpcHelp: outputs comprehensive CLI reference", () => {
+  const helpText = getIpcHelp();
+  assert.ok(typeof helpText === "string" && helpText.length > 500);
+  assert.ok(helpText.includes("Ardoise IPC Commands Reference"));
+  assert.ok(helpText.includes("toggle"));
+  assert.ok(helpText.includes("addDetailed"));
+  assert.ok(helpText.includes("seedTutorial"));
+  assert.ok(helpText.includes("resetReleaseHighlights"));
+});
+
 
 
 

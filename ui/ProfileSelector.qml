@@ -19,6 +19,7 @@ Item {
   signal profileSelected(string profileName, int index)
 
   implicitHeight: Style.space(26)
+  implicitWidth: profileRow.implicitWidth
 
   function ensureVisible(idx) {
     if (!profileRepeater || idx < 0 || idx >= profileRepeater.count) return
@@ -26,11 +27,11 @@ Item {
     if (!item) return
     var itemLeft = item.x
     var itemRight = item.x + item.width
-    if (itemLeft < profileFlickable.contentX) {
-      profileFlickable.contentX = Math.max(0, itemLeft - Style.space(4))
-    } else if (itemRight > profileFlickable.contentX + profileFlickable.width) {
+    if (itemLeft - Style.space(6) < profileFlickable.contentX) {
+      profileFlickable.contentX = Math.max(0, itemLeft - Style.space(6))
+    } else if (itemRight + Style.space(6) > profileFlickable.contentX + profileFlickable.width) {
       var maxContentX = Math.max(0, profileFlickable.contentWidth - profileFlickable.width)
-      profileFlickable.contentX = Math.min(maxContentX, itemRight - profileFlickable.width + Style.space(4))
+      profileFlickable.contentX = Math.min(maxContentX, itemRight + Style.space(6) - profileFlickable.width)
     }
   }
 
@@ -73,6 +74,8 @@ Item {
 
     Row {
       id: profileRow
+      leftPadding: Style.space(6)
+      rightPadding: Style.space(6)
       spacing: Style.space(4)
       anchors.verticalCenter: parent.verticalCenter
 

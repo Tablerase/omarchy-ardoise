@@ -243,6 +243,24 @@ BarWidget {
     saveStore(TodoStore.removeProfile(root.store, name), "Remove profile: " + name)
   }
 
+  function seedTutorial() {
+    var updated = TodoStore.seedTutorialTasks(root.store)
+    saveStore(updated, "Seed onboarding tutorial tasks")
+    return "ok"
+  }
+
+  function markReleaseSeen() {
+    var updated = TodoStore.markReleaseSeen(root.store)
+    saveStore(updated, "Acknowledge release highlights")
+    return "ok"
+  }
+
+  function resetReleaseHighlights() {
+    var updated = TodoStore.resetReleaseHighlights(root.store)
+    saveStore(updated, "Reset release highlights")
+    return "ok"
+  }
+
   function getTooltip() {
     var lines = []
 
@@ -341,6 +359,8 @@ BarWidget {
     if ("barWidget" in target) target.barWidget = root
   }
 
+  readonly property string initialStoreJson: JSON.stringify(TodoStore.createInitialStore(), null, 2)
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -352,7 +372,7 @@ BarWidget {
     command: [
       "bash", "-c",
       "mkdir -p \"" + root.dataDirPath + "\" && " +
-      "[ -f \"" + root.todoFilePath + "\" ] || echo '{\"version\":1,\"activeProfile\":\"personal\",\"profiles\":[\"personal\",\"work\"],\"todos\":[]}' > \"" + root.todoFilePath + "\"; " +
+      "[ -f \"" + root.todoFilePath + "\" ] || cat << 'EOF' > \"" + root.todoFilePath + "\"\n" + root.initialStoreJson + "\nEOF\n; " +
       "[ -f \"" + root.archiveFilePath + "\" ] || echo '{\"version\":1,\"archived\":[]}' > \"" + root.archiveFilePath + "\"; " +
       "if [ ! -f \"" + root.bindingsFilePath + "\" ] && [ -f \"" + root.defaultBindingsTemplatePath + "\" ]; then cp \"" + root.defaultBindingsTemplatePath + "\" \"" + root.bindingsFilePath + "\" 2>/dev/null || true; fi; " +
       "if [ ! -f \"" + root.dataDirPath + "/.gitignore\" ]; then printf 'bindings.lua\\n*.tmp\\n' > \"" + root.dataDirPath + "/.gitignore\"; fi; " +
@@ -830,9 +850,14 @@ BarWidget {
       var d = String(notes || "")
       var r = reminder && String(reminder).trim() ? String(reminder).trim() : null
       var finalRem = r
-      if (r && TodoStore && typeof TodoStore.computePresetReminder === "function") {
-        var computed = TodoStore.computePresetReminder(r)
-        if (computed) finalRem = computed
+      var computed = (r && TodoStore && typeof TodoStore.computePresetReminder === "function")
+        ? TodoStore.computePresetReminder(r)
+        : null
+      if (computed) {
+        finalRem = computed
+      } else if (r && TodoStore && typeof TodoStore.parseCustomReminder === "function") {
+        var custom = TodoStore.parseCustomReminder(r)
+        if (custom && custom.iso) finalRem = custom.iso
       }
       root.addTodo(t, d, null, finalRem)
       return "ok"
@@ -852,6 +877,18 @@ BarWidget {
       if (isNaN(id)) return "invalid_id"
       try {
         var fields = JSON.parse(fieldsJson)
+        if (fields && fields.reminder && typeof fields.reminder === "string") {
+          var remStr = fields.reminder.trim()
+          var comp = (remStr.length > 0 && TodoStore && typeof TodoStore.computePresetReminder === "function")
+            ? TodoStore.computePresetReminder(remStr)
+            : null
+          if (comp) {
+            fields.reminder = comp
+          } else if (remStr.length > 0 && TodoStore && typeof TodoStore.parseCustomReminder === "function") {
+            var parsed = TodoStore.parseCustomReminder(remStr)
+            if (parsed && parsed.iso) fields.reminder = parsed.iso
+          }
+        }
         root.updateTodo(id, fields)
         return "ok"
       } catch (e) {
@@ -892,6 +929,11 @@ BarWidget {
     }
     function autoSetupGitRemote(repoName: string): string { return root.autoSetupGitRemote(repoName) }
     function gitAutoSetup(repoName: string): string { return root.autoSetupGitRemote(repoName) }
+    function seedTutorial(): string { return root.seedTutorial() }
+    function whatsNew(): string { return JSON.stringify(TodoStore.RELEASE_HIGHLIGHTS) }
+    function markReleaseSeen(): string { return root.markReleaseSeen() }
+    function resetReleaseHighlights(): string { return root.resetReleaseHighlights() }
+    function help(): string { return TodoStore.getIpcHelp() }
   }
 
   WidgetButton {

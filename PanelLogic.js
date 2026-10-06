@@ -409,6 +409,11 @@ function handleEscape(root) {
     else root.showTaskMenu = false;
     return true;
   }
+  if (root.showReminderPickerModal) {
+    if (typeof root.closeReminderPickerModal === "function") root.closeReminderPickerModal();
+    else root.showReminderPickerModal = false;
+    return true;
+  }
   if (root.showArchiveModal) {
     if (typeof root.closeArchiveModal === "function") root.closeArchiveModal();
     else root.showArchiveModal = false;
@@ -553,7 +558,7 @@ function handleMove(root, dx, dy, TodoStore) {
         return;
       } else if (dx !== 0) {
         if (root.expandedSubSection === "reminders") {
-          var maxRem = root.reminderPresets.length + (currentTask.reminder ? 1 : 0);
+          var maxRem = root.reminderPresets.length + 1 + (currentTask.reminder ? 1 : 0);
           root.expandedReminderIndex = Math.max(0, Math.min(maxRem - 1, root.expandedReminderIndex + dx));
           if (typeof root.ensureReminderVisible === "function") {
             root.ensureReminderVisible(root.expandedReminderIndex);
@@ -890,6 +895,21 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
 }
 
 /**
+ * Checks whether a reminder string matches one of the preset values.
+ * @param {any[]} [presets]
+ * @param {string|null} [reminder]
+ * @returns {boolean}
+ */
+function isPresetReminder(presets, reminder) {
+  if (!presets || !reminder) return false;
+  for (var i = 0; i < presets.length; i++) {
+    var p = presets[i];
+    if (p && p.value === reminder) return true;
+  }
+  return false;
+}
+
+/**
  * Handles Space/Enter action activation.
  * @param {any} root PanelContent root QML object
  * @param {any} TodoStore TodoStore module
@@ -913,13 +933,35 @@ function handleActivate(root, TodoStore) {
           if (root.expandedSubSection === "notes") {
             if (typeof root.focusNotesEditor === "function" && root.focusNotesEditor()) return;
           } else if (root.expandedSubSection === "reminders") {
-            if (root.expandedReminderIndex < root.reminderPresets.length) {
-              var freshRem = (TodoStore && typeof TodoStore.computePresetReminder === "function")
-                ? TodoStore.computePresetReminder(root.expandedReminderIndex)
-                : root.reminderPresets[root.expandedReminderIndex].value;
-              root.updateTodo(task.id, { reminder: freshRem });
+            var isCustomSel = Boolean(task.reminder && !isPresetReminder(root.reminderPresets, task.reminder));
+            var presetsLen = root.reminderPresets ? root.reminderPresets.length : 0;
+            if (isCustomSel) {
+              if (root.expandedReminderIndex === 0) {
+                if (typeof root.openCustomReminderPicker === "function") {
+                  root.openCustomReminderPicker(task);
+                }
+              } else if (root.expandedReminderIndex >= 1 && root.expandedReminderIndex <= presetsLen) {
+                var pIdx = root.expandedReminderIndex - 1;
+                var freshRem = (TodoStore && typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(pIdx)
+                  : root.reminderPresets[pIdx].value;
+                root.updateTodo(task.id, { reminder: freshRem });
+              } else {
+                root.updateTodo(task.id, { reminder: null });
+              }
             } else {
-              root.updateTodo(task.id, { reminder: null });
+              if (root.expandedReminderIndex < presetsLen) {
+                var freshRem = (TodoStore && typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(root.expandedReminderIndex)
+                  : root.reminderPresets[root.expandedReminderIndex].value;
+                root.updateTodo(task.id, { reminder: freshRem });
+              } else if (root.expandedReminderIndex === presetsLen) {
+                if (typeof root.openCustomReminderPicker === "function") {
+                  root.openCustomReminderPicker(task);
+                }
+              } else {
+                root.updateTodo(task.id, { reminder: null });
+              }
             }
           } else if (root.expandedSubSection === "profiles") {
             var profs = TodoStore.getSortedProfiles(root.store, false, "");
@@ -976,13 +1018,35 @@ function handleReturn(root, TodoStore) {
           if (root.expandedSubSection === "notes") {
             if (typeof root.focusNotesEditor === "function" && root.focusNotesEditor()) return;
           } else if (root.expandedSubSection === "reminders") {
-            if (root.expandedReminderIndex < root.reminderPresets.length) {
-              var freshRemReturn = (TodoStore && typeof TodoStore.computePresetReminder === "function")
-                ? TodoStore.computePresetReminder(root.expandedReminderIndex)
-                : root.reminderPresets[root.expandedReminderIndex].value;
-              root.updateTodo(task.id, { reminder: freshRemReturn });
+            var isCustomSelReturn = Boolean(task.reminder && !isPresetReminder(root.reminderPresets, task.reminder));
+            var presetsLenReturn = root.reminderPresets ? root.reminderPresets.length : 0;
+            if (isCustomSelReturn) {
+              if (root.expandedReminderIndex === 0) {
+                if (typeof root.openCustomReminderPicker === "function") {
+                  root.openCustomReminderPicker(task);
+                }
+              } else if (root.expandedReminderIndex >= 1 && root.expandedReminderIndex <= presetsLenReturn) {
+                var pIdxReturn = root.expandedReminderIndex - 1;
+                var freshRemReturnVal = (TodoStore && typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(pIdxReturn)
+                  : root.reminderPresets[pIdxReturn].value;
+                root.updateTodo(task.id, { reminder: freshRemReturnVal });
+              } else {
+                root.updateTodo(task.id, { reminder: null });
+              }
             } else {
-              root.updateTodo(task.id, { reminder: null });
+              if (root.expandedReminderIndex < presetsLenReturn) {
+                var freshRemReturn = (TodoStore && typeof TodoStore.computePresetReminder === "function")
+                  ? TodoStore.computePresetReminder(root.expandedReminderIndex)
+                  : root.reminderPresets[root.expandedReminderIndex].value;
+                root.updateTodo(task.id, { reminder: freshRemReturn });
+              } else if (root.expandedReminderIndex === presetsLenReturn) {
+                if (typeof root.openCustomReminderPicker === "function") {
+                  root.openCustomReminderPicker(task);
+                }
+              } else {
+                root.updateTodo(task.id, { reminder: null });
+              }
             }
           } else if (root.expandedSubSection === "profiles") {
             var profs = TodoStore.getSortedProfiles(root.store, false, "");

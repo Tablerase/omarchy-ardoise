@@ -18,6 +18,9 @@ Item {
   onBarWidgetChanged: {
     if (barWidget && barWidget.store) {
       root.store = barWidget.store
+      if (TodoStore.hasNewRelease(root.store)) {
+        root.dismissedReleaseBanner = false
+      }
       root.syncFilteredTodos()
     }
   }
@@ -27,6 +30,9 @@ Item {
     function onStoreChanged() {
       if (root.barWidget && root.barWidget.store) {
         root.store = root.barWidget.store
+        if (TodoStore.hasNewRelease(root.store)) {
+          root.dismissedReleaseBanner = false
+        }
         root.syncFilteredTodos()
       }
     }
@@ -138,6 +144,8 @@ Item {
   property bool showKeyHelp: false
   property bool showGitModal: false
   property bool showArchiveModal: false
+  property bool showReminderPickerModal: false
+  property var reminderPickerTask: null
   property bool showTaskMenu: false
   property int taskMenuIndex: 0
   property var taskMenuItems: []
@@ -148,6 +156,19 @@ Item {
   property string keyHelpSearch: ""
   property string searchQuery: ""
   property bool searchActive: false
+  property bool hasNewRelease: TodoStore.hasNewRelease(root.store)
+  property bool dismissedReleaseBanner: false
+
+  function acknowledgeRelease() {
+    if (root.hasNewRelease) {
+      if (root.barWidget && typeof root.barWidget.markReleaseSeen === "function") {
+        root.barWidget.markReleaseSeen()
+      } else {
+        root.store = TodoStore.markReleaseSeen(root.store)
+      }
+    }
+  }
+
   property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
   property int expandedReminderIndex: 0
   property int expandedProfileIndex: 0
@@ -294,6 +315,7 @@ Item {
 
   onShowKeyHelpChanged: {
     if (showKeyHelp) {
+      root.acknowledgeRelease()
       if (typeof helpModal !== "undefined" && helpModal) {
         helpModal.open()
       }
@@ -600,10 +622,12 @@ Item {
     root.showKeyHelp ||
     root.showGitModal ||
     root.showArchiveModal ||
+    root.showReminderPickerModal ||
     (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
     (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus)) ||
     (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen) ||
-    (typeof archiveModal !== "undefined" && archiveModal && archiveModal.isOpen)
+    (typeof archiveModal !== "undefined" && archiveModal && archiveModal.isOpen) ||
+    (typeof reminderPickerModal !== "undefined" && reminderPickerModal && reminderPickerModal.isOpen)
   )
 
   readonly property var keybindingsList: Logic.getKeybindingsList(root.detectedPanelShortcut, root.detectedQuickAddShortcut, root.activeBindings)
@@ -900,6 +924,24 @@ Item {
     root.showArchiveModal = false
   }
 
+  // ---- Custom reminder picker -----------------------------------------------
+  function openCustomReminderPicker(task) {
+    savePendingNotes()
+    root.releaseFocus()
+    var t = task || root.currentTask()
+    if (!t) return
+    root.reminderPickerTask = t
+    root.showReminderPickerModal = true
+    if (reminderPickerModal && reminderPickerModal.open) {
+      reminderPickerModal.open(t.reminder || "")
+    }
+  }
+
+  function closeReminderPickerModal() {
+    root.showReminderPickerModal = false
+    root.reminderPickerTask = null
+  }
+
   function openArchiveInEditor() {
     savePendingNotes()
     var p = barWidget ? barWidget.archiveFilePath : (Quickshell.env("HOME") + "/.config/omarchy/tablerase.ardoise/todos-archive.json")
@@ -1086,6 +1128,19 @@ Item {
             shortcut: "?"
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }
+
+          Rectangle {
+            id: helpReleaseDot
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: Style.space(2)
+            anchors.rightMargin: Style.space(2)
+            width: Style.space(6)
+            height: Style.space(6)
+            radius: width / 2
+            color: Color.accent
+            visible: root.hasNewRelease && !root.dismissedReleaseBanner && !root.showKeyHelp
+          }
         }
 
         PanelActionButton {
@@ -1164,6 +1219,119 @@ Item {
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
               onClicked: shortcutBtn.clicked()
+            }
+          }
+        }
+      }
+    }
+
+    // Release highlight banner (subtle, dismissible)
+    Rectangle {
+      id: releaseBanner
+      visible: root.hasNewRelease && !root.dismissedReleaseBanner
+      width: parent.width
+      implicitHeight: visible ? (releaseBannerContent.implicitHeight + Style.space(8)) : 0
+      radius: Style.cornerRadius
+      color: Util.alpha(Color.accent, 0.1)
+      border.color: Util.alpha(Color.accent, 0.35)
+      border.width: 1
+
+      Item {
+        id: releaseBannerContent
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(8)
+        anchors.rightMargin: Style.space(6)
+        implicitHeight: Math.max(releaseBannerLeft.implicitHeight, releaseBannerActions.implicitHeight)
+
+        Row {
+          id: releaseBannerLeft
+          anchors.left: parent.left
+          anchors.right: releaseBannerActions.left
+          anchors.rightMargin: Style.space(6)
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(6)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰞋"
+            color: Color.accent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "v" + (TodoStore.CURRENT_RELEASE_VERSION || "1.0.0") + " highlights available"
+            color: root.barForeground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+          }
+        }
+
+        Row {
+          id: releaseBannerActions
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(4)
+
+          Rectangle {
+            id: viewReleaseBtn
+            implicitWidth: viewReleaseText.implicitWidth + Style.space(12)
+            implicitHeight: Style.space(18)
+            radius: Style.cornerRadius
+            color: viewReleaseHover.hovered ? Util.alpha(Color.accent, 0.25) : Util.alpha(Color.accent, 0.15)
+            border.color: Color.accent
+            border.width: 1
+
+            Text {
+              id: viewReleaseText
+              anchors.centerIn: parent
+              text: "View"
+              color: Color.accent
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.space(9)
+              font.bold: true
+            }
+
+            HoverHandler { id: viewReleaseHover }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                if (typeof helpModal !== "undefined" && helpModal) {
+                  helpModal.releaseNotesCollapsed = false
+                  helpModal.releaseNotesHidden = false
+                }
+                root.showKeyHelp = true
+                root.acknowledgeRelease()
+              }
+            }
+          }
+
+          Rectangle {
+            id: dismissReleaseBtn
+            implicitWidth: Style.space(18)
+            implicitHeight: Style.space(18)
+            radius: Style.cornerRadius
+            color: dismissReleaseHover.hovered ? Color.menu.selectedBackground : "transparent"
+
+            Text {
+              anchors.centerIn: parent
+              text: "✕"
+              color: dismissReleaseHover.hovered ? root.barForeground : Color.muted
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.space(9)
+            }
+
+            HoverHandler { id: dismissReleaseHover }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.dismissedReleaseBanner = true
+                root.acknowledgeRelease()
+              }
             }
           }
         }
@@ -1764,7 +1932,7 @@ Item {
       id: todoListFlickable
       visible: root.filteredTodos.length > 0
       width: parent.width
-      implicitHeight: Math.min(Style.space(280), todoListCol.implicitHeight)
+      implicitHeight: Math.min(Style.space(420), todoListCol.implicitHeight)
       contentHeight: todoListCol.implicitHeight
       clip: true
       boundsBehavior: Flickable.StopAtBounds
@@ -2724,13 +2892,18 @@ Item {
                     isNavFocused: root.expandedSubSection === "reminders"
                     bar: root.bar
                     barForeground: root.barForeground
-                    onReminderSelected: function(val, idx) {
+                    onReminderSelected: function(val, idx, pIdx) {
                       root.expandedReminderIndex = idx
                       itemRow.ensureReminderVisible(idx)
-                      var freshRem = (typeof TodoStore.computePresetReminder === "function")
-                        ? TodoStore.computePresetReminder(idx)
+                      var freshRem = (typeof TodoStore !== "undefined" && typeof TodoStore.computePresetReminder === "function" && typeof pIdx === "number")
+                        ? TodoStore.computePresetReminder(pIdx)
                         : val
                       root.updateTodo(itemRow.modelData.id, { reminder: freshRem })
+                    }
+                    onCustomSelected: function(idx) {
+                      root.expandedReminderIndex = idx
+                      itemRow.ensureReminderVisible(idx)
+                      root.openCustomReminderPicker(itemRow.modelData)
                     }
                     onClearSelected: function(idx) {
                       root.expandedReminderIndex = idx
@@ -2785,11 +2958,11 @@ Item {
                   }
                 }
 
-                // Location & Codebase Context Row (if task has location, repo, or tags)
+                // Location & Codebase Context Row (if task has location or repo)
                 Item {
                   width: parent.width
                   implicitHeight: Math.max(locRow.implicitHeight, openLocBtn.implicitHeight)
-                  visible: Boolean(itemRow.modelData.location || itemRow.modelData.repo || (itemRow.modelData.tags && itemRow.modelData.tags.length > 0))
+                  visible: Boolean(itemRow.modelData.location || itemRow.modelData.repo)
 
                   Row {
                     id: locRow
@@ -2830,25 +3003,12 @@ Item {
                         }
                         return ""
                       }
-                      maximumWidth: Style.space(180)
+                      maximumWidth: openLocBtn.visible ? Math.max(Style.space(80), parent.width - openLocBtn.width - Style.space(70)) : Style.space(260)
                       fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       onClicked: {
                         if (itemRow.modelData.location && itemRow.modelData.location.localPath) {
                           root.openCodebase(itemRow.modelData)
                         }
-                      }
-                    }
-
-                    // Display tag chips if any
-                    Repeater {
-                      model: itemRow.modelData.tags || []
-                      Ui.Chip {
-                        required property string modelData
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "#" + modelData
-                        chipColor: Color.muted
-                        maximumWidth: Style.space(70)
-                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       }
                     }
                   }
@@ -2868,6 +3028,45 @@ Item {
                     tooltipText: "Open codebase directory in editor"
                     onClicked: {
                       root.openCodebase(itemRow.modelData)
+                    }
+                  }
+                }
+
+                // Tags Context Row (if task has tags)
+                Item {
+                  width: parent.width
+                  implicitHeight: tagsFlow.implicitHeight
+                  visible: Boolean(itemRow.modelData.tags && itemRow.modelData.tags.length > 0)
+
+                  Flow {
+                    id: tagsFlow
+                    width: parent.width
+                    spacing: Style.space(5)
+
+                    Item {
+                      width: tagLabel.implicitWidth
+                      height: Style.space(18)
+
+                      Text {
+                        id: tagLabel
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "󰓹 Tags:"
+                        color: Color.muted
+                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                        font.pixelSize: Style.space(9.5)
+                      }
+                    }
+
+                    Repeater {
+                      model: itemRow.modelData.tags || []
+
+                      Ui.Chip {
+                        required property string modelData
+                        text: "#" + modelData
+                        chipColor: Color.muted
+                        maximumWidth: Style.space(90)
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
                     }
                   }
                 }
@@ -3008,6 +3207,7 @@ Item {
   Ui.HelpModal {
     id: helpModal
     isOpen: root.showKeyHelp
+    hasNewRelease: root.hasNewRelease
     bar: root.bar
     barForeground: root.barForeground
     detectedShortcut: root.detectedPanelShortcut
@@ -3042,6 +3242,34 @@ Item {
     barForeground: root.barForeground
     onCloseRequested: {
       root.showArchiveModal = false
+      root.returnFocusRequested()
+    }
+  }
+
+  // Custom reminder picker overlay modal
+  Ui.ReminderPicker {
+    id: reminderPickerModal
+    isOpen: root.showReminderPickerModal
+    bar: root.bar
+    accentColor: Color.accent
+    barForeground: root.barForeground
+    warningColor: root.warningColor
+    onReminderConfirmed: function(iso) {
+      if (root.reminderPickerTask) {
+        root.updateTodo(root.reminderPickerTask.id, { reminder: iso })
+      }
+      root.closeReminderPickerModal()
+      root.returnFocusRequested()
+    }
+    onReminderCleared: function() {
+      if (root.reminderPickerTask) {
+        root.updateTodo(root.reminderPickerTask.id, { reminder: null })
+      }
+      root.closeReminderPickerModal()
+      root.returnFocusRequested()
+    }
+    onCloseRequested: {
+      root.closeReminderPickerModal()
       root.returnFocusRequested()
     }
   }

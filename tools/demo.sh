@@ -295,7 +295,9 @@ store = {
     "version": 1,
     "activeProfile": "all",
     "profiles": ["personal", "work"],
-    "todos": todos
+    "todos": todos,
+    "tutorialSeeded": True,
+    "lastSeenVersion": "1.0.0"
 }
 
 with open(todo_file, "w") as f:
@@ -393,7 +395,9 @@ store = {
     "version": 1,
     "activeProfile": "all",
     "profiles": ["personal", "work"],
-    "todos": todos
+    "todos": todos,
+    "tutorialSeeded": True,
+    "lastSeenVersion": "1.0.0"
 }
 
 with open(todo_file, "w") as f:
@@ -412,7 +416,9 @@ store = {
     "version": 1,
     "activeProfile": "all",
     "profiles": ["personal"],
-    "todos": []
+    "todos": [],
+    "tutorialSeeded": True,
+    "lastSeenVersion": "1.0.0"
 }
 with open(todo_file, "w") as f:
     json.dump(store, f, indent=2)
@@ -435,10 +441,13 @@ show_scenario_card() {
     printf '    1. %sBar icon%s     : Note warning color and overdue "1" count badge\n' "$C_CYAN" "$C_OFF"
     printf '    2. %sOpen panel%s   : Click the bar widget or press toggle shortcut\n' "$C_CYAN" "$C_OFF"
     printf '    3. %sExpand task%s  : Press %sEnter%s on "Ship the v1.4 release notes"\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
-    printf '    4. %sSearch%s       : Press %s/%s or %sCtrl+F%s, type "release", then press %sEsc%s\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
-    printf '    5. %sGit modal%s    : Press %su%s to view snapshots, %sq%s to dismiss\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
-    printf '    6. %sHelp modal%s   : Press %s?%s to view dynamic keybindings, %sEsc%s to close\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
-    printf '    7. %sClose panel%s  : Press %sEsc%s\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    4. %sReminder%s     : Note presets & custom reminder picker ("󰃭 Custom...")\n' "$C_CYAN" "$C_OFF"
+    printf '    5. %sHold delete%s  : Hold %sx%s to see the glowing 800ms laser progress bar\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    6. %sCopy task%s    : Press %sy%s to yank LLM-ready markdown\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    7. %sSearch%s       : Press %s/%s or %sCtrl+F%s, type "release", then press %sEsc%s\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    8. %sGit modal%s    : Press %su%s to view snapshots, %sq%s to dismiss\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    9. %sHelp modal%s   : Press %s?%s to view dynamic keybindings, %sEsc%s to close\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '   10. %sClose panel%s  : Press %sEsc%s\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
   elif [[ "$scenario" == "ladder" ]]; then
     printf '  %sLadder Rung%s  : Multi-urgency breakdown (overdue, due today, pending, done)\n' "$C_BOLD" "$C_OFF"
   elif [[ "$scenario" == "empty" ]]; then

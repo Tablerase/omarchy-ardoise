@@ -375,6 +375,48 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       panelContent.includes("TodoStore.computePresetReminder"),
     "PanelContent must refresh reminder presets dynamically and use computePresetReminder"
   );
+  assert.ok(
+    quickAddContent.includes("Ui.ReminderPicker") &&
+      quickAddContent.includes("onCustomSelected") &&
+      panelContent.includes("Ui.ReminderPicker") &&
+      panelContent.includes("openCustomReminderPicker"),
+    "QuickAdd and PanelContent must integrate Ui.ReminderPicker and handle onCustomSelected"
+  );
+  const reminderPillsContent = fs.readFileSync(path.join(repoDir, "ui", "ReminderPills.qml"), "utf8");
+  assert.ok(
+    reminderPillsContent.includes("customBtn") &&
+      reminderPillsContent.includes("customBtnTrailing") &&
+      reminderPillsContent.includes("getItemAtVisualIndex") &&
+      reminderPillsContent.includes("customSelected") &&
+      reminderPillsContent.includes("showCustomPill"),
+    "ReminderPills must support custom reminder pill, leading/trailing layout, and customSelected signal"
+  );
+  assert.ok(
+    reminderPillsContent.includes("leftPadding: Style.space(6)") &&
+      reminderPillsContent.includes("rightPadding: Style.space(6)"),
+    "ReminderPills must include left and right padding to avoid edge chip scale cropping"
+  );
+  const profileSelectorContent = fs.readFileSync(path.join(repoDir, "ui", "ProfileSelector.qml"), "utf8");
+  assert.ok(
+    profileSelectorContent.includes("leftPadding: Style.space(6)") &&
+      profileSelectorContent.includes("rightPadding: Style.space(6)"),
+    "ProfileSelector must include left and right padding to avoid edge chip scale cropping"
+  );
+  const reminderPickerContent = fs.readFileSync(path.join(repoDir, "ui", "ReminderPicker.qml"), "utf8");
+  assert.ok(
+    reminderPickerContent.includes("TodoStore.parseCustomReminder") &&
+      reminderPickerContent.includes("calGrid") &&
+      reminderPickerContent.includes("adjustMinutes") &&
+      reminderPickerContent.includes("reminderConfirmed"),
+    "ReminderPicker must implement natural language parsing, mini-calendar grid, time adjustments, and confirmation"
+  );
+  assert.ok(
+    !reminderPickerContent.includes('text = ""') &&
+      reminderPickerContent.includes("card.forceActiveFocus()") &&
+      reminderPickerContent.includes("isNavFocused") &&
+      reminderPickerContent.includes("manualInput.forceActiveFocus()"),
+    "ReminderPicker must adhere to Two-Stage Escape: never wipe draft text on Escape, blur to card container mode, support re-entry via i/a, and provide nav focus styling"
+  );
 
   // 4e. Expanded Drawer Title Reveal (long titles must be readable, not truncated)
   assert.ok(
@@ -1039,7 +1081,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
     "ArchiveModal must defensively guard purgeHold access against uninitialized or missing references"
   );
   assert.ok(
-    readme.includes("`unarchive`") && readme.includes("`purgeArchived`") && readme.includes("**25 shell commands**"),
+    readme.includes("`unarchive`") && readme.includes("`purgeArchived`") && readme.includes("**31 shell commands**"),
     "README must document the archive commands and the updated command count"
   );
   assert.ok(
@@ -1170,3 +1212,78 @@ test("Right-click, archive menu/delete, and data-loss safeguards: contracts", ()
     "DESIGN.md must document the archive data-loss safeguards"
   );
 });
+
+test("Onboarding Tutorial Quests & Release Highlights: contracts and UI indicators", () => {
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const helpModal = fs.readFileSync(path.join(repoDir, "ui", "HelpModal.qml"), "utf8");
+  const todoStore = fs.readFileSync(path.join(repoDir, "TodoStore.js"), "utf8");
+  const design = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
+
+  // 1. Initial Store Seeding on Install
+  assert.ok(
+    barWidget.includes("TodoStore.createInitialStore()") &&
+      barWidget.includes("initialStoreJson") &&
+      barWidget.includes("cat << 'EOF' >"),
+    "BarWidget must seed the initial store using createInitialStore via heredoc on fresh install"
+  );
+
+  // 2. BarWidget IPC contracts
+  assert.ok(
+    barWidget.includes("function seedTutorial()") &&
+      barWidget.includes("function markReleaseSeen()") &&
+      barWidget.includes("function seedTutorial(): string") &&
+      barWidget.includes("function whatsNew(): string") &&
+      barWidget.includes("function markReleaseSeen(): string"),
+    "BarWidget must expose seedTutorial, whatsNew, and markReleaseSeen methods and IPC endpoints"
+  );
+
+  // 3. PanelContent Indicators
+  assert.ok(
+    panelContent.includes("property bool hasNewRelease: TodoStore.hasNewRelease(root.store)") &&
+      panelContent.includes("property bool dismissedReleaseBanner:") &&
+      panelContent.includes("function acknowledgeRelease()") &&
+      panelContent.includes("helpReleaseDot") &&
+      panelContent.includes("releaseBanner"),
+    "PanelContent must implement hasNewRelease, acknowledgeRelease, helpReleaseDot, and releaseBanner"
+  );
+
+  // 4. HelpModal What's New Card
+  assert.ok(
+    helpModal.includes('import "../TodoStore.js" as TodoStore') &&
+      helpModal.includes("whatsNewCard") &&
+      helpModal.includes("TodoStore.RELEASE_HIGHLIGHTS") &&
+      helpModal.includes("property bool releaseNotesCollapsed:") &&
+      helpModal.includes("property bool releaseNotesHidden:") &&
+      helpModal.includes("toggleCollapseBtn") &&
+      helpModal.includes("hideReleaseBtn") &&
+      helpModal.includes('root.focusSection === "release"'),
+    "HelpModal must import TodoStore and display collapsible & dismissible whatsNewCard with full keyboard navigation"
+  );
+  assert.ok(
+    panelContent.includes("hasNewRelease: root.hasNewRelease"),
+    "PanelContent must pass hasNewRelease to helpModal"
+  );
+
+  // 5. TodoStore Catalog & Seeding
+  assert.ok(
+    todoStore.includes("CURRENT_RELEASE_VERSION") &&
+      todoStore.includes("RELEASE_HIGHLIGHTS") &&
+      todoStore.includes("getTutorialTasks") &&
+      todoStore.includes("createInitialStore") &&
+      todoStore.includes("seedTutorialTasks") &&
+      todoStore.includes("hasNewRelease") &&
+      todoStore.includes("markReleaseSeen"),
+    "TodoStore must export CURRENT_RELEASE_VERSION, RELEASE_HIGHLIGHTS, getTutorialTasks, createInitialStore, seedTutorialTasks, hasNewRelease, markReleaseSeen"
+  );
+
+  // 6. Documentation in DESIGN.md
+  assert.ok(
+    design.includes("Onboarding Tutorial & Release Highlights System") &&
+      design.includes("seedTutorial") &&
+      design.includes("whatsNew") &&
+      design.includes("markReleaseSeen"),
+    "DESIGN.md must document the onboarding tutorial and release highlights system"
+  );
+});
+

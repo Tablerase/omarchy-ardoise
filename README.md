@@ -30,10 +30,13 @@ ignore until you want it.
 - <img src="https://api.iconify.design/mdi:tooltip-text-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Badge + tooltip.** Pending count on the bar; hover for a per-profile
   breakdown, completion progress, and overdue / due-today detail.
 - <img src="https://api.iconify.design/mdi:card-text-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Flyout panel** with profile filters, an auto-hiding filter for empty
-  profiles, and expandable rows for notes, reminders, and profile changes.
+  profiles, and expandable drawers (<kbd>Enter</kbd>) for notes, dynamic reminder presets, and profile reassignment.
+- <img src="https://api.iconify.design/mdi:shield-alert-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hold-to-confirm laser safeguards.** Destructive actions (task deletion with <kbd>x</kbd>,
+  clearing completed tasks with <kbd>c</kbd>, and purging archives) charge an 800ms glowing laser bar with card micro-shake
+  and surface tint. Releasing early drains safely, eliminating confirmation modal fatigue while preventing accidental loss.
 - <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add** — a fullscreen capture bar. Type, <kbd>Enter</kbd>, gone.
 - <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
-  `#perso` and `#personal` resolve to the same profile.
+  `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
 
 </details>
 
@@ -55,7 +58,11 @@ ignore until you want it.
 <summary><img src="https://api.iconify.design/mdi:clock-outline.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Reminders & notifications</b></summary>
 
 - <img src="https://api.iconify.design/mdi:clock-fast.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Scheduled reminders** with quick presets (`+30m`, `+1h`, `Tomorrow 9am`,
-  `Tomorrow 6pm`).
+  `Tomorrow 6pm`), dynamically recomputed relative to current execution time.
+- <img src="https://api.iconify.design/mdi:calendar-clock.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Interactive Custom Reminder Picker.** Natural-language input
+  (`45m`, `2h`, `14:30`, `tomorrow 9am`, `Oct 15 10am`) with a live relative countdown preview badge,
+  quick step adjustments (`±15m`, `±1h`, `+1d`), hour/minute steppers, and an interactive mini-calendar month grid.
+  Strict Two-Stage Escape compliant — never loses draft text on <kbd>Esc</kbd>.
 - <img src="https://api.iconify.design/mdi:bell-ring-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Desktop notifications** — a headless service watches your file and raises native desktop
   notifications; clicking one opens the panel.
 - <img src="https://api.iconify.design/mdi:bell-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Loop prevention** — tasks never notify twice.
@@ -87,7 +94,7 @@ Your data directory is a git repository, so every change is a snapshot.
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
 
-- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **25 shell commands** over `omarchy-shell tablerase.ardoise` — see
+- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` — see
   [Scripting](#scripting--automation).
 - <img src="https://api.iconify.design/mdi:file-eye-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **React to writes.** The data file is watched, so external tools, git hooks,
   and AI agents can write to it and the UI updates immediately.
@@ -245,7 +252,7 @@ omarchy-shell tablerase.ardoise addDetailed "Fix flake" "CI is red on main" "+1h
 
 # Query single task, update, complete, remove
 omarchy-shell tablerase.ardoise get "<id>"
-omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "2026-09-22T09:00:00.000Z"}'
+omarchy-shell tablerase.ardoise update "<id>" '{"reminder": "tomorrow 18:00"}' # accepts ISO, presets, or natural language
 omarchy-shell tablerase.ardoise toggleTodo "<id>"
 omarchy-shell tablerase.ardoise remove "<id>"
 ```
@@ -253,7 +260,7 @@ omarchy-shell tablerase.ardoise remove "<id>"
 Two commands are built specifically for agents:
 
 ```bash
-# Create a task with notes and a reminder in one call
+# Create a task with notes and a natural-language or preset reminder in one call
 omarchy-shell tablerase.ardoise addDetailed "Refactor parser" "Split tokenizer out" "tomorrow 9am"
 
 # Resolve a profile from free text before using it
@@ -265,9 +272,9 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | Group | Commands |
 | :--- | :--- |
 | **Tasks** | `add`, `addDetailed`, `toggleTodo`, `update`, `remove`, `clear` |
-| **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived` |
+| **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived`, `whatsNew`, `markReleaseSeen` |
 | **Profiles** | `setProfile` |
-| **Panel** | `open`, `close`, `toggle` |
+| **Panel** | `open`, `close`, `toggle`, `seedTutorial`, `help`, `resetReleaseHighlights` |
 | **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |
 
 Notes:
@@ -374,9 +381,6 @@ data schemas.
   **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT) — the
   multi-kind overlay pattern behind the Quick Add modal, and the headless
   preview pipeline.
-- **[Planova / PlaneTxt](https://github.com/brvier/PlanovaQuickShell)** by
-  **Benoît HERVIER** ([@brvier](https://github.com/brvier)) — separating a
-  reactive data store from its presentation.
 - **[Omarchy](https://github.com/omacom/omarchy)** — the bar widget
   architecture, theme tokens, and the desktop this lives on.
 

@@ -18,28 +18,54 @@ Item {
   property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
   property color fadeColor: Color.menu.background
 
-  signal reminderSelected(string value, int index)
+  property bool showCustomPill: true
+  readonly property bool isCustomSelected: root.hasReminder && !root.presets.some(function(p) { return p && p.value === root.selectedValue })
+
+  signal reminderSelected(string value, int index, int presetIndex)
+  signal customSelected(int index)
   signal clearSelected(int index)
 
   implicitHeight: Style.space(26)
   implicitWidth: reminderRow.implicitWidth
 
-  function ensureVisible(idx) {
-    var item = null
-    if (presetRepeater && idx >= 0 && idx < presetRepeater.count) {
-      item = presetRepeater.itemAt(idx)
-    } else if (idx === root.presets.length && clearBtn.visible) {
-      item = clearBtn
+  function getItemAtVisualIndex(idx) {
+    if (root.isCustomSelected) {
+      if (idx === 0) return (customBtn && customBtn.visible) ? customBtn : null
+      var pIdx = idx - 1
+      if (presetRepeater && pIdx >= 0 && pIdx < presetRepeater.count) {
+        return presetRepeater.itemAt(pIdx)
+      }
+      var clearIdxCustom = root.presets.length + 1
+      if (idx === clearIdxCustom && clearBtn && clearBtn.visible) {
+        return clearBtn
+      }
+    } else {
+      if (presetRepeater && idx >= 0 && idx < presetRepeater.count) {
+        return presetRepeater.itemAt(idx)
+      }
+      var customIdx = root.showCustomPill ? root.presets.length : -1
+      if (idx === customIdx && customBtnTrailing && customBtnTrailing.visible) {
+        return customBtnTrailing
+      }
+      var clearIdxStandard = root.showCustomPill ? (root.presets.length + 1) : root.presets.length
+      if (idx === clearIdxStandard && clearBtn && clearBtn.visible) {
+        return clearBtn
+      }
     }
+    return null
+  }
+
+  function ensureVisible(idx) {
+    var item = getItemAtVisualIndex(idx)
     if (!item) return
 
     var itemLeft = item.x
     var itemRight = item.x + item.width
-    if (itemLeft < reminderFlickable.contentX) {
-      reminderFlickable.contentX = Math.max(0, itemLeft - Style.space(4))
-    } else if (itemRight > reminderFlickable.contentX + reminderFlickable.width) {
+    if (itemLeft - Style.space(6) < reminderFlickable.contentX) {
+      reminderFlickable.contentX = Math.max(0, itemLeft - Style.space(6))
+    } else if (itemRight + Style.space(6) > reminderFlickable.contentX + reminderFlickable.width) {
       var maxContentX = Math.max(0, reminderFlickable.contentWidth - reminderFlickable.width)
-      reminderFlickable.contentX = Math.min(maxContentX, itemRight - reminderFlickable.width + Style.space(4))
+      reminderFlickable.contentX = Math.min(maxContentX, itemRight + Style.space(6) - reminderFlickable.width)
     }
   }
 
@@ -82,8 +108,44 @@ Item {
 
     Row {
       id: reminderRow
+      leftPadding: Style.space(6)
+      rightPadding: Style.space(6)
       spacing: Style.space(4)
       anchors.verticalCenter: parent.verticalCenter
+
+      // Custom reminder pill (displayed FIRST when selected so info is immediately visible)
+      Rectangle {
+        id: customBtn
+        visible: root.showCustomPill && root.isCustomSelected
+        readonly property bool isCustomNavFocused: root.isNavFocused && (root.focusedIndex === 0)
+        implicitWidth: customText.implicitWidth + Style.space(12)
+        implicitHeight: Style.space(20)
+        radius: implicitHeight / 2
+        color: root.accentColor
+        border.color: isCustomNavFocused ? root.accentColor : Color.menu.border
+        border.width: isCustomNavFocused ? 1.5 : 1
+        scale: isCustomNavFocused ? 1.05 : 1.0
+        Behavior on scale { NumberAnimation { duration: 80 } }
+
+        Text {
+          id: customText
+          anchors.centerIn: parent
+          text: root.selectedValue
+            ? ("󰃭 " + ((typeof TodoStore !== "undefined" && typeof TodoStore.formatReminder === "function") ? TodoStore.formatReminder(root.selectedValue) : "Custom"))
+            : "󰃭 Custom..."
+          color: "white"
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.caption
+          font.bold: true
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.customSelected(0)
+        }
+      }
 
       Repeater {
         id: presetRepeater
@@ -93,8 +155,9 @@ Item {
           id: presetBtn
           required property var modelData
           required property int index
+          readonly property int visualIndex: root.isCustomSelected ? (index + 1) : index
           readonly property bool isSelected: root.hasReminder && (root.selectedValue === modelData.value)
-          readonly property bool isBtnNavFocused: root.isNavFocused && (root.focusedIndex === index)
+          readonly property bool isBtnNavFocused: root.isNavFocused && (root.focusedIndex === visualIndex)
 
           implicitWidth: presetText.implicitWidth + Style.space(12)
           implicitHeight: Style.space(20)
@@ -123,9 +186,42 @@ Item {
               var freshVal = (typeof TodoStore !== "undefined" && typeof TodoStore.computePresetReminder === "function")
                 ? TodoStore.computePresetReminder(presetBtn.index)
                 : presetBtn.modelData.value
-              root.reminderSelected(freshVal, presetBtn.index)
+              root.reminderSelected(freshVal, presetBtn.visualIndex, presetBtn.index)
             }
           }
+        }
+      }
+
+      // Custom reminder pill (displayed AFTER presets when not selected)
+      Rectangle {
+        id: customBtnTrailing
+        visible: root.showCustomPill && !root.isCustomSelected
+        readonly property int visualIndex: root.presets ? root.presets.length : 0
+        readonly property bool isCustomNavFocused: root.isNavFocused && (root.focusedIndex === visualIndex)
+        implicitWidth: customTextTrailing.implicitWidth + Style.space(12)
+        implicitHeight: Style.space(20)
+        radius: implicitHeight / 2
+        color: isCustomNavFocused ? Util.alpha(root.accentColor, 0.25) : Color.menu.background
+        border.color: isCustomNavFocused ? root.accentColor : Color.menu.border
+        border.width: isCustomNavFocused ? 1.5 : 1
+        scale: isCustomNavFocused ? 1.05 : 1.0
+        Behavior on scale { NumberAnimation { duration: 80 } }
+
+        Text {
+          id: customTextTrailing
+          anchors.centerIn: parent
+          text: "󰃭 Custom..."
+          color: customBtnTrailing.isCustomNavFocused ? root.accentColor : root.barForeground
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.caption
+          font.bold: customBtnTrailing.isCustomNavFocused
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.customSelected(customBtnTrailing.visualIndex)
         }
       }
 
@@ -133,7 +229,8 @@ Item {
       Rectangle {
         id: clearBtn
         visible: root.hasReminder
-        readonly property bool isClearNavFocused: root.isNavFocused && (root.focusedIndex === root.presets.length)
+        readonly property int clearIndex: root.isCustomSelected ? (root.presets.length + 1) : (root.showCustomPill ? (root.presets.length + 1) : root.presets.length)
+        readonly property bool isClearNavFocused: root.isNavFocused && (root.focusedIndex === clearIndex)
         implicitWidth: clearText.implicitWidth + Style.space(10)
         implicitHeight: Style.space(20)
         radius: implicitHeight / 2
@@ -156,7 +253,7 @@ Item {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.clearSelected(root.presets.length)
+          onClicked: root.clearSelected(clearBtn.clearIndex)
         }
       }
     }
