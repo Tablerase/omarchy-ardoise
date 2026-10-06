@@ -23,7 +23,7 @@ jobs:
         run: echo "/usr/lib/qt6/bin" >> "$GITHUB_PATH"
 
       - name: Install Dependencies
-        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq
+        run: pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq lua
 
       - name: Checkout Code
         uses: actions/checkout@v7

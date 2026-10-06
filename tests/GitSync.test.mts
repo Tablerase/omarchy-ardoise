@@ -338,7 +338,7 @@ test("sync safety: connecting an empty remote pushes local tasks without losing 
     fs.mkdirSync(remoteDir, { recursive: true });
 
     // 1. Initialize bare remote repository (simulates empty GitHub repo)
-    spawnSync("git", ["init", "--bare", remoteDir]);
+    spawnSync("git", ["init", "--bare", "-b", "main", remoteDir]);
 
     // 2. Initialize local repository with existing tasks
     spawnSync("git", ["init", "-b", "main", localDir]);
@@ -394,7 +394,7 @@ test("sync safety: newly added local tasks are preserved and pushed incrementall
 
   try {
     fs.mkdirSync(localDir, { recursive: true });
-    spawnSync("git", ["init", "--bare", remoteDir]);
+    spawnSync("git", ["init", "--bare", "-b", "main", remoteDir]);
 
     spawnSync("git", ["init", "-b", "main", localDir]);
     spawnSync("git", ["-C", localDir, "config", "user.name", "TestUser"]);
@@ -466,7 +466,7 @@ test("sync safety: multi-device divergence merges remote changes without droppin
 
   try {
     fs.mkdirSync(devADir, { recursive: true });
-    spawnSync("git", ["init", "--bare", remoteDir]);
+    spawnSync("git", ["init", "--bare", "-b", "main", remoteDir]);
 
     // Device A starts with shared Task 1 and unique Task 2
     spawnSync("git", ["init", "-b", "main", devADir]);
@@ -493,7 +493,7 @@ test("sync safety: multi-device divergence merges remote changes without droppin
     assert.equal(runSyncShellProcess(devADir).stdout, "INITIALIZED_AND_PUSHED");
 
     // Device B clones the repo and makes independent edits
-    spawnSync("git", ["clone", remoteDir, devBDir]);
+    spawnSync("git", ["clone", "-b", "main", remoteDir, devBDir]);
     spawnSync("git", ["-C", devBDir, "config", "user.name", "DeviceB"]);
     spawnSync("git", ["-C", devBDir, "config", "user.email", "b@example.com"]);
     spawnSync("git", ["-C", devBDir, "config", "commit.gpgsign", "false"]);

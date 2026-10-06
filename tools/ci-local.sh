@@ -27,7 +27,7 @@ exec docker run --rm \
     set -euo pipefail
     export PATH="/usr/lib/qt6/bin:$PATH"
 
-    pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq
+    pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq lua
 
     # Same sparse checkout CI performs, at the same pinned commit.
     git init -q /tmp/omarchy
