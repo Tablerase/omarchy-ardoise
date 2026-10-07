@@ -338,12 +338,24 @@ if [ -z "$dir" ] || [ ! -d "$dir" ] || [ "$dir" = "$HOME" ]; then
   exit 0
 fi
 
+# Ignore sensitive system or credential directories to prevent private path extraction
+case "$dir" in
+  "$HOME"|"/"|"/root"|"/etc"|"/var"|"/tmp"|"/dev"|"/proc"|"/sys")
+    echo "null"
+    exit 0
+    ;;
+  "$HOME/.ssh"*|"$HOME/.gnupg"*|"$HOME/.aws"*|"$HOME/.password-store"*|"$HOME/.local/share/keyrings"*|"$HOME/.pki"*)
+    echo "null"
+    exit 0
+    ;;
+esac
+
 repo_root=""
 remote=""
 subpath=""
 repo_name=""
 
-if cd "$dir" 2>/dev/null; then
+if cd -- "$dir" 2>/dev/null; then
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
   if [ -n "$repo_root" ]; then
     remote=$(git config --get remote.origin.url 2>/dev/null | sed -E 's/^(https?:\/\/|git@)(github\.com[:\/])?//' | sed -E 's/\.git$//')

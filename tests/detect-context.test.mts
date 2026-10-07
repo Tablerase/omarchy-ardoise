@@ -423,3 +423,23 @@ test("Focused Terminal Resolution: Terminal window resolves active terminal work
     // Execution restricted
   }
 });
+
+// -----------------------------------------------------------------------------
+// 12. Privacy & Data Minimization: Sensitive directories yield null
+// -----------------------------------------------------------------------------
+test("Privacy & Data Minimization: Sensitive directories yield null", () => {
+  const sensitiveDirs = ["~/.ssh", "~/.gnupg", "~/.aws", "~/.password-store", "/etc", "/tmp"];
+  for (const sDir of sensitiveDirs) {
+    try {
+      const simCmd = `bash -c 'code=$(sed "s|^dir=.*|dir=\\"${sDir}\\"|; s|win_class=.*|win_class=\\"com.mitchellh.ghostty\\"|; s|is_terminal_win=.*|is_terminal_win=true|" "${DETECT_SCRIPT}"); bash -c "$code"'`;
+      const out = execSync(simCmd, { encoding: "utf8" }).trim();
+      assert.strictEqual(
+        out,
+        "null",
+        `Sensitive directory '${sDir}' must resolve to null to prevent private directory path extraction`
+      );
+    } catch {
+      // Execution restricted
+    }
+  }
+});

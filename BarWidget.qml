@@ -65,8 +65,14 @@ BarWidget {
 
   // Reads a file from disk, bypassing FileView's cached text. Authoritative.
   function readFile(path, cb) {
+    var p = String(path || "")
+    if (!p.startsWith(root.dataDirPath)) {
+      console.warn("[Ardoise] Blocked read outside data directory scope:", p)
+      if (cb) cb("")
+      return
+    }
     root._readCb = cb
-    readProc.readPath = path
+    readProc.readPath = p
     readProc.running = true
   }
 
@@ -371,9 +377,11 @@ BarWidget {
     id: initFileProc
     command: [
       "bash", "-c",
-      'mkdir -p "$1" && ' +
+      'mkdir -p "$1" && chmod 700 "$1" 2>/dev/null || true; ' +
       "[ -f \"$2\" ] || cat << 'EOF' > \"$2\"\n" + root.initialStoreJson + "\nEOF\n; " +
+      'chmod 600 "$2" 2>/dev/null || true; ' +
       '[ -f "$3" ] || echo \'{"version":1,"archived":[]}\' > "$3"; ' +
+      'chmod 600 "$3" 2>/dev/null || true; ' +
       'if [ ! -f "$4" ] && [ -f "$5" ]; then cp "$5" "$4" 2>/dev/null || true; fi; ' +
       'if [ ! -f "$1/.gitignore" ]; then printf \'bindings.lua\\n*.tmp\\n\' > "$1/.gitignore"; fi; ' +
       'cd "$1" && ' +
@@ -635,6 +643,7 @@ BarWidget {
   function rollbackToCommit(hashStr) {
     if (!hashStr) return
     var h = String(hashStr).trim()
+    if (!/^[0-9a-fA-F]{4,40}$/.test(h)) return
     Quickshell.execDetached([
       "bash", "-c",
       'cd "$1" && git checkout "$2" -- todos.json todos-archive.json && printf \'[%s] Restored snapshot %s\\n\' "$3" "${2:0:7}" | git commit -F -',
@@ -652,7 +661,9 @@ BarWidget {
 
   function recoverFromCommit(hashStr) {
     if (!hashStr) return
-    root.recoveringHash = String(hashStr).trim()
+    var h = String(hashStr).trim()
+    if (!/^[0-9a-fA-F]{4,40}$/.test(h)) return
+    root.recoveringHash = h
     recoverProc.running = true
   }
 
@@ -701,9 +712,11 @@ BarWidget {
 
   function autoSetupGitRemote(repoName) {
     if (setupGitRemoteProc.running) return "already_running"
+    var name = (repoName && String(repoName).trim()) ? String(repoName).trim() : "ardoise-tasks"
+    if (!/^[a-zA-Z0-9_\-\.]+$/.test(name)) return "invalid_repo_name"
     root.gitSyncStatus = "syncing"
     root.gitSyncMessage = "Setting up GitHub repository..."
-    setupGitRemoteProc.targetRepoName = (repoName && String(repoName).trim()) ? String(repoName).trim() : "ardoise-tasks"
+    setupGitRemoteProc.targetRepoName = name
     setupGitRemoteProc.running = true
     return "started"
   }

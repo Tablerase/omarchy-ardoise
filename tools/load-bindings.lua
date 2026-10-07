@@ -20,6 +20,12 @@ if filePath:sub(1, 1) == "~" then
   filePath = home .. filePath:sub(2)
 end
 
+-- Scope check: only allow reading .lua files
+if not filePath:match("%.lua$") then
+  print("{}")
+  os.exit(0)
+end
+
 local f = io.open(filePath, "r")
 if not f then
   -- File doesn't exist yet; safe default empty object

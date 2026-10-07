@@ -824,14 +824,20 @@ test("Lua Keybindings Sandbox: tools/load-bindings.lua evaluates config and bloc
     const evilJson = JSON.parse(evilRes.stdout.trim());
     assert.deepEqual(evilJson, {}, "Unsafe script execution error must safely return empty object");
 
-    // 4. Malformed syntax
+    // 4. File extension scope enforcement: non-.lua files must be rejected
+    const nonLuaFile = path.join(tmpDir, "secret.conf");
+    fs.writeFileSync(nonLuaFile, "return { open_editor = 'p' }");
+    const nonLuaRes = spawnSync(luaPath, [loadBindingsScript, nonLuaFile], { encoding: "utf8" });
+    assert.deepEqual(JSON.parse(nonLuaRes.stdout.trim()), {}, "load-bindings.lua must refuse to read non-.lua files");
+
+    // 5. Malformed syntax
     const malformedFile = path.join(tmpDir, "syntax_error.lua");
     fs.writeFileSync(malformedFile, "return { incomplete table");
     const syntaxRes = spawnSync(luaPath, [loadBindingsScript, malformedFile], { encoding: "utf8" });
     const syntaxJson = JSON.parse(syntaxRes.stdout.trim());
     assert.deepEqual(syntaxJson, {}, "Syntax errors must safely resolve to empty object");
 
-    // 5. Non-existent file
+    // 6. Non-existent file
     const nonExistentRes = spawnSync(luaPath, [loadBindingsScript, path.join(tmpDir, "missing.lua")], { encoding: "utf8" });
     assert.equal(nonExistentRes.status, 0);
     assert.deepEqual(JSON.parse(nonExistentRes.stdout.trim()), {});
@@ -1317,6 +1323,13 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
       service.includes('headline = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "") + "Task Reminder"') &&
       service.includes('desc = "Scheduled reminder is due"'),
     "Service.qml must not expose private task titles or reminder descriptions in notification process arguments"
+  );
+  // 4. BarWidget must enforce restrictive permissions on data directory and files
+  assert.ok(
+    barWidget.includes('chmod 700 "$1"') &&
+      barWidget.includes('chmod 600 "$2"') &&
+      barWidget.includes('chmod 600 "$3"'),
+    "BarWidget.initFileProc must enforce restrictive permissions (0700 dir, 0600 store files)"
   );
 });
 

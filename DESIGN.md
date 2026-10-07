@@ -720,7 +720,13 @@ per-task conflicts resolve on the newer `updatedAt` (falling back to
 versions. This is deliberate: a task list must not be silently truncated
 because a rollback happened.
 
-### 7.2 Task Location
+#### Storage permissions & data privacy
+All task data and archives are kept strictly local to the user session at
+`~/.config/omarchy/tablerase.ardoise/`. The directory is created with mode `0700`
+(accessible only by the user), and task stores (`todos.json`, `todos-archive.json`)
+are initialized with mode `0600` to prevent cross-user visibility on multi-user systems.
+
+### 7.2 Task Location & Data Minimization
 
 `location` is nullable; every field is optional.
 
@@ -731,7 +737,10 @@ because a rollback happened.
 | `location.localPath` | `string\|null` | Local filesystem path. |
 
 Populated automatically by `tools/detect-context.sh` from the focused Hyprland
-window, and overridable by hand.
+window, and overridable by hand. To ensure data minimization:
+- Context detection is restricted to recognized development environments (editors and terminals). Non-dev applications (browsers, chat, markdown notes) yield `null`.
+- Sensitive credential and system directories (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.password-store`, root, `/etc`) are strictly ignored and yield `null`.
+- Task titles and private notes are excluded from process argument lists (`argv`) and Git commit messages to prevent process table leakage.
 
 ### 7.3 Archive Schema (`todos-archive.json`)
 

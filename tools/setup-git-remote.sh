@@ -48,6 +48,7 @@ DATA_DIR="${2:-${ARDOISE_DATA_DIR:-$HOME/.config/omarchy/tablerase.ardoise}}"
 if [ ! -d "$DATA_DIR" ]; then
   mkdir -p "$DATA_DIR"
 fi
+chmod 700 "$DATA_DIR" 2>/dev/null || true
 
 # Ensure local git repo is initialized if not present
 if [ ! -d "$DATA_DIR/.git" ]; then
