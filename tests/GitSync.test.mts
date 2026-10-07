@@ -47,6 +47,18 @@ test("buildCommitMessage: constructs device-tagged commit message", () => {
     "[omarchy] Add task: buy milk (5 pending)"
   );
   assert.equal(
+    buildCommitMessage("omarchy", "Add #work task", 3),
+    "[omarchy] Add #work task (3 pending)"
+  );
+  assert.equal(
+    buildCommitMessage("omarchy", "Complete #work task", 2),
+    "[omarchy] Complete #work task (2 pending)"
+  );
+  assert.equal(
+    buildCommitMessage("omarchy", "Set reminder in #work task", 2),
+    "[omarchy] Set reminder in #work task (2 pending)"
+  );
+  assert.equal(
     buildCommitMessage("laptop", "Clear completed"),
     "[laptop] Clear completed"
   );

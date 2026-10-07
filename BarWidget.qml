@@ -48,6 +48,8 @@ BarWidget {
   property string gitSyncMessage: ""
   property string lastSyncOutput: ""
   property string recoveringHash: ""
+  property string inspectingHash: ""
+  property var inspectedSnapshotTasks: []
   property string lastArchiveText: ""
 
   // Durable archive-operation state. Restore/purge read both files fresh from
@@ -155,25 +157,42 @@ BarWidget {
   }
 
   function addTodo(title, description, profile, reminder) {
-    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task")
+    var prof = (profile && String(profile).trim()) ? "#" + String(profile).trim() + " " : ""
+    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add " + prof + "task")
   }
 
   function toggleTodo(id) {
-    saveStore(TodoStore.toggleTodo(root.store, id), "Toggle task")
+    var task = TodoStore.getTaskById(root.store, id)
+    var prof = (task && task.profile && String(task.profile).trim()) ? "#" + String(task.profile).trim() + " " : ""
+    var verb = (task && task.done) ? "Reopen " : "Complete "
+    saveStore(TodoStore.toggleTodo(root.store, id), verb + prof + "task")
   }
 
   function removeTodo(id) {
-    saveStore(TodoStore.removeTodo(root.store, id), "Delete task")
+    var task = TodoStore.getTaskById(root.store, id)
+    var prof = (task && task.profile && String(task.profile).trim()) ? "#" + String(task.profile).trim() + " " : ""
+    saveStore(TodoStore.removeTodo(root.store, id), "Delete " + prof + "task")
   }
 
   function updateTodo(id, fields) {
-    saveStore(TodoStore.updateTodo(root.store, id, fields), "Update task")
+    var task = TodoStore.getTaskById(root.store, id)
+    var prof = (task && task.profile && String(task.profile).trim()) ? "#" + String(task.profile).trim() + " " : ""
+    var act = "Update " + prof + "task"
+    if (fields && fields.reminder !== undefined) {
+      act = fields.reminder ? ("Set reminder in " + prof + "task").trim() : ("Clear reminder in " + prof + "task").trim()
+    } else if (fields && fields.profile) {
+      act = "Move task to #" + fields.profile
+    }
+    saveStore(TodoStore.updateTodo(root.store, id, fields), act)
   }
 
   function clearCompleted(profile) {
     var currentText = root.getArchiveText()
     var result = TodoStore.archiveCompleted(root.store, profile, currentText)
-    saveStore(result.updatedStore, "Clear completed")
+    var prof = (profile && String(profile).trim() && String(profile).trim() !== "all") ? " #" + String(profile).trim() : ""
+    var count = result.clearedCount || 0
+    var act = "Clear " + count + " completed" + prof + " task" + (count === 1 ? "" : "s")
+    saveStore(result.updatedStore, act)
     var json = JSON.stringify(result.updatedArchive, null, 2) + "\n"
     root.lastArchiveText = json
     archiveFile.setText(json)
@@ -484,6 +503,27 @@ BarWidget {
   }
 
   Process {
+    id: inspectSnapshotProc
+    command: ["git", "-C", root.dataDirPath, "show", root.inspectingHash + ":todos.json"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var parsed = JSON.parse(text)
+          root.inspectedSnapshotTasks = (parsed && Array.isArray(parsed.todos)) ? parsed.todos : []
+        } catch (_) {
+          root.inspectedSnapshotTasks = []
+        }
+      }
+    }
+    onExited: function(code) {
+      if (code !== 0) {
+        root.inspectedSnapshotTasks = []
+      }
+    }
+  }
+
+  Process {
     id: syncProcess
     command: [
       "bash", "-c",
@@ -665,6 +705,23 @@ BarWidget {
     if (!/^[0-9a-fA-F]{4,40}$/.test(h)) return
     root.recoveringHash = h
     recoverProc.running = true
+  }
+
+  function inspectSnapshot(hashStr) {
+    if (!hashStr) {
+      root.inspectingHash = ""
+      root.inspectedSnapshotTasks = []
+      return
+    }
+    var h = String(hashStr).trim()
+    if (!/^[0-9a-fA-F]{4,40}$/.test(h)) {
+      root.inspectingHash = ""
+      root.inspectedSnapshotTasks = []
+      return
+    }
+    if (root.inspectingHash === h && inspectSnapshotProc.running) return
+    root.inspectingHash = h
+    inspectSnapshotProc.running = true
   }
 
   function syncWithRemote() {

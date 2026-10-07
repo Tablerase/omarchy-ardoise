@@ -1296,13 +1296,21 @@ test("Onboarding Tutorial Quests & Release Highlights: contracts and UI indicato
 test("Security & Privacy Baseline: Git commit shell safety and notification argv hygiene", () => {
   const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
   const service = fs.readFileSync(path.join(repoDir, "Service.qml"), "utf8");
+  const gitModal = fs.readFileSync(path.join(repoDir, "ui/GitModal.qml"), "utf8");
 
-  // 1. Commit action must NOT append user title to actionName
+  // 1. Commit action must use semantic verbs and profile names without interpolating user title or notes
   assert.ok(
     barWidget.includes('function addTodo(title, description, profile, reminder) {') &&
-      barWidget.includes('saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task")') &&
-      !barWidget.includes('"Add task: " + title'),
+      barWidget.includes('saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add " + prof + "task")') &&
+      !barWidget.includes('"Add task: " + title') &&
+      !barWidget.includes('saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task: "'),
     "BarWidget.addTodo must not concatenate user task title into commit action name"
+  );
+  assert.ok(
+    barWidget.includes('var verb = (task && task.done) ? "Reopen " : "Complete "') &&
+      barWidget.includes('saveStore(TodoStore.toggleTodo(root.store, id), verb + prof + "task")') &&
+      barWidget.includes('saveStore(TodoStore.removeTodo(root.store, id), "Delete " + prof + "task")'),
+    "BarWidget task mutations must use semantic verbs and profile tags without leaking titles"
   );
 
   // 2. CommitProcess must pass commit message as data outside shell source and via stdin
@@ -1316,7 +1324,21 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "BarWidget.commitProcess must pass data outside shell source and use stdin for git commit"
   );
 
-  // 3. Service.qml must NOT pass private titles or reminder descriptions in argv
+  // 3. Local snapshot inspector must be safely scoped and wired
+  assert.ok(
+    barWidget.includes('command: ["git", "-C", root.dataDirPath, "show", root.inspectingHash + ":todos.json"]') &&
+      barWidget.includes('/^[0-9a-fA-F]{4,40}$/.test(h)') &&
+      barWidget.includes('property var inspectedSnapshotTasks: []'),
+    "BarWidget must safely scope git show inspection and validate hash input"
+  );
+  assert.ok(
+    gitModal.includes('id: previewBox') &&
+      gitModal.includes('model: root.inspectedTasks') &&
+      gitModal.includes('+ Recoverable'),
+    "GitModal must provide snapshot task preview drawer with recoverable indicator"
+  );
+
+  // 4. Service.qml must NOT pass private titles or reminder descriptions in argv
   assert.ok(
     !service.includes('headline = "Todo: " + t.title') &&
       !service.includes('t.description') &&
@@ -1324,7 +1346,7 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
       service.includes('desc = "Scheduled reminder is due"'),
     "Service.qml must not expose private task titles or reminder descriptions in notification process arguments"
   );
-  // 4. BarWidget must enforce restrictive permissions on data directory and files
+  // 5. BarWidget must enforce restrictive permissions on data directory and files
   assert.ok(
     barWidget.includes('chmod 700 "$1"') &&
       barWidget.includes('chmod 600 "$2"') &&

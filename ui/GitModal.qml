@@ -34,6 +34,14 @@ Rectangle {
     ? root.filteredSnapshots[root.selectedIndex]
     : null
 
+  readonly property var inspectedTasks: (root.barWidget && root.barWidget.inspectedSnapshotTasks) ? root.barWidget.inspectedSnapshotTasks : []
+
+  onSelectedSnapshotChanged: {
+    if (root.barWidget && typeof root.barWidget.inspectSnapshot === "function") {
+      root.barWidget.inspectSnapshot(root.selectedSnapshot ? root.selectedSnapshot.hash : "")
+    }
+  }
+
   signal closeRequested()
 
   onActiveTabChanged: {
@@ -63,6 +71,9 @@ Rectangle {
     if (contextMenu) contextMenu.close()
     if (root.barWidget && typeof root.barWidget.refreshGitHistory === "function") {
       root.barWidget.refreshGitHistory(true)
+    }
+    if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.inspectSnapshot === "function") {
+      root.barWidget.inspectSnapshot(root.selectedSnapshot.hash)
     }
     Qt.callLater(function() { root.forceActiveFocus() })
   }
@@ -124,6 +135,10 @@ Rectangle {
         root.barWidget.refreshGitHistory(true)
       }
       Qt.callLater(function() { root.forceActiveFocus() })
+    } else {
+      if (root.barWidget && typeof root.barWidget.inspectSnapshot === "function") {
+        root.barWidget.inspectSnapshot("")
+      }
     }
   }
 
@@ -698,7 +713,7 @@ Rectangle {
         Item {
           id: listContainer
           width: parent.width
-          height: parent.height - actionRow.implicitHeight - (snapshotSearchRow.visible ? snapshotSearchRow.implicitHeight + Style.space(6) : 0) - Style.space(10)
+          height: parent.height - actionRow.implicitHeight - (snapshotSearchRow.visible ? snapshotSearchRow.implicitHeight + Style.space(6) : 0) - (previewBox.visible ? previewBox.height + Style.space(6) : 0) - Style.space(10)
 
           ListView {
             id: snapshotList
@@ -881,6 +896,155 @@ Rectangle {
               color: Util.alpha(Color.muted, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption * 0.85
+            }
+          }
+        }
+
+        // Local Snapshot Task Preview Box
+        Rectangle {
+          id: previewBox
+          visible: root.isOpen && Boolean(root.selectedSnapshot)
+          width: parent.width
+          height: visible ? Style.space(96) : 0
+          radius: Style.cornerRadius
+          color: Util.alpha(Color.surface, 0.6)
+          border.color: Util.alpha(Color.menu.border, 0.8)
+          border.width: 1
+          clip: true
+
+          Column {
+            anchors.fill: parent
+            anchors.margins: Style.space(6)
+            spacing: Style.space(4)
+
+            // Header
+            Row {
+              id: previewHeader
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "󰈙"
+                color: Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Snapshot Tasks (" + (root.inspectedTasks ? root.inspectedTasks.length : 0) + ")"
+                color: root.barForeground
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.95
+                font.bold: true
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Boolean(root.selectedSnapshot && root.selectedSnapshot.shortHash)
+                text: "• " + (root.selectedSnapshot ? root.selectedSnapshot.shortHash : "")
+                color: Color.muted
+                font.family: "monospace"
+                font.pixelSize: Style.font.caption * 0.8
+              }
+            }
+
+            // Task List
+            ListView {
+              id: inspectedTaskList
+              width: parent.width
+              height: parent.height - previewHeader.implicitHeight - Style.space(4)
+              clip: true
+              boundsBehavior: Flickable.StopAtBounds
+              spacing: Style.space(3)
+              model: root.inspectedTasks
+
+              ScrollBar.vertical: ScrollBar {
+                policy: inspectedTaskList.contentHeight > inspectedTaskList.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+              }
+
+              delegate: Row {
+                id: taskRow
+                required property var modelData
+                width: inspectedTaskList.width
+                spacing: Style.space(6)
+
+                readonly property bool isMissing: Boolean(root.barWidget && root.barWidget.store && !TodoStore.getTaskById(root.barWidget.store, modelData.id))
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: modelData.done ? "󰄲" : "󰄱"
+                  color: modelData.done ? Color.muted : (taskRow.isMissing ? Color.accent : root.barForeground)
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.caption * 0.85
+                }
+
+                // Profile tag badge
+                Rectangle {
+                  id: profBadge
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: Boolean(modelData.profile && modelData.profile !== "personal")
+                  implicitWidth: profText.implicitWidth + Style.space(6)
+                  implicitHeight: profText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(Color.muted, 0.15)
+
+                  Text {
+                    id: profText
+                    anchors.centerIn: parent
+                    text: modelData.profile || ""
+                    color: Color.muted
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                  }
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: Math.max(Style.space(40), parent.width - (profBadge.visible ? profBadge.implicitWidth + Style.space(6) : 0) - (recoverBadge.visible ? recoverBadge.implicitWidth + Style.space(6) : 0) - Style.space(24))
+                  text: modelData.title || ""
+                  color: modelData.done ? Color.muted : root.barForeground
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.caption * 0.85
+                  elide: Text.ElideRight
+                }
+
+                Rectangle {
+                  id: recoverBadge
+                  anchors.verticalCenter: parent.verticalCenter
+                  visible: taskRow.isMissing
+                  implicitWidth: recText.implicitWidth + Style.space(6)
+                  implicitHeight: recText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(Color.accent, 0.2)
+
+                  Text {
+                    id: recText
+                    anchors.centerIn: parent
+                    text: "+ Recoverable"
+                    color: Color.accent
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                    font.bold: true
+                  }
+                }
+              }
+            }
+
+            // Empty state for snapshot with 0 tasks
+            Item {
+              visible: root.inspectedTasks.length === 0
+              width: parent.width
+              height: parent.height - previewHeader.implicitHeight - Style.space(4)
+
+              Text {
+                anchors.centerIn: parent
+                text: "No active tasks recorded in this snapshot"
+                color: Color.muted
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.85
+              }
             }
           }
         }
