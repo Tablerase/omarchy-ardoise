@@ -84,6 +84,7 @@ preflight() {
 
 arm() {
   mkdir -p "$BACKUP_DIR"
+  chmod 700 "$STATE_ROOT" "$BACKUP_DIR" 2>/dev/null || true
   local real_head=""
 
   if [[ -d "$DATA_DIR/.git" ]]; then

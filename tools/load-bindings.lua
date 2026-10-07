@@ -20,8 +20,8 @@ if filePath:sub(1, 1) == "~" then
   filePath = home .. filePath:sub(2)
 end
 
--- Scope check: only allow reading .lua files
-if not filePath:match("%.lua$") then
+-- Scope check: only allow reading .lua files and reject sensitive credential/system directories
+if not filePath:match("%.lua$") or filePath:match("^/etc") or filePath:match("/%.ssh/") or filePath:match("/%.gnupg/") or filePath:match("/%.aws/") or filePath:match("/%.docker/") or filePath:match("/%.kube/") then
   print("{}")
   os.exit(0)
 end

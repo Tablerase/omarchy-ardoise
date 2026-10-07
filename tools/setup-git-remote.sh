@@ -7,8 +7,14 @@
 # Returns structured JSON to stdout.
 # =============================================================================
 
-set -e
+set -euo pipefail
 export MISE_QUIET=1
+
+# Prevent option injection
+if [[ "${1:-}" =~ ^- ]]; then
+  printf '{"success":false,"error":"invalid_repo_name","message":"Repository name cannot start with a hyphen."}\n'
+  exit 0
+fi
 
 # 1. Resolve GitHub CLI (gh)
 GH_BIN="${GH_BIN:-}"
@@ -48,6 +54,15 @@ fi
 
 # 3. Resolve Data Directory
 DATA_DIR="${2:-${ARDOISE_DATA_DIR:-$HOME/.config/omarchy/tablerase.ardoise}}"
+
+# Refuse execution if pointing to sensitive directory locations
+case "$DATA_DIR" in
+  "$HOME"|"/"|"/root"|"/etc"|"/var"|"/tmp"|"/dev"|"/proc"|"/sys"|"$HOME/.ssh"*|"$HOME/.gnupg"*|"$HOME/.aws"*|"$HOME/.docker"*|"$HOME/.kube"*)
+    printf '{"success":false,"error":"invalid_data_dir","message":"Refusing to operate on sensitive directory path."}\n'
+    exit 0
+    ;;
+esac
+
 if [ ! -d "$DATA_DIR" ]; then
   mkdir -p "$DATA_DIR"
 fi
@@ -109,6 +124,6 @@ if [[ "$SSH_URL" =~ ^(git@|https?://|ssh://) ]]; then
 fi
 
 # Otherwise, report creation failure
-ESCAPED_ERR="$(printf '%s' "$CREATE_OUTPUT" | head -n2 | tr '\n' ' ' | sed 's/"/\\"/g')"
+ESCAPED_ERR="$(printf '%s' "$CREATE_OUTPUT" | head -n2 | tr '\n' ' ' | sed 's/\\/\\\\/g; s/"/\\"/g')"
 printf '{"success":false,"error":"gh_create_failed","message":"Failed to create GitHub repo: %s"}\n' "$ESCAPED_ERR"
 exit 0

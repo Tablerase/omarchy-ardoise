@@ -12,22 +12,34 @@
 # Exit code 1: Verified PUBLIC -> Push strictly blocked
 # =============================================================================
 
-set -e
+set -euo pipefail
 export MISE_QUIET=1
 
 ARG1="${1:-.}"
 ARG2="${2:-origin}"
+
+# Prevent command-line option injection
+if [[ "$ARG1" =~ ^- ]] || [[ "$ARG2" =~ ^- ]]; then
+  echo "INVALID_ARGUMENT: Arguments cannot start with a hyphen" >&2
+  exit 1
+fi
 
 REMOTE_URL=""
 DATA_DIR="."
 
 if [ -d "$ARG1" ]; then
   DATA_DIR="$ARG1"
-  REMOTE_URL="$(git -C "$DATA_DIR" remote get-url "$ARG2" 2>/dev/null || echo "$ARG2")"
+  REMOTE_URL="$(git -C "$DATA_DIR" remote get-url -- "$ARG2" 2>/dev/null || echo "$ARG2")"
 elif [[ "$ARG1" =~ ^(git@|https?://|ssh://|file://|/) ]]; then
   REMOTE_URL="$ARG1"
 else
-  REMOTE_URL="$(git remote get-url "$ARG1" 2>/dev/null || echo "$ARG1")"
+  REMOTE_URL="$(git remote get-url -- "$ARG1" 2>/dev/null || echo "$ARG1")"
+fi
+
+# Reject any remote URL starting with a hyphen (flag injection prevention)
+if [[ "$REMOTE_URL" =~ ^- ]]; then
+  echo "INVALID_REMOTE_URL: Remote URL cannot start with a hyphen" >&2
+  exit 1
 fi
 
 if [ -z "$REMOTE_URL" ]; then

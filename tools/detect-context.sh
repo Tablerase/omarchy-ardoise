@@ -344,7 +344,7 @@ case "$dir" in
     echo "null"
     exit 0
     ;;
-  "$HOME/.ssh"*|"$HOME/.gnupg"*|"$HOME/.aws"*|"$HOME/.password-store"*|"$HOME/.local/share/keyrings"*|"$HOME/.pki"*)
+  "$HOME/.ssh"*|"$HOME/.gnupg"*|"$HOME/.aws"*|"$HOME/.password-store"*|"$HOME/.local/share/keyrings"*|"$HOME/.pki"*|"$HOME/.docker"*|"$HOME/.kube"*|"$HOME/.netrc"*)
     echo "null"
     exit 0
     ;;

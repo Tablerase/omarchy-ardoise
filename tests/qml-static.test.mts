@@ -841,6 +841,13 @@ test("Lua Keybindings Sandbox: tools/load-bindings.lua evaluates config and bloc
     const nonExistentRes = spawnSync(luaPath, [loadBindingsScript, path.join(tmpDir, "missing.lua")], { encoding: "utf8" });
     assert.equal(nonExistentRes.status, 0);
     assert.deepEqual(JSON.parse(nonExistentRes.stdout.trim()), {});
+
+    // 7. Sensitive system/credential path rejection
+    const sensitiveFile = path.join(tmpDir, ".ssh", "id_rsa.lua");
+    fs.mkdirSync(path.join(tmpDir, ".ssh"), { recursive: true });
+    fs.writeFileSync(sensitiveFile, "return { open_editor = 's' }");
+    const sensitiveRes = spawnSync(luaPath, [loadBindingsScript, sensitiveFile], { encoding: "utf8" });
+    assert.deepEqual(JSON.parse(sensitiveRes.stdout.trim()), {}, "load-bindings.lua must refuse to read paths in sensitive credential directories");
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
