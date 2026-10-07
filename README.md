@@ -136,7 +136,11 @@ Your data directory is a git repository, so every change is a snapshot.
 
 ## Installation
 
-Ardoise is a shell plugin designed for **Omarchy Quattro (Omarchy 4.x)**.
+### Requirements & External Dependencies
+
+- **Omarchy Quattro (Omarchy 4.x)** — desktop environment with Hyprland and Quickshell (Qt 6).
+- **`git`** — required for local task versioning, snapshot rollbacks, and multi-device sync.
+- **`lua`** *(optional)* — required only if customizing in-panel keyboard shortcuts via `bindings.lua`.
 
 ### Via Omarchy Plugin Marketplace (Recommended)
 
@@ -442,4 +446,8 @@ data schemas.
 - **[Omarchy](https://github.com/omacom/omarchy)** — the bar widget
   architecture, theme tokens, and the desktop this lives on.
 
-MIT licensed.
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
