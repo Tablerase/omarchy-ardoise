@@ -371,21 +371,29 @@ BarWidget {
     id: initFileProc
     command: [
       "bash", "-c",
-      "mkdir -p \"" + root.dataDirPath + "\" && " +
-      "[ -f \"" + root.todoFilePath + "\" ] || cat << 'EOF' > \"" + root.todoFilePath + "\"\n" + root.initialStoreJson + "\nEOF\n; " +
-      "[ -f \"" + root.archiveFilePath + "\" ] || echo '{\"version\":1,\"archived\":[]}' > \"" + root.archiveFilePath + "\"; " +
-      "if [ ! -f \"" + root.bindingsFilePath + "\" ] && [ -f \"" + root.defaultBindingsTemplatePath + "\" ]; then cp \"" + root.defaultBindingsTemplatePath + "\" \"" + root.bindingsFilePath + "\" 2>/dev/null || true; fi; " +
-      "if [ ! -f \"" + root.dataDirPath + "/.gitignore\" ]; then printf 'bindings.lua\\n*.tmp\\n' > \"" + root.dataDirPath + "/.gitignore\"; fi; " +
-      "cd \"" + root.dataDirPath + "\" && " +
-      "git config gc.auto 100 2>/dev/null || true; " +
-      "if [ ! -d \".git\" ]; then " +
-      "  git init -b main; " +
-      "  git config user.name \"" + root.deviceName + "\"; " +
-      "  git config user.email \"" + Quickshell.env("USER") + "@" + root.deviceName + "\"; " +
-      "  git config gc.auto 100; " +
-      "  git add todos.json todos-archive.json .gitignore 2>/dev/null || git add todos.json todos-archive.json; " +
-      "  git commit -m \"[" + root.deviceName + "] Initial task repository\"; " +
-      "fi"
+      'mkdir -p "$1" && ' +
+      "[ -f \"$2\" ] || cat << 'EOF' > \"$2\"\n" + root.initialStoreJson + "\nEOF\n; " +
+      '[ -f "$3" ] || echo \'{"version":1,"archived":[]}\' > "$3"; ' +
+      'if [ ! -f "$4" ] && [ -f "$5" ]; then cp "$5" "$4" 2>/dev/null || true; fi; ' +
+      'if [ ! -f "$1/.gitignore" ]; then printf \'bindings.lua\\n*.tmp\\n\' > "$1/.gitignore"; fi; ' +
+      'cd "$1" && ' +
+      'git config gc.auto 100 2>/dev/null || true; ' +
+      'if [ ! -d ".git" ]; then ' +
+      '  git init -b main; ' +
+      '  git config user.name "$6"; ' +
+      '  git config user.email "$7@$6"; ' +
+      '  git config gc.auto 100; ' +
+      '  git add todos.json todos-archive.json .gitignore 2>/dev/null || git add todos.json todos-archive.json; ' +
+      '  printf \'[%s] Initial task repository\\n\' "$6" | git commit -F -; ' +
+      'fi',
+      "_",
+      root.dataDirPath,
+      root.todoFilePath,
+      root.archiveFilePath,
+      root.bindingsFilePath,
+      root.defaultBindingsTemplatePath,
+      root.deviceName,
+      Quickshell.env("USER") || "user"
     ]
     onExited: {
       todoFile.reload()
@@ -471,43 +479,45 @@ BarWidget {
     id: syncProcess
     command: [
       "bash", "-c",
-      "cd \"" + root.dataDirPath + "\" && " +
-      "if git remote get-url origin >/dev/null 2>&1; then " +
-      "  FETCH_OUT=$(git fetch origin main 2>&1); " +
-      "  FETCH_CODE=$?; " +
-      "  if [ $FETCH_CODE -ne 0 ]; then " +
-      "    if echo \"$FETCH_OUT\" | grep -qE \"couldn't find remote ref\"; then " +
-      "      PUSH_INIT_OUT=$(git push -u origin main 2>&1); " +
-      "      if [ $? -eq 0 ]; then " +
-      "        echo \"INITIALIZED_AND_PUSHED\"; " +
-      "      else " +
-      "        echo \"$PUSH_INIT_OUT\"; " +
-      "        exit 2; " +
-      "      fi; " +
-      "    else " +
-      "      echo \"$FETCH_OUT\"; " +
-      "      exit 1; " +
-      "    fi; " +
-      "  else " +
-      "    LOCAL_HEAD=$(git rev-parse HEAD); " +
-      "    REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo \"$LOCAL_HEAD\"); " +
-      "    if [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then " +
-      "      PUSH_OUT=$(git push origin main 2>&1); " +
-      "      if [ $? -eq 0 ]; then " +
-      "        echo \"UP_TO_DATE\"; " +
-      "      else " +
-      "        echo \"$PUSH_OUT\"; " +
-      "        exit 3; " +
-      "      fi; " +
-      "    elif [ \"$LOCAL_HEAD\" != \"$REMOTE_HEAD\" ]; then " +
-      "      echo \"NEEDS_MERGE\"; " +
-      "    else " +
-      "      echo \"UP_TO_DATE\"; " +
-      "    fi; " +
-      "  fi; " +
-      "else " +
-      "  echo \"NO_REMOTE\"; " +
-      "fi"
+      'cd "$1" && ' +
+      'if git remote get-url origin >/dev/null 2>&1; then ' +
+      '  FETCH_OUT=$(git fetch origin main 2>&1); ' +
+      '  FETCH_CODE=$?; ' +
+      '  if [ $FETCH_CODE -ne 0 ]; then ' +
+      '    if echo "$FETCH_OUT" | grep -qE "couldn\'t find remote ref"; then ' +
+      '      PUSH_INIT_OUT=$(git push -u origin main 2>&1); ' +
+      '      if [ $? -eq 0 ]; then ' +
+      '        echo "INITIALIZED_AND_PUSHED"; ' +
+      '      else ' +
+      '        echo "$PUSH_INIT_OUT"; ' +
+      '        exit 2; ' +
+      '      fi; ' +
+      '    else ' +
+      '      echo "$FETCH_OUT"; ' +
+      '      exit 1; ' +
+      '    fi; ' +
+      '  else ' +
+      '    LOCAL_HEAD=$(git rev-parse HEAD); ' +
+      '    REMOTE_HEAD=$(git rev-parse origin/main 2>/dev/null || echo "$LOCAL_HEAD"); ' +
+      '    if [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ] && git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then ' +
+      '      PUSH_OUT=$(git push origin main 2>&1); ' +
+      '      if [ $? -eq 0 ]; then ' +
+      '        echo "UP_TO_DATE"; ' +
+      '      else ' +
+      '        echo "$PUSH_OUT"; ' +
+      '        exit 3; ' +
+      '      fi; ' +
+      '    elif [ "$LOCAL_HEAD" != "$REMOTE_HEAD" ]; then ' +
+      '      echo "NEEDS_MERGE"; ' +
+      '    else ' +
+      '      echo "UP_TO_DATE"; ' +
+      '    fi; ' +
+      '  fi; ' +
+      'else ' +
+      '  echo "NO_REMOTE"; ' +
+      'fi',
+      "_",
+      root.dataDirPath
     ]
     stdout: StdioCollector {
       waitForEnd: true
@@ -542,10 +552,9 @@ BarWidget {
     id: mergeRemoteChangesProc
     command: [
       "bash", "-c",
-      "cd \"" + root.dataDirPath + "\" && " +
-      "REMOTE_TODOS=$(git show origin/main:todos.json 2>/dev/null || echo '') && " +
-      "REMOTE_ARCHIVE=$(git show origin/main:todos-archive.json 2>/dev/null || echo '') && " +
-      "printf '%s\\n---SPLIT---\\n%s' \"$REMOTE_TODOS\" \"$REMOTE_ARCHIVE\""
+      'cd "$1" && REMOTE_TODOS=$(git show origin/main:todos.json 2>/dev/null || echo "") && REMOTE_ARCHIVE=$(git show origin/main:todos-archive.json 2>/dev/null || echo "") && printf \'%s\\n---SPLIT---\\n%s\' "$REMOTE_TODOS" "$REMOTE_ARCHIVE"',
+      "_",
+      root.dataDirPath
     ]
     stdout: StdioCollector {
       waitForEnd: true
@@ -565,7 +574,10 @@ BarWidget {
               archiveFile.setText(json)
               Quickshell.execDetached([
                 "bash", "-c",
-                "cd \"" + root.dataDirPath + "\" && git merge --no-commit -s ours origin/main 2>/dev/null || true; git add todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Auto-merge remote changes\" && git push origin main"
+                'cd "$1" && git merge --no-commit -s ours origin/main 2>/dev/null || true; git add todos.json todos-archive.json && printf \'[%s] Auto-merge remote changes\\n\' "$2" | git commit -F - && git push origin main',
+                "_",
+                root.dataDirPath,
+                root.deviceName
               ])
               root.gitSyncStatus = "success"
               root.gitSyncMessage = "Merged & synced with remote"
@@ -607,7 +619,13 @@ BarWidget {
     if (!GitSync.isValidRemoteUrl(u)) {
       return "invalid_url"
     }
-    Quickshell.execDetached(["bash", "-c", "cd \"" + root.dataDirPath + "\" && git remote remove origin 2>/dev/null; git remote add origin \"" + u + "\""])
+    Quickshell.execDetached([
+      "bash", "-c",
+      'git -C "$1" remote remove origin 2>/dev/null || true; git -C "$1" remote add origin "$2"',
+      "_",
+      root.dataDirPath,
+      u
+    ])
     root.remoteUrl = u
     root.gitSyncStatus = "idle"
     root.gitSyncMessage = "Remote configured"
@@ -617,8 +635,14 @@ BarWidget {
   function rollbackToCommit(hashStr) {
     if (!hashStr) return
     var h = String(hashStr).trim()
-    var cmd = "cd \"" + root.dataDirPath + "\" && git checkout " + h + " -- todos.json todos-archive.json && git commit -m \"[" + root.deviceName + "] Restored snapshot " + h.substring(0, 7) + "\""
-    Quickshell.execDetached(["bash", "-c", cmd])
+    Quickshell.execDetached([
+      "bash", "-c",
+      'cd "$1" && git checkout "$2" -- todos.json todos-archive.json && printf \'[%s] Restored snapshot %s\\n\' "$3" "${2:0:7}" | git commit -F -',
+      "_",
+      root.dataDirPath,
+      h,
+      root.deviceName
+    ])
     Qt.callLater(function() {
       todoFile.reload()
       archiveFile.reload()
@@ -642,9 +666,10 @@ BarWidget {
     id: setupGitRemoteProc
     property string targetRepoName: "ardoise-tasks"
     command: [
-      "bash", "-c",
-      "\"" + Qt.resolvedUrl("tools/setup-git-remote.sh").toString().replace(/^file:\/\//, "") +
-      "\" \"" + targetRepoName + "\" \"" + root.dataDirPath + "\""
+      "bash",
+      Qt.resolvedUrl("tools/setup-git-remote.sh").toString().replace(/^file:\/\//, ""),
+      targetRepoName,
+      root.dataDirPath
     ]
     stdout: StdioCollector {
       waitForEnd: true
