@@ -149,7 +149,7 @@ BarWidget {
   }
 
   function addTodo(title, description, profile, reminder) {
-    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task: " + title)
+    saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task")
   }
 
   function toggleTodo(id) {
@@ -409,12 +409,10 @@ BarWidget {
     id: commitProcess
     command: [
       "bash", "-c",
-      "cd \"" + root.dataDirPath + "\" && " +
-      "git add todos.json todos-archive.json && " +
-      "if ! git diff --cached --quiet; then " +
-      "  git commit -m \"" + GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount) + "\"; " +
-      "  git gc --auto --quiet; " +
-      "fi"
+      'cd "$1" && git add todos.json todos-archive.json && if ! git diff --cached --quiet; then printf \'%s\\n\' "$2" | git commit -F - && git gc --auto --quiet; fi',
+      "_",
+      root.dataDirPath,
+      GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount)
     ]
     onExited: root.refreshGitHistory()
   }

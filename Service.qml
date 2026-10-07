@@ -71,9 +71,8 @@ Item {
     // Fire notifications only for unsent reminders
     for (var j = 0; j < toNotify.length; j++) {
       var t = toNotify[j]
-      var headline = "Todo: " + t.title
-      var desc = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "")
-        + (t.description ? t.description : "Scheduled reminder")
+      var headline = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "") + "Task Reminder"
+      var desc = "Scheduled reminder is due"
 
       Quickshell.execDetached([
         bin,

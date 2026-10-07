@@ -1287,3 +1287,37 @@ test("Onboarding Tutorial Quests & Release Highlights: contracts and UI indicato
   );
 });
 
+test("Security & Privacy Baseline: Git commit shell safety and notification argv hygiene", () => {
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const service = fs.readFileSync(path.join(repoDir, "Service.qml"), "utf8");
+
+  // 1. Commit action must NOT append user title to actionName
+  assert.ok(
+    barWidget.includes('function addTodo(title, description, profile, reminder) {') &&
+      barWidget.includes('saveStore(TodoStore.addTodo(root.store, title, description, profile, reminder), "Add task")') &&
+      !barWidget.includes('"Add task: " + title'),
+    "BarWidget.addTodo must not concatenate user task title into commit action name"
+  );
+
+  // 2. CommitProcess must pass commit message as data outside shell source and via stdin
+  assert.ok(
+    barWidget.includes("git commit -F -") &&
+      barWidget.includes('"$1"') &&
+      barWidget.includes('"$2"') &&
+      barWidget.includes('"_"') &&
+      barWidget.includes('root.dataDirPath') &&
+      barWidget.includes('GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount)'),
+    "BarWidget.commitProcess must pass data outside shell source and use stdin for git commit"
+  );
+
+  // 3. Service.qml must NOT pass private titles or reminder descriptions in argv
+  assert.ok(
+    !service.includes('headline = "Todo: " + t.title') &&
+      !service.includes('t.description') &&
+      service.includes('headline = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "") + "Task Reminder"') &&
+      service.includes('desc = "Scheduled reminder is due"'),
+    "Service.qml must not expose private task titles or reminder descriptions in notification process arguments"
+  );
+});
+
+

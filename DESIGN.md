@@ -783,7 +783,7 @@ reflected in the bar and panel without a restart. Writes are atomic
 
 - **Lifecycle**: loaded by `shell.qml` at startup; runs headless 24/7.
 - **Monitoring**: polls `todos.json` on a 15 s `Timer` for tasks where `reminder <= now` and `notified == false`.
-- **Notification**: calls `$OMARCHY_PATH/bin/omarchy-notification-send` with glyph `󰥔` (reminder clock), the title as headline, and profile + description as body. Click action: `omarchy-shell shell toggle tablerase.ardoise '{}'`.
+- **Notification & Privacy**: calls `$OMARCHY_PATH/bin/omarchy-notification-send` with glyph `󰥔` (reminder clock), generic headline ("Task Reminder" with optional profile badge) and body ("Scheduled reminder is due"), strictly keeping private task titles and complete reminder notes out of system process arguments (`argv`). Click action: `omarchy-shell shell toggle tablerase.ardoise '{}'` to view details securely within the panel.
 - **Deduplication**: sets `notified: true` and writes back, so a task never alerts twice. An in-memory guard also covers the window where a write is still in flight.
 
 ### 7.6 Project Structure
