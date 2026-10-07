@@ -16,6 +16,10 @@ lock-in — point any tool you like at the file and it reacts instantly.
 
 ## Features
 
+<video src="https://github.com/user-attachments/assets/c645fb26-b4c4-4e6a-99e8-7c3e56b5d7d0" controls width="100%">
+  Video walkthrough of the Omarchy Ardoise plugin main features
+</video>
+
 The essentials, then the rest. Everything under a heading is a bonus you can
 ignore until you want it.
 
