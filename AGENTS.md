@@ -14,6 +14,22 @@
    - In task lists: <kbd>Enter</kbd> expands/collapses task details. <kbd>Space</kbd> toggles completion (`done`).
 4. **Layout Safety**: Wrap profile pills (`Flow`) and elide long strings (`Text.ElideRight`) to avoid horizontal overflow.
 
+## Branching & Release Lifecycle Standards
+- **`main` (Production Branch)**:
+  - Holds exclusively verified, stable release versions.
+  - End-users and Omarchy marketplace tooling (`omarchy plugin add`, `omarchy plugin update`) clone and track `main`.
+  - Never commit direct feature work or work-in-progress to `main`.
+- **`develop` (Integration Trunk)**:
+  - The default base branch for ongoing development, integrations, and local staging.
+  - All feature and task work branches off `develop` and merges back into `develop`.
+- **`feat/*` and `fix/*` (Feature / Bugfix Branches)**:
+  - Create short-lived branches off `develop`: `git checkout -b feat/<name> develop`.
+  - All validations (`npm run check`) must pass with zero errors and zero warnings before merging back into `develop`.
+- **Release Cadence**:
+  - Releases are cut by merging `develop` into `main` after full validation (`npm run test:docker`).
+- **Emergency Hotfixes**:
+  - Critical production bugs branch directly off `main` (`fix/<issue>`), merge to `main`, and are back-merged into `develop`.
+
 ## Code Quality & Commit Standards
 - **Validation**: Always run `npm run check` (which runs `deno check TodoStore.js PanelLogic.js GitSync.js`, `qmllint *.qml ui/*.qml`, `omarchy plugin validate .`, and `tests/*.test.mts`). All checks must pass with zero errors and zero warnings.
 - **Fast Iteration**: Use `npm run test:fast` (< 0.8s) during active editing to run all unit and static QML tests.
