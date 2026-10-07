@@ -11,8 +11,11 @@ set -e
 export MISE_QUIET=1
 
 # 1. Resolve GitHub CLI (gh)
-GH_BIN=""
-if command -v mise >/dev/null 2>&1; then
+GH_BIN="${GH_BIN:-}"
+if [ -n "$GH_BIN" ] && [ ! -x "$GH_BIN" ]; then
+  GH_BIN=""
+fi
+if [ -z "$GH_BIN" ] && command -v mise >/dev/null 2>&1; then
   GH_BIN="$(mise which gh 2>/dev/null || true)"
 fi
 if [ -z "$GH_BIN" ] || [ ! -x "$GH_BIN" ]; then
@@ -54,13 +57,21 @@ chmod 700 "$DATA_DIR" 2>/dev/null || true
 if [ ! -d "$DATA_DIR/.git" ]; then
   git -C "$DATA_DIR" init -b main >/dev/null 2>&1 || git -C "$DATA_DIR" init >/dev/null 2>&1
   git -C "$DATA_DIR" add -A >/dev/null 2>&1 || true
-  git -C "$DATA_DIR" commit -m "[$(hostname)] Initial task repository" >/dev/null 2>&1 || true
+  printf '[%s] Initial task repository\n' "$(hostname)" | git -C "$DATA_DIR" commit --allow-empty -F - >/dev/null 2>&1 || true
 fi
 
 # 4. Check if remote 'origin' already exists
 EXISTING_REMOTE="$(git -C "$DATA_DIR" remote get-url origin 2>/dev/null || true)"
 if [ -n "$EXISTING_REMOTE" ]; then
-  # Origin exists; push any pending commits
+  # If remote points to GitHub, require that it is strictly private before pushing
+  if [[ "$EXISTING_REMOTE" =~ github\.com ]]; then
+    IS_EXISTING_PRIVATE="$("$GH_BIN" repo view "$EXISTING_REMOTE" --json isPrivate -q .isPrivate 2>/dev/null || true)"
+    if [ "$IS_EXISTING_PRIVATE" != "true" ]; then
+      printf '{"success":false,"error":"destination_not_private","message":"Refusing to push private task data: existing remote repository is not private."}\n'
+      exit 0
+    fi
+  fi
+  # Origin exists and is verified; push any pending commits
   git -C "$DATA_DIR" push origin main >/dev/null 2>&1 || true
   printf '{"success":true,"remoteUrl":"%s","alreadyExisted":true,"message":"Remote origin already configured and synced."}\n' "$EXISTING_REMOTE"
   exit 0
@@ -82,12 +93,18 @@ if CREATE_OUTPUT="$("$GH_BIN" repo create "$CLEAN_NAME" --private --source="$DAT
   exit 0
 fi
 
-# If repo already exists on GitHub for this user, attempt to connect to it
-SSH_URL="$("$GH_BIN" repo view "$CLEAN_NAME" --json sshUrl -q .sshUrl 2>/dev/null || true)"
+# If repo already exists on GitHub for this user, attempt to connect only if it is strictly private
+REPO_INFO="$("$GH_BIN" repo view "$CLEAN_NAME" --json isPrivate,sshUrl -q '[.isPrivate, .sshUrl] | @tsv' 2>/dev/null || true)"
+read -r IS_PRIVATE SSH_URL <<< "$REPO_INFO"
+
 if [[ "$SSH_URL" =~ ^(git@|https?://|ssh://) ]]; then
+  if [ "$IS_PRIVATE" != "true" ]; then
+    printf '{"success":false,"error":"destination_not_private","message":"Refusing to push private task data: existing GitHub repository \\"%s\\" is not private."}\n' "$CLEAN_NAME"
+    exit 0
+  fi
   git -C "$DATA_DIR" remote add origin "$SSH_URL" 2>/dev/null || git -C "$DATA_DIR" remote set-url origin "$SSH_URL"
   git -C "$DATA_DIR" push -u origin main >/dev/null 2>&1 || true
-  printf '{"success":true,"remoteUrl":"%s","repo":"%s","alreadyExisted":true,"message":"Connected to existing GitHub repository and pushed."}\n' "$SSH_URL" "$CLEAN_NAME"
+  printf '{"success":true,"remoteUrl":"%s","repo":"%s","alreadyExisted":true,"message":"Connected to existing private GitHub repository and pushed."}\n' "$SSH_URL" "$CLEAN_NAME"
   exit 0
 fi
 

@@ -935,6 +935,62 @@ test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wir
   const scriptContent = fs.readFileSync(setupScript, "utf8");
   assert.ok(scriptContent.includes("--private"), "setup-git-remote.sh must create private repositories by default");
   assert.ok(scriptContent.includes("MISE_QUIET=1"), "setup-git-remote.sh must suppress mise output");
+  assert.ok(scriptContent.includes("isPrivate"), "setup-git-remote.sh must inspect repository privacy via isPrivate");
+  assert.ok(scriptContent.includes("destination_not_private"), "setup-git-remote.sh must reject non-private destinations");
+
+  // Functional test: ensure fallback to an existing public repo is rejected
+  const tmpTestDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-remote-test-"));
+  try {
+    const mockBinDir = path.join(tmpTestDir, "bin");
+    const testDataDir = path.join(tmpTestDir, "data");
+    fs.mkdirSync(mockBinDir, { recursive: true });
+    fs.mkdirSync(testDataDir, { recursive: true });
+
+    // Mock gh that reports public repo on view
+    const mockGhScript = [
+      "#!/bin/sh",
+      'if [ "$1" = "auth" ]; then exit 0; fi',
+      'if [ "$1" = "repo" ] && [ "$2" = "create" ]; then exit 1; fi',
+      'if [ "$1" = "repo" ] && [ "$2" = "view" ]; then printf "false\\tgit@github.com:test/public-repo.git\\n"; exit 0; fi',
+      "exit 0\n"
+    ].join("\n");
+    const mockGhPath = path.join(mockBinDir, "gh");
+    fs.writeFileSync(mockGhPath, mockGhScript, { mode: 0o755 });
+
+    const rejectRes = spawnSync("bash", [setupScript, "public-target", testDataDir], {
+      encoding: "utf8",
+      env: { ...process.env, GH_BIN: mockGhPath }
+    });
+    assert.equal(rejectRes.status, 0);
+    const parsedReject = JSON.parse(rejectRes.stdout.trim());
+    assert.equal(parsedReject.success, false);
+    assert.equal(parsedReject.error, "destination_not_private");
+
+    // Origin must not be set
+    const gitRemoteCheck = spawnSync("git", ["-C", testDataDir, "remote", "get-url", "origin"], { encoding: "utf8" });
+    assert.notEqual(gitRemoteCheck.status, 0, "Origin must not be configured for public destination");
+
+    // Mock gh that reports private repo on view
+    const mockGhPrivateScript = [
+      "#!/bin/sh",
+      'if [ "$1" = "auth" ]; then exit 0; fi',
+      'if [ "$1" = "repo" ] && [ "$2" = "create" ]; then exit 1; fi',
+      'if [ "$1" = "repo" ] && [ "$2" = "view" ]; then printf "true\\tgit@github.com:test/private-repo.git\\n"; exit 0; fi',
+      "exit 0\n"
+    ].join("\n");
+    fs.writeFileSync(mockGhPath, mockGhPrivateScript, { mode: 0o755 });
+
+    const acceptRes = spawnSync("bash", [setupScript, "private-target", testDataDir], {
+      encoding: "utf8",
+      env: { ...process.env, GH_BIN: mockGhPath }
+    });
+    assert.equal(acceptRes.status, 0);
+    const parsedAccept = JSON.parse(acceptRes.stdout.trim());
+    assert.equal(parsedAccept.success, true);
+    assert.equal(parsedAccept.remoteUrl, "git@github.com:test/private-repo.git");
+  } finally {
+    fs.rmSync(tmpTestDir, { recursive: true, force: true });
+  }
 
   const gitModalContent = fs.readFileSync(path.join(repoDir, "ui", "GitModal.qml"), "utf8");
   assert.ok(gitModalContent.includes("autoCreateRemoteBtn"), "GitModal.qml must declare autoCreateRemoteBtn");
