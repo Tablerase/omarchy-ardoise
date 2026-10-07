@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "../TodoStore.js" as TodoStore
@@ -104,10 +105,34 @@ Rectangle {
     }
   }
 
+  property string pendingClipboardText: ""
+  property string pendingClipboardLabel: ""
+
+  Process {
+    id: archiveClipboardProc
+    command: ["wl-copy"]
+    stdinEnabled: true
+    onStarted: {
+      archiveClipboardProc.write(root.pendingClipboardText)
+      archiveClipboardProc.stdinEnabled = false
+    }
+    onExited: function(code) {
+      if (code === 0 && root.pendingClipboardLabel) {
+        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", root.pendingClipboardLabel])
+      }
+    }
+  }
+
   function copyToClipboard(text, label) {
     if (!text) return
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
-    Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", label || ""])
+    Quickshell.clipboardText = String(text)
+    root.pendingClipboardText = String(text)
+    root.pendingClipboardLabel = label || ""
+    if (archiveClipboardProc.running) {
+      archiveClipboardProc.running = false
+    }
+    archiveClipboardProc.stdinEnabled = true
+    archiveClipboardProc.running = true
   }
 
   function copySelected() {
@@ -137,7 +162,7 @@ Rectangle {
     if (!root.barWidget) return
     var path = root.barWidget.archiveFilePath
     if (root.bar && root.bar.run) root.bar.run("omarchy-launch-editor " + path)
-    else Quickshell.execDetached(["bash", "-c", "omarchy-launch-editor " + Util.shellQuote(path)])
+    else Quickshell.execDetached(["omarchy-launch-editor", path])
     root.close()
   }
 

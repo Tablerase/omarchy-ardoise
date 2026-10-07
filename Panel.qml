@@ -118,7 +118,7 @@ Panel {
     command: [
       "bash",
       "-c",
-      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + ALT + T\\\", \\\"Ardoise Panel Toggle\\\", \\\"omarchy-shell tablerase.ardoise toggle\\\")\\no.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle\\nbindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; wl-copy \"$SNIPPET\" && notify-send -a 'Ardoise' 'Keybindings Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
+      "if [ -f \"$HOME/.config/hypr/bindings.lua\" ]; then FILE=\"$HOME/.config/hypr/bindings.lua\"; SNIPPET=\"o.bind(\\\"SUPER + ALT + T\\\", \\\"Ardoise Panel Toggle\\\", \\\"omarchy-shell tablerase.ardoise toggle\\\")\\no.bind(\\\"SUPER + SHIFT + T\\\", \\\"Ardoise Quick Add\\\", \\\"omarchy-shell shell toggle tablerase.ardoise '{}'\\\")\"; else FILE=\"$HOME/.config/hypr/bindings.conf\"; SNIPPET=\"bindd = SUPER ALT, T, Ardoise Panel Toggle, exec, omarchy-shell tablerase.ardoise toggle\\nbindd = SUPER SHIFT, T, Ardoise Quick Add, exec, omarchy-shell shell toggle tablerase.ardoise \\\"{}\\\"\"; fi; printf '%s' \"$SNIPPET\" | wl-copy && notify-send -a 'Ardoise' 'Keybindings Copied & Config Opened' \"Paste into $(basename \\\"$FILE\\\") and run hyprctl reload\" && omarchy-launch-editor \"$FILE\""
     ]
     onExited: function(exitCode) {
       checkShortcutProc.running = true

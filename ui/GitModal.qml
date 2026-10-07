@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "../GitSync.js" as GitSync
@@ -1320,6 +1321,34 @@ Rectangle {
     }
   }
 
+  property string pendingCopyHash: ""
+
+  Process {
+    id: copyHashProc
+    command: ["wl-copy"]
+    stdinEnabled: true
+    onStarted: {
+      copyHashProc.write(root.pendingCopyHash)
+      copyHashProc.stdinEnabled = false
+    }
+    onExited: function(code) {
+      if (code === 0 && root.pendingCopyHash) {
+        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Commit hash copied", root.pendingCopyHash.slice(0, 7)])
+      }
+    }
+  }
+
+  function copyHash(hash) {
+    if (!hash) return
+    Quickshell.clipboardText = String(hash)
+    root.pendingCopyHash = String(hash)
+    if (copyHashProc.running) {
+      copyHashProc.running = false
+    }
+    copyHashProc.stdinEnabled = true
+    copyHashProc.running = true
+  }
+
   GitContextMenu {
     id: contextMenu
     bar: root.bar
@@ -1337,7 +1366,7 @@ Rectangle {
       root.forceActiveFocus()
     }
     onCopyHashRequested: function(hash) {
-      Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(hash) + " | wl-copy"])
+      root.copyHash(hash)
       root.forceActiveFocus()
     }
     onCloseRequested: {

@@ -879,10 +879,34 @@ Item {
     root.taskMenuIndex = 0
   }
 
+  property string pendingClipboardText: ""
+  property string pendingClipboardLabel: ""
+
+  Process {
+    id: clipboardProc
+    command: ["wl-copy"]
+    stdinEnabled: true
+    onStarted: {
+      clipboardProc.write(root.pendingClipboardText)
+      clipboardProc.stdinEnabled = false
+    }
+    onExited: function(code) {
+      if (code === 0 && root.pendingClipboardLabel) {
+        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", root.pendingClipboardLabel])
+      }
+    }
+  }
+
   function copyToClipboard(text, label) {
     if (!text) return
-    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
-    Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Copied to clipboard", label || ""])
+    Quickshell.clipboardText = String(text)
+    root.pendingClipboardText = String(text)
+    root.pendingClipboardLabel = label || ""
+    if (clipboardProc.running) {
+      clipboardProc.running = false
+    }
+    clipboardProc.stdinEnabled = true
+    clipboardProc.running = true
   }
 
   function copySelectedTask() {

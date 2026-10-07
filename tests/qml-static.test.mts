@@ -1100,7 +1100,10 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
       panelContent.includes("function copySelectedTask()") &&
       panelContent.includes("function activateTaskMenuItem(actionId)") &&
       panelContent.includes("TodoStore.formatTaskForLLM(task)") &&
-      panelContent.includes("Quickshell.execDetached([\"bash\", \"-c\", \"printf %s \" + Util.shellQuote(text) + \" | wl-copy\"])") &&
+      panelContent.includes('command: ["wl-copy"]') &&
+      panelContent.includes("stdinEnabled: true") &&
+      panelContent.includes("clipboardProc.write(root.pendingClipboardText)") &&
+      panelContent.includes("clipboardProc.stdinEnabled = false") &&
       panelContent.includes("Ui.ContextActionMenu {") &&
       panelContent.includes("onItemActivated: function(actionId) { root.activateTaskMenuItem(actionId) }"),
     "PanelContent must open the menu, dispatch actions, and copy via wl-copy with feedback"
@@ -1353,6 +1356,8 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
   const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
   const service = fs.readFileSync(path.join(repoDir, "Service.qml"), "utf8");
   const gitModal = fs.readFileSync(path.join(repoDir, "ui/GitModal.qml"), "utf8");
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const archiveModal = fs.readFileSync(path.join(repoDir, "ui/ArchiveModal.qml"), "utf8");
 
   // 1. Commit action must use semantic verbs and profile names without interpolating user title or notes
   assert.ok(
@@ -1408,6 +1413,21 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
       barWidget.includes('chmod 600 "$2"') &&
       barWidget.includes('chmod 600 "$3"'),
     "BarWidget.initFileProc must enforce restrictive permissions (0700 dir, 0600 store files)"
+  );
+
+  // 6. Clipboard operations must pass text via stdin to wl-copy and NEVER in command arguments or shell strings
+  assert.ok(
+    !panelContent.includes("Util.shellQuote(text)") &&
+      !panelContent.includes('["bash", "-c", "printf %s " + Util.shellQuote(text)') &&
+      panelContent.includes('command: ["wl-copy"]') &&
+      panelContent.includes("clipboardProc.stdinEnabled = false") &&
+      !archiveModal.includes("Util.shellQuote(text)") &&
+      archiveModal.includes('command: ["wl-copy"]') &&
+      archiveModal.includes("archiveClipboardProc.stdinEnabled = false") &&
+      !gitModal.includes("Util.shellQuote(hash)") &&
+      gitModal.includes('command: ["wl-copy"]') &&
+      gitModal.includes("copyHashProc.stdinEnabled = false"),
+    "Clipboard operations must pass private contents via stdin to wl-copy and never expose them in process command arguments"
   );
 });
 
