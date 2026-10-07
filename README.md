@@ -134,30 +134,65 @@ Your data directory is a git repository, so every change is a snapshot.
 
 </details>
 
----
+## Installation
 
-## Install
+Ardoise is a shell plugin designed for **Omarchy Quattro (Omarchy 4.x)**.
 
-Ardoise is a shell plugin. It needs **Omarchy Quattro (Omarchy 4.x)**.
+### Via Omarchy Plugin Marketplace (Recommended)
 
 ```bash
-# 1. Place the plugin where Omarchy looks for it
+omarchy plugin clone tablerase.ardoise
+omarchy plugin enable tablerase.ardoise right
+omarchy-restart-shell
+```
+
+### Manual Installation (from Git)
+
+```bash
+# 1. Clone into your plugins directory
 mkdir -p ~/.config/omarchy/plugins
 git clone https://github.com/Tablerase/omarchy-ardoise \
   ~/.config/omarchy/plugins/tablerase.ardoise
 
-# 2. Let the shell discover it, then put it on the bar
+# 2. Discover and enable on your bar
 omarchy-shell shell rescanPlugins
 omarchy plugin enable tablerase.ardoise right
 
-# 3. Apply
+# 3. Reload the shell
 omarchy-restart-shell
 ```
 
-To take it off the bar without uninstalling:
+---
 
+## Removal & Uninstallation
+
+To remove Ardoise safely from your system:
+
+### 1. Disable from the Bar (Temporary)
+To take the widget off your bar without removing plugin files or task data:
 ```bash
 omarchy plugin disable tablerase.ardoise
+omarchy-restart-shell
+```
+
+### 2. Complete Plugin Removal
+To completely uninstall the plugin:
+```bash
+# Disable and remove the plugin directory
+omarchy plugin disable tablerase.ardoise
+rm -rf ~/.config/omarchy/plugins/tablerase.ardoise
+omarchy-shell shell rescanPlugins
+omarchy-restart-shell
+```
+
+### 3. Optional: Purge Task Data & Keybindings
+Ardoise stores your tasks and local Git snapshots in `~/.config/omarchy/tablerase.ardoise/`. To permanently remove all task history and configuration:
+```bash
+rm -rf ~/.config/omarchy/tablerase.ardoise
+```
+If you configured Hyprland shortcuts, remove the two Ardoise lines from `~/.config/hypr/bindings.lua` (or `bindings.conf`) and reload Hyprland:
+```bash
+hyprctl reload
 ```
 
 ### First 30 seconds
