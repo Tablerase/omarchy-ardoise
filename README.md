@@ -12,6 +12,25 @@
 Everything stays in plain JSON on your machine. No account, no sync service, no
 lock-in — point any tool you like at the file and it reacts instantly.
 
+<div align="center">
+
+[![Release](https://img.shields.io/badge/version-1.0.0--initial-blue.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/releases)
+[![Status](https://img.shields.io/badge/status-early%20public%20release-amber.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/issues)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](./LICENSE)
+
+</div>
+
+> [!NOTE]
+> **Initial Public Release (`v1.0.0`)**: Ardoise is fully
+functional, offline-first, and backed by a comprehensive test suite.
+As this is its first public outing on Omarchy, UI ergonomics,
+shortcut defaults, and CLI/IPC hooks may receive quick refinements
+based on community feedback.
+>
+> If you encounter edge cases or have workflow suggestions, please
+[open an issue](https://github.com/Tablerase/omarchy-ardoise/issues)
+or share your thoughts!
+
 ---
 
 ## Features
