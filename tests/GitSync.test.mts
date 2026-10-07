@@ -292,6 +292,17 @@ test("diagnoseGitSyncError: falls back cleanly on empty output", () => {
   assert.equal(diagnoseGitSyncError("", undefined), "Sync failed (check connection/auth)");
 });
 
+test("diagnoseGitSyncError: handles DESTINATION_NOT_PRIVATE error", () => {
+  assert.equal(
+    diagnoseGitSyncError("DESTINATION_NOT_PRIVATE", 4),
+    "Push blocked: Remote repository is public. Personal tasks must only be stored in private repositories."
+  );
+  assert.equal(
+    diagnoseGitSyncError("Remote repository is public", 1),
+    "Push blocked: Remote repository is public. Personal tasks must only be stored in private repositories."
+  );
+});
+
 // =============================================================================
 // Remote Sync Data Preservation & Non-Regression Tests
 // =============================================================================

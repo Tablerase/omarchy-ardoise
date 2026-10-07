@@ -217,6 +217,9 @@ function diagnoseGitSyncError(rawOutput, exitCode) {
   if (!text) {
     return exitCode ? "Sync failed (exit code " + exitCode + ")" : "Sync failed (check connection/auth)"
   }
+  if (/destination_not_private|repository is not private|repository is public|hook declined/i.test(text)) {
+    return "Push blocked: Remote repository is public. Personal tasks must only be stored in private repositories."
+  }
   if (/passphrase/i.test(text)) {
     return "SSH key locked. Run 'ssh-add' in terminal to load key."
   }

@@ -53,6 +53,9 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 chmod 700 "$DATA_DIR" 2>/dev/null || true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHECK_PRIVACY_BIN="$SCRIPT_DIR/check-remote-privacy.sh"
+
 # Ensure local git repo is initialized if not present
 if [ ! -d "$DATA_DIR/.git" ]; then
   git -C "$DATA_DIR" init -b main >/dev/null 2>&1 || git -C "$DATA_DIR" init >/dev/null 2>&1
@@ -63,13 +66,10 @@ fi
 # 4. Check if remote 'origin' already exists
 EXISTING_REMOTE="$(git -C "$DATA_DIR" remote get-url origin 2>/dev/null || true)"
 if [ -n "$EXISTING_REMOTE" ]; then
-  # If remote points to GitHub, require that it is strictly private before pushing
-  if [[ "$EXISTING_REMOTE" =~ github\.com ]]; then
-    IS_EXISTING_PRIVATE="$("$GH_BIN" repo view "$EXISTING_REMOTE" --json isPrivate -q .isPrivate 2>/dev/null || true)"
-    if [ "$IS_EXISTING_PRIVATE" != "true" ]; then
-      printf '{"success":false,"error":"destination_not_private","message":"Refusing to push private task data: existing remote repository is not private."}\n'
-      exit 0
-    fi
+  # Require that the remote repository is strictly private before pushing
+  if [ -f "$CHECK_PRIVACY_BIN" ] && ! "$CHECK_PRIVACY_BIN" "$DATA_DIR" origin >/dev/null 2>&1; then
+    printf '{"success":false,"error":"destination_not_private","message":"Refusing to push private task data: existing remote repository is not private."}\n'
+    exit 0
   fi
   # Origin exists and is verified; push any pending commits
   git -C "$DATA_DIR" push origin main >/dev/null 2>&1 || true
@@ -95,10 +95,10 @@ fi
 
 # If repo already exists on GitHub for this user, attempt to connect only if it is strictly private
 REPO_INFO="$("$GH_BIN" repo view "$CLEAN_NAME" --json isPrivate,sshUrl -q '[.isPrivate, .sshUrl] | @tsv' 2>/dev/null || true)"
-read -r IS_PRIVATE SSH_URL <<< "$REPO_INFO"
+SSH_URL="$(printf '%s' "$REPO_INFO" | awk '{print $NF}')"
 
 if [[ "$SSH_URL" =~ ^(git@|https?://|ssh://) ]]; then
-  if [ "$IS_PRIVATE" != "true" ]; then
+  if [ -f "$CHECK_PRIVACY_BIN" ] && ! "$CHECK_PRIVACY_BIN" "$SSH_URL" >/dev/null 2>&1; then
     printf '{"success":false,"error":"destination_not_private","message":"Refusing to push private task data: existing GitHub repository \\"%s\\" is not private."}\n' "$CLEAN_NAME"
     exit 0
   fi

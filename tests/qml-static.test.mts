@@ -933,9 +933,9 @@ test("Automated GitHub Remote Creation: tools/setup-git-remote.sh and UI/IPC wir
   assert.ok(Boolean(stat.mode & 0o111), "tools/setup-git-remote.sh must be executable");
 
   const scriptContent = fs.readFileSync(setupScript, "utf8");
-  assert.ok(scriptContent.includes("--private"), "setup-git-remote.sh must create private repositories by default");
-  assert.ok(scriptContent.includes("MISE_QUIET=1"), "setup-git-remote.sh must suppress mise output");
-  assert.ok(scriptContent.includes("isPrivate"), "setup-git-remote.sh must inspect repository privacy via isPrivate");
+  assert.ok(scriptContent.includes("check-remote-privacy.sh"), "setup-git-remote.sh must delegate privacy checks to check-remote-privacy.sh");
+  const privacyScriptContent = fs.readFileSync(path.join(repoDir, "tools", "check-remote-privacy.sh"), "utf8");
+  assert.ok(privacyScriptContent.includes("isPrivate"), "check-remote-privacy.sh must inspect repository privacy via isPrivate");
   assert.ok(scriptContent.includes("destination_not_private"), "setup-git-remote.sh must reject non-private destinations");
 
   // Functional test: ensure fallback to an existing public repo is rejected
@@ -1428,6 +1428,23 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
       gitModal.includes('command: ["wl-copy"]') &&
       gitModal.includes("copyHashProc.stdinEnabled = false"),
     "Clipboard operations must pass private contents via stdin to wl-copy and never expose them in process command arguments"
+  );
+
+  // 7. Remote Privacy Protection: BarWidget must invoke checkRemotePrivacyPath before pushing
+  assert.ok(
+    barWidget.includes("readonly property string checkRemotePrivacyPath:") &&
+      barWidget.includes('! "$2" "$1" origin') &&
+      barWidget.includes("root.checkRemotePrivacyPath") &&
+      barWidget.includes("DESTINATION_NOT_PRIVATE"),
+    "BarWidget must validate remote repository privacy before sync and block pushes to public repos"
+  );
+
+  // 8. Invariant: Plugin must never modify git hooks or sensitive locations
+  assert.ok(
+    !barWidget.includes(".git/hooks") &&
+      !barWidget.includes("pre-push") &&
+      !barWidget.includes("post-commit"),
+    "BarWidget must never install, modify or touch user git hooks"
   );
 });
 

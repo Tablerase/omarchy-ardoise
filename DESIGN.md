@@ -741,6 +741,8 @@ window, and overridable by hand. To ensure data minimization:
 - Context detection is restricted to recognized development environments (editors and terminals). Non-dev applications (browsers, chat, markdown notes) yield `null`.
 - Sensitive credential and system directories (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.password-store`, root, `/etc`) are strictly ignored and yield `null`.
 - Task titles and private notes are excluded from process argument lists (`argv`) and Git commit messages to prevent process table leakage. Commit subjects strictly adhere to a semantic grammar without user-generated text: `[<device>] <Action Verb> #<profile> task (<N> pending)` (e.g. `[omarchy] Complete #work task (3 pending)`). Historical snapshot task details are inspected on-demand locally via `git show <hash>:todos.json` in `ui/GitModal.qml`.
+- **Remote privacy enforcement**: Prior to executing any Git push operation, `BarWidget` validates the remote repository visibility via `tools/check-remote-privacy.sh`. If the remote repository on GitHub or GitLab is detected as public, push actions are halted with `DESTINATION_NOT_PRIVATE` to prevent accidental public disclosure of personal tasks.
+- **Scope confinement & zero hook tampering**: The plugin never creates, installs, or modifies Git hooks (such as `.git/hooks/pre-push` or `.git/hooks/post-commit`) and never writes outside `~/.config/omarchy/tablerase.ardoise/`. All security validations execute strictly within the plugin's own managed processes.
 
 ### 7.3 Archive Schema (`todos-archive.json`)
 

@@ -38,6 +38,7 @@ BarWidget {
   readonly property string archiveFilePath: dataDirPath + "/todos-archive.json"
   readonly property string bindingsFilePath: dataDirPath + "/bindings.lua"
   readonly property string defaultBindingsTemplatePath: Qt.resolvedUrl("tools/default-bindings.lua").toString().replace(/^file:\/\//, "")
+  readonly property string checkRemotePrivacyPath: Qt.resolvedUrl("tools/check-remote-privacy.sh").toString().replace(/^file:\/\//, "")
 
   property string deviceName: Quickshell.env("HOSTNAME") || "omarchy"
   property string lastCommitAction: "Update tasks"
@@ -529,6 +530,10 @@ BarWidget {
       "bash", "-c",
       'cd "$1" && ' +
       'if git remote get-url origin >/dev/null 2>&1; then ' +
+      '  if [ -x "$2" ] && ! "$2" "$1" origin 2>&1; then ' +
+      '    echo "DESTINATION_NOT_PRIVATE"; ' +
+      '    exit 4; ' +
+      '  fi; ' +
       '  FETCH_OUT=$(git fetch origin main 2>&1); ' +
       '  FETCH_CODE=$?; ' +
       '  if [ $FETCH_CODE -ne 0 ]; then ' +
@@ -565,14 +570,18 @@ BarWidget {
       '  echo "NO_REMOTE"; ' +
       'fi',
       "_",
-      root.dataDirPath
+      root.dataDirPath,
+      root.checkRemotePrivacyPath
     ]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         var out = text.trim()
         root.lastSyncOutput = out
-        if (out.indexOf("NEEDS_MERGE") !== -1) {
+        if (out.indexOf("DESTINATION_NOT_PRIVATE") !== -1) {
+          root.gitSyncStatus = "error"
+          root.gitSyncMessage = "Push blocked: Remote repository is public. Personal tasks must only be stored in private repositories."
+        } else if (out.indexOf("NEEDS_MERGE") !== -1) {
           mergeRemoteChangesProc.running = true
         } else if (out.indexOf("INITIALIZED_AND_PUSHED") !== -1) {
           root.gitSyncStatus = "success"
@@ -622,10 +631,11 @@ BarWidget {
               archiveFile.setText(json)
               Quickshell.execDetached([
                 "bash", "-c",
-                'cd "$1" && git merge --no-commit -s ours origin/main 2>/dev/null || true; git add todos.json todos-archive.json && printf \'[%s] Auto-merge remote changes\\n\' "$2" | git commit -F - && git push origin main',
+                'cd "$1" && if [ -x "$3" ] && ! "$3" "$1" origin >/dev/null 2>&1; then exit 4; fi; git merge --no-commit -s ours origin/main 2>/dev/null || true; git add todos.json todos-archive.json && printf \'[%s] Auto-merge remote changes\\n\' "$2" | git commit -F - && git push origin main',
                 "_",
                 root.dataDirPath,
-                root.deviceName
+                root.deviceName,
+                root.checkRemotePrivacyPath
               ])
               root.gitSyncStatus = "success"
               root.gitSyncMessage = "Merged & synced with remote"
