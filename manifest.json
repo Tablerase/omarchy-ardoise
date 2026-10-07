@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "tablerase",
   "license": "MIT",
-  "description": "Minimalist task slate for the Omarchy Quattro bar: profiles, reminders, and archives.",
+  "description": "Keyboard-first Vim task and todo slate for the Omarchy Quattro bar: profiles, reminders, and private Git snapshot sync.",
   "kinds": [
     "bar-widget",
     "overlay",
