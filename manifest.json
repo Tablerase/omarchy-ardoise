@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tablerase.ardoise",
   "name": "Ardoise",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "tablerase",
   "license": "MIT",
   "description": "Keyboard-first Vim task and todo slate for the Omarchy Quattro bar: profiles, reminders, and private Git snapshot sync.",
