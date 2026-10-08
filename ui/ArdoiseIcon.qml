@@ -24,6 +24,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import "../TodoStore.js" as TodoStore
 
 Item {
@@ -60,7 +61,7 @@ Item {
   // `yellow` is preferred over `orange` because several themes' orange is a
   // coral/salmon that collides with urgent red (catppuccin orange #f6b6ab vs
   // red #f38ba8; catppuccin-latte orange #d84e2b vs red #d20f39).
-  readonly property string themeDir: Color.currentThemePath
+  readonly property string themeDir: Commons.Color.currentThemePath
   property string themeYellow: ""
   readonly property string themeName: Quickshell.env("HOME")
     + "/.local/state/omarchy/current/theme.name"
@@ -104,7 +105,7 @@ Item {
   // the active theme's own `yellow` -> amber fallback.
   readonly property color warningColor: root.warningOverride !== undefined
     ? root.warningOverride
-    : Color.pick("bar.warning", root.themeYellow
+    : Commons.Color.pick("bar.warning", root.themeYellow
         ? root.themeYellow
         : "#df8e1d")
 
@@ -129,11 +130,11 @@ Item {
 
   readonly property color foregroundColor: root.foregroundOverride !== undefined
     ? root.foregroundOverride
-    : (root.bar ? root.bar.foreground : Color.foreground)
-  readonly property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
+    : (root.bar ? root.bar.foreground : Commons.Color.foreground)
+  readonly property color urgentColor: root.bar ? root.bar.urgent : Commons.Color.urgent
   readonly property color accentColor: root.accentOverride !== undefined
     ? root.accentOverride
-    : Color.accent
+    : Commons.Color.accent
   readonly property color ladderColor: {
     if (root.iconState.role === "warning") return root.warningColor
     if (root.iconState.role === "urgent") return root.urgentColor

@@ -27,6 +27,7 @@ exec docker run --rm \
     set -euo pipefail
     export PATH="/usr/lib/qt6/bin:$PATH"
 
+    echo "Server = https://archive.archlinux.org/repos/2026/09/25/\$repo/os/\$arch" > /etc/pacman.d/mirrorlist
     pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq lua
 
     # Same sparse checkout CI performs, at the same pinned commit.
