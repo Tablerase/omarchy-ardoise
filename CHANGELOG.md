@@ -20,6 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-10-08
+
+> **Security & Privacy Hardening Release**.
+>
+> This release hardens process confidentiality, sanitizes command execution pathways, prevents parameter injection, and expands path confinement safeguards.
+
+### Fixed
+
+#### Security & Confidentiality
+- **Stdin Clipboard Streaming**: Stream clipboard write contents directly through stdin into `wl-copy` using Quickshell `Process` (`stdinEnabled = true`), completely eliminating command argument disclosure of private task titles and notes in the system process table.
+- **Git Snapshot Command Safety**: Pass commit message payloads outside of Bash shell execution strings, preventing command substitution or subshell execution from task titles during automatic background snapshots.
+- **Notification Privacy**: Strip private titles and reminder notes from desktop notification execution (`notify-send`), reporting generic counts and clean identifiers without process-list visibility.
+- **Strict Destination Privacy Enforcement**: Require `isPrivate == true` via `gh repo view` before pushing when falling back to existing GitHub repositories in `tools/setup-git-remote.sh`, preventing accidental push of private task data to public remotes.
+- **Option & Flag Injection Guards**: Add `--` parameter delimiters and reject leading hyphen arguments across `tools/check-remote-privacy.sh` and `tools/setup-git-remote.sh`.
+- **Sensitive Directory Confinement**:
+  - Block access to credential and cluster configuration directories (`~/.docker`, `~/.kube`, `~/.netrc`) in `tools/detect-context.sh`.
+  - Disallow reading configuration files located inside `/etc` and credential subdirectories in `tools/load-bindings.lua`.
+  - Enforce restrictive file permissions (`chmod 700`) on demo backup staging directories.
+
+### Changed
+- **Marketplace Discovery**: Enriched plugin description in `manifest.json` with high-intent keywords (Vim, task, todo, private Git snapshot sync) for search indexing in the Omarchy plugin marketplace.
+
+---
+
 ## [1.0.0] - 2026-10-07
 
 > **Initial Public Release** (Early Access Baseline).
