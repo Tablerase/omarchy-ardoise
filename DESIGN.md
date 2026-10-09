@@ -881,6 +881,10 @@ On fresh installation (when initializing `todos.json` via `BarWidget.qml` or `To
   ```bash
   omarchy-shell tablerase.ardoise seedTutorial
   ```
+- Users or reviewers can also test the tutorial safely in an isolated sandbox with automatic backup and restore via the demo runner:
+  ```bash
+  tools/demo.sh tuto   # or npm run demo:tuto
+  ```
 
 ### 8.2 Release Highlights & "What's New" Invariants
 

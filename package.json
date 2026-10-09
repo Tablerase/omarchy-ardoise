@@ -18,7 +18,9 @@
     "check:ci": "CI=1 QT_QPA_PLATFORM=offscreen npm run typecheck && npm run lint:qml && npm run validate:plugin:ci && npm test",
     "validate:plugin:ci": "bash \"${OMARCHY_PATH:-/tmp/omarchy}/bin/omarchy-plugin-validate\" .",
     "test:ci": "gh act -j test -P ubuntu-latest=node:20-bookworm-slim",
-    "test:docker": "bash tools/ci-local.sh"
+    "test:docker": "bash tools/ci-local.sh",
+    "demo": "bash tools/demo.sh",
+    "demo:tuto": "bash tools/demo.sh tuto"
   },
   "author": "tablerase",
   "license": "MIT"

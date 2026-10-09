@@ -427,6 +427,32 @@ PY
   notify_reload
 }
 
+seed_tutorial() {
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+  node - "$TODO_FILE" "$ARCHIVE_FILE" "$script_dir" <<'JS'
+const fs = require("fs");
+const path = require("path");
+const [todoFile, archiveFile, repoDir] = process.argv.slice(2);
+const TodoStore = require(path.join(repoDir, "TodoStore.js"));
+
+const store = TodoStore.createInitialStore();
+fs.writeFileSync(todoFile, JSON.stringify(store, null, 2));
+
+const archive = { version: 1, archived: [] };
+fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
+JS
+
+  if [[ -d "$DATA_DIR/.git" ]]; then
+    git -C "$DATA_DIR" add todos.json todos-archive.json >/dev/null 2>&1 || true
+    git -C "$DATA_DIR" -c commit.gpgsign=false commit -q \
+      -m "[demo] Initial onboarding tutorial state" >/dev/null 2>&1 || true
+  fi
+
+  notify_reload
+}
+
 show_scenario_card() {
   local scenario="$1"
   printf '\n'
@@ -453,6 +479,20 @@ show_scenario_card() {
     printf '  %sLadder Rung%s  : Multi-urgency breakdown (overdue, due today, pending, done)\n' "$C_BOLD" "$C_OFF"
   elif [[ "$scenario" == "empty" ]]; then
     printf '  %sState%s        : Clean zero-tasks empty state\n' "$C_BOLD" "$C_OFF"
+  elif [[ "$scenario" == "tutorial" || "$scenario" == "tuto" ]]; then
+    printf '  %sFocus%s        : Onboarding Tutorial Quests (8 interactive quest tasks)\n' "$C_BOLD" "$C_OFF"
+    printf '  %sProfiles%s     : personal (8 quests)\n' "$C_BOLD" "$C_OFF"
+    printf '%s------------------------------------------------------------------------%s\n' "$C_DIM" "$C_OFF"
+    printf '  %sInteractive Quest Walkthrough Beats:%s\n' "$C_BOLD" "$C_OFF"
+    printf '    1. %sTask 1 (j/k)%s   : Press %sj%s / %sk%s (or %s↓%s / %s↑%s) to navigate tasks\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    2. %sTask 2 (Space)%s : Press %sSpace%s to toggle completion (not %sEnter%s!)\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    3. %sTask 3 (h/l)%s   : Press %sh%s / %sl%s (or %s←%s / %s→%s, or %s[%s / %s]%s) to cycle profiles\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '       %sNote%s           : %s/%s is reserved for searching tasks, notes & profiles!\n' "$C_YELLOW" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    4. %sTask 4 (Enter)%s : Press %sEnter%s to open notes drawer & test reminder presets\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    5. %sTask 5 (Binds)%s : Check header pill or hyprland shortcuts\n' "$C_CYAN" "$C_OFF"
+    printf '    6. %sTask 6 (Quick)%s : Press %sA%s (or %sSuper+Shift+T%s) to summon Quick Add modal\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    7. %sTask 7 (Help)%s  : Press %s?%s to view keybinding cheat sheet\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
+    printf '    8. %sTask 8 (Delete)%s: Hold %sx%s for 800ms to test laser confirmation bar\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
   fi
 
   printf '%s------------------------------------------------------------------------%s\n' "$C_DIM" "$C_OFF"
@@ -469,13 +509,15 @@ cmd_start() {
   arm
 
   case "$scenario" in
-    hero)   seed_hero ;;
-    ladder) seed_ladder ;;
-    empty)  seed_empty ;;
-    *)      die "Unknown scenario '$scenario'. Run 'tools/demo.sh list' for options." ;;
+    hero)          seed_hero ;;
+    ladder)        seed_ladder ;;
+    empty)         seed_empty ;;
+    tutorial|tuto) seed_tutorial ;;
+    *)             die "Unknown scenario '$scenario'. Run 'tools/demo.sh list' for options." ;;
   esac
 
   show_scenario_card "$scenario"
+  ipc open || true
   disarm # Keep active without exit trap
   ok "Demo mode started. When finished, run: tools/demo.sh restore"
 }
@@ -511,20 +553,21 @@ PY
 
 cmd_list() {
   printf '%sAvailable demo scenarios:%s\n' "$C_BOLD" "$C_OFF"
-  printf '  %shero%s    (Default) Showcase scenario: overdue ladder rung, tags, rich notes, git snapshot history\n' "$C_GREEN" "$C_OFF"
-  printf '  %sladder%s   Urgency progression scenario: tasks across overdue, due today, and pending rungs\n' "$C_GREEN" "$C_OFF"
-  printf '  %sempty%s    Zero tasks clean empty slate\n' "$C_GREEN" "$C_OFF"
+  printf '  %shero%s       (Default) Showcase scenario: overdue ladder rung, tags, rich notes, git snapshot history\n' "$C_GREEN" "$C_OFF"
+  printf '  %stutorial%s   (tuto) Onboarding quest: 8 interactive tasks teaching keyboard invariants & profile cycling\n' "$C_GREEN" "$C_OFF"
+  printf '  %sladder%s      Urgency progression scenario: tasks across overdue, due today, and pending rungs\n' "$C_GREEN" "$C_OFF"
+  printf '  %sempty%s       Zero tasks clean empty slate\n' "$C_GREEN" "$C_OFF"
 }
 
 cmd_help() {
   printf '%sArdoise Demo & Scenario Runner%s\n' "$C_BOLD" "$C_OFF"
   printf 'Reproduce demo scenarios easily and safely.\n\n'
   printf '%sCommands:%s\n' "$C_BOLD" "$C_OFF"
-  printf '  tools/demo.sh [scenario]        Run interactive demo (hero by default, auto-restores on Enter or Ctrl+C)\n'
+  printf '  tools/demo.sh [scenario]        Run interactive demo (hero, tutorial, ladder, empty; auto-restores on Enter or Ctrl+C)\n'
   printf '  tools/demo.sh start [scenario]  Seed scenario and leave running\n'
   printf '  tools/demo.sh restore | stop    Restore your real task data\n'
   printf '  tools/demo.sh status            Check demo / backup status\n'
-  printf '  tools/demo.sh list              List available scenarios (hero, ladder, empty)\n'
+  printf '  tools/demo.sh list              List available scenarios (hero, tutorial/tuto, ladder, empty)\n'
 }
 
 # Interactive mode: seeds scenario, waits for user to test/record, then restores cleanly on Enter / Ctrl+C
@@ -534,13 +577,15 @@ run_interactive() {
   arm
 
   case "$scenario" in
-    hero)   seed_hero ;;
-    ladder) seed_ladder ;;
-    empty)  seed_empty ;;
-    *)      die "Unknown scenario '$scenario'. Run 'tools/demo.sh list' for options." ;;
+    hero)          seed_hero ;;
+    ladder)        seed_ladder ;;
+    empty)         seed_empty ;;
+    tutorial|tuto) seed_tutorial ;;
+    *)             die "Unknown scenario '$scenario'. Run 'tools/demo.sh list' for options." ;;
   esac
 
   show_scenario_card "$scenario"
+  ipc open || true
 
   printf '\n%s==> Press [ENTER] when finished to restore your real tasks (or press Ctrl+C)...%s ' "$C_BOLD" "$C_OFF"
   read -r _ || true
@@ -568,7 +613,7 @@ main() {
     help|--help|-h)
       cmd_help
       ;;
-    hero|ladder|empty)
+    hero|ladder|empty|tutorial|tuto)
       run_interactive "$action"
       ;;
     *)

@@ -924,6 +924,7 @@ test("Demo & Scenario Runner: tools/demo.sh exists, is executable, and supports 
   const listRes = spawnSync(demoScript, ["list"], { encoding: "utf8" });
   assert.equal(listRes.status, 0, "tools/demo.sh list must succeed with exit code 0");
   assert.ok(listRes.stdout.includes("hero"), "tools/demo.sh list must include hero scenario");
+  assert.ok(listRes.stdout.includes("tutorial"), "tools/demo.sh list must include tutorial scenario");
   assert.ok(listRes.stdout.includes("ladder"), "tools/demo.sh list must include ladder scenario");
   assert.ok(listRes.stdout.includes("empty"), "tools/demo.sh list must include empty scenario");
 
