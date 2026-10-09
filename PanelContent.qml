@@ -46,6 +46,7 @@ Item {
   property alias taskMenu: taskMenu
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.cardBackground, Color.muted, root.barForeground, 4.5)
   // Late-task severity, read by the header ArdoiseIcon (which owns the theme
   // lookup) and handed down to every task row so panel rows, brand mark and
   // bar all render the same amber. The literal fallback covers the window
@@ -2511,8 +2512,8 @@ Item {
                       anchors.verticalCenter: parent.verticalCenter
                       verticalAlignment: itemRow.isExpanded ? Text.AlignTop : Text.AlignVCenter
                       text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
-                      color: itemRow.isDone ? Color.muted : root.barForeground
-                      opacity: itemRow.isDone ? 0.55 : 1.0
+                      color: itemRow.isDone ? root.secondaryText : root.barForeground
+                      opacity: itemRow.isDone ? 0.85 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption
                       font.bold: itemRow.isHeaderFocused
@@ -2639,8 +2640,7 @@ Item {
                       anchors.verticalCenter: parent.verticalCenter
                       verticalAlignment: Text.AlignVCenter
                       text: (itemRow.modelData.description || "").replace(/[\r\n]+/g, " ").trim()
-                      color: Color.muted
-                      opacity: 0.8
+                      color: root.secondaryText
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
                       font.italic: true
@@ -2673,8 +2673,7 @@ Item {
                       verticalAlignment: Text.AlignVCenter
                       width: Math.min(implicitWidth, parent.width * 0.3)
                       text: "#" + (itemRow.modelData.profile || "")
-                      color: Color.muted
-                      opacity: 0.65
+                      color: root.secondaryText
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
                       elide: Text.ElideRight
@@ -2768,7 +2767,7 @@ Item {
                             required property string modelData
                             anchors.verticalCenter: parent.verticalCenter
                             text: "#" + modelData
-                            chipColor: Color.muted
+                            chipColor: root.secondaryText
                             maximumWidth: Style.space(65)
                             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                           }
@@ -3075,7 +3074,7 @@ Item {
                         id: tagLabel
                         anchors.verticalCenter: parent.verticalCenter
                         text: "󰓹 Tags:"
-                        color: Color.muted
+                        color: root.secondaryText
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(9.5)
                       }
@@ -3087,7 +3086,7 @@ Item {
                       Ui.Chip {
                         required property string modelData
                         text: "#" + modelData
-                        chipColor: Color.muted
+                        chipColor: root.secondaryText
                         maximumWidth: Style.space(90)
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
                       }

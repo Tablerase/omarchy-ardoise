@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "../TodoStore.js" as TodoStore
 
 Rectangle {
   id: root
@@ -10,6 +11,7 @@ Rectangle {
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color accentColor: Color.accent
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground, 4.5)
   // Late-task severity. Supplied by the host from ArdoiseIcon.warningColor so
   // panel rows, the brand mark and the bar all read the same amber. The
   // literal default keeps the row renderable if a host ever omits it.
@@ -55,7 +57,7 @@ Rectangle {
 
   border.color: root.checked
     ? root.accentColor
-    : (root.isOverdue ? root.warningColor : (root.isDueToday ? root.accentColor : Color.muted))
+    : (root.isOverdue ? root.warningColor : (root.isDueToday ? root.accentColor : root.secondaryText))
   border.width: (root.isOverdue || root.isDueToday || root.checked) ? 1.5 : 1
 
   Behavior on border.color { ColorAnimation { duration: 150 } }

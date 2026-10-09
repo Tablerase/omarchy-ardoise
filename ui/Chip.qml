@@ -17,6 +17,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "../TodoStore.js" as TodoStore
 
 Rectangle {
   id: root
@@ -28,6 +29,7 @@ Rectangle {
   property color chipColor: Color.accent
   property color textColor: chipColor
   property color iconColor: textColor
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground, 4.5)
   property real bgAlpha: 0.12
   property real borderAlpha: 0.35
   property bool removable: false
@@ -58,7 +60,7 @@ Rectangle {
   }
 
   readonly property color resolvedIconColor: {
-    if (isDone) return Color.muted
+    if (isDone) return root.secondaryText
     if (variant === "time") {
       if (isOverdue) return root.warningColor
       return root.accentColor
@@ -68,14 +70,14 @@ Rectangle {
   }
 
   readonly property color resolvedTextColor: {
-    if (isDone) return Color.muted
+    if (isDone) return root.secondaryText
     if (variant === "time") {
       if (isOverdue) return root.warningColor
       if (isDueToday) return root.accentColor
       return root.accentColor
     }
     if (variant === "location") {
-      return (root.textColor !== root.chipColor) ? root.textColor : Color.muted
+      return (root.textColor !== root.chipColor) ? root.textColor : root.secondaryText
     }
     return root.textColor
   }
@@ -87,7 +89,7 @@ Rectangle {
 
   color: {
     if (isDone) {
-      return Util.alpha(Color.muted, 0.08)
+      return Util.alpha(root.secondaryText, 0.08)
     }
     if (variant === "time") {
       if (isOverdue) {
@@ -106,7 +108,7 @@ Rectangle {
 
   border.color: {
     if (isDone) {
-      return Util.alpha(Color.muted, 0.2)
+      return Util.alpha(root.secondaryText, 0.2)
     }
     if (variant === "time") {
       if (isOverdue) {

@@ -2546,7 +2546,7 @@ function rgbToHex(r, g, b) {
 }
 
 /**
- * Returns a readable secondary/muted color that achieves at least targetContrast (default 3.0)
+ * Returns a readable secondary/muted color that achieves at least targetContrast (default 4.5)
  * against the provided background color. If the current muted color already has sufficient
  * contrast, it is returned. Otherwise, it blends or steps towards foreground until targetContrast
  * is reached.
@@ -2554,11 +2554,11 @@ function rgbToHex(r, g, b) {
  * @param {any} background - The surface background color
  * @param {any} muted - The candidate muted or secondary color
  * @param {any} foreground - The primary high-contrast foreground color
- * @param {number} [targetContrast=3.0] - Target minimum contrast ratio (default 3.0 for secondary text/badges)
+ * @param {number} [targetContrast=4.5] - Target minimum contrast ratio (default 4.5 for high readability)
  * @returns {string} Hex color string (#rrggbb)
  */
 function getReadableSecondary(background, muted, foreground, targetContrast) {
-  var minRatio = typeof targetContrast === "number" && targetContrast > 0 ? targetContrast : 3.0
+  var minRatio = typeof targetContrast === "number" && targetContrast > 0 ? targetContrast : 4.5
   var currentRatio = getContrastRatio(muted, background)
   if (currentRatio >= minRatio) {
     var mParsed = parseColorComponents(muted)

@@ -22,6 +22,7 @@ Rectangle {
   property var bar: null
   property var barWidget: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 4.5)
 
   // Parsed once on open / after a restore.
   property var archivedTasks: []
@@ -650,7 +651,7 @@ Rectangle {
                   }
                   return meta.join("  ")
                 }
-                color: Color.muted
+                color: root.secondaryText
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption * 0.8
                 elide: Text.ElideRight
@@ -667,7 +668,7 @@ Rectangle {
         text: root.searchQuery.length > 0
           ? "No archived tasks match \"" + root.searchQuery + "\""
           : "Archive is empty"
-        color: Color.muted
+        color: root.secondaryText
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: Style.font.caption
         font.italic: true
