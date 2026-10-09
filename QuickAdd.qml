@@ -55,6 +55,7 @@ Item {
   readonly property var parsedInput: TodoStore.parseTaskInput(taskInput.text, root.selectedProfile)
   readonly property bool hasValidTitle: Boolean(parsedInput && parsedInput.title && parsedInput.title.trim().length > 0)
   readonly property bool canSubmit: hasValidTitle
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground)
 
   property var reminderPresets: TodoStore.getReminderPresets()
 
@@ -818,7 +819,7 @@ Item {
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
                   text: root.autocompleteMode === "profile" ? "Profiles" : "Tags"
-                  color: Color.muted
+                  color: root.secondaryText
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
                   font.bold: true
@@ -850,7 +851,7 @@ Item {
                     Text {
                       anchors.verticalCenter: parent.verticalCenter
                       text: root.autocompleteMode === "profile" ? TodoStore.getProfileGlyph(modelData) : "󰓹"
-                      color: matchItem.isSelected ? Color.accent : Color.muted
+                      color: matchItem.isSelected ? Color.accent : root.secondaryText
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                     }
@@ -886,7 +887,7 @@ Item {
                         return tagCount > 0 ? (tagCount + (tagCount === 1 ? " task" : " tasks")) : ""
                       }
                     }
-                    color: Color.muted
+                    color: root.secondaryText
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
                   }
@@ -945,7 +946,7 @@ Item {
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "󰁯"
-            color: Color.muted
+            color: root.secondaryText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -953,7 +954,7 @@ Item {
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "Draft restored"
-            color: Color.muted
+            color: root.secondaryText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -961,7 +962,7 @@ Item {
           Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "•"
-            color: Color.muted
+            color: root.secondaryText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -1221,7 +1222,7 @@ Item {
               if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
               return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
             }
-            color: Color.muted
+            color: root.secondaryText
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             elide: Text.ElideRight

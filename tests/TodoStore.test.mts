@@ -2223,6 +2223,26 @@ test("WCAG Color Utilities: getReadableSecondary dynamically guarantees readabil
   const etherealFg = "#ffcead";
   const etherealSecondary = getReadableSecondary(etherealBg, etherealMuted, etherealFg, 3.0);
   assert.equal(etherealSecondary.toLowerCase(), etherealMuted.toLowerCase(), "Already legible muted color should be preserved");
+
+  // Scenario 4: Dynamic adaptation without explicit target override for low-contrast dark themes (everforest)
+  const efBg = "#2d353b";
+  const efMuted = "#475258";
+  const efFg = "#d3c6aa";
+  const efSecondary = getReadableSecondary(efBg, efMuted, efFg);
+  const efRatio = getContrastRatio(efSecondary, efBg);
+  const efFgDist = getContrastRatio(efFg, efSecondary);
+  assert.ok(efRatio >= 3.15, `Everforest dynamic secondary contrast ratio ${efRatio} must meet readable threshold`);
+  assert.ok(efFgDist >= 2.0, `Everforest secondary must maintain visual distinction from title (distance ${efFgDist} >= 2.0)`);
+
+  // Scenario 5: Dynamic adaptation for light themes (catppuccin-latte) ensuring chips/details are not too close to title
+  const clBg = "#eff1f5";
+  const clMuted = "#acb0be";
+  const clFg = "#4c4f69";
+  const clSecondary = getReadableSecondary(clBg, clMuted, clFg);
+  const clRatio = getContrastRatio(clSecondary, clBg);
+  const clFgDist = getContrastRatio(clFg, clSecondary);
+  assert.ok(clRatio >= 3.15, `Catppuccin Latte secondary contrast ratio ${clRatio} must be readable`);
+  assert.ok(clFgDist >= 2.0, `Catppuccin Latte secondary must remain distinct from title (distance ${clFgDist} >= 2.0)`);
 });
 
 

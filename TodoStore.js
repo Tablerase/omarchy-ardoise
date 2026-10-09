@@ -2617,29 +2617,45 @@ function rgbToHex(r, g, b) {
  * @returns {string} Hex color string (#rrggbb)
  */
 function getReadableSecondary(background, muted, foreground, targetContrast) {
-  var minRatio = typeof targetContrast === "number" && targetContrast > 0 ? targetContrast : 3.4
+  var fgRatio = getContrastRatio(foreground, background)
+  var minRatio
+  if (typeof targetContrast === "number" && targetContrast > 0) {
+    minRatio = targetContrast
+  } else {
+    // Dynamic scaling: bounded between 3.15 and 3.75 based on available foreground contrast headroom
+    minRatio = Math.max(3.15, Math.min(3.75, 3.0 + Math.max(0, fgRatio - 6.0) * 0.05))
+  }
+
   var currentRatio = getContrastRatio(muted, background)
   if (currentRatio >= minRatio) {
     var mParsed = parseColorComponents(muted)
     return rgbToHex(mParsed[0], mParsed[1], mParsed[2])
   }
 
-  // Current muted has low contrast. Blend muted towards foreground in increments until target reached.
   var m = parseColorComponents(muted)
   var f = parseColorComponents(foreground)
-  for (var step = 1; step <= 10; step++) {
-    var factor = step / 10
-    var blendedR = m[0] + (f[0] - m[0]) * factor
-    var blendedG = m[1] + (f[1] - m[1]) * factor
-    var blendedB = m[2] + (f[2] - m[2]) * factor
-    var hex = rgbToHex(blendedR, blendedG, blendedB)
-    if (getContrastRatio(hex, background) >= minRatio) {
-      return hex
+
+  // Binary search to find the minimal blend towards foreground that meets minRatio
+  var low = 0.0
+  var high = 1.0
+  var bestHex = rgbToHex(f[0], f[1], f[2])
+
+  for (var i = 0; i < 20; i++) {
+    var mid = (low + high) / 2
+    var r = m[0] + (f[0] - m[0]) * mid
+    var g = m[1] + (f[1] - m[1]) * mid
+    var b = m[2] + (f[2] - m[2]) * mid
+    var hex = rgbToHex(r, g, b)
+    var cr = getContrastRatio(hex, background)
+    if (cr >= minRatio) {
+      bestHex = hex
+      high = mid // seek lower blend to stay as close as possible to theme muted
+    } else {
+      low = mid
     }
   }
 
-  // Fallback: return foreground directly if blending didn't reach target
-  return rgbToHex(f[0], f[1], f[2])
+  return bestHex
 }
 
 if (typeof module !== "undefined" && module.exports) {

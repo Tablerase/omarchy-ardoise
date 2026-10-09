@@ -46,7 +46,7 @@ Item {
   property alias taskMenu: taskMenu
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  readonly property color secondaryText: TodoStore.getReadableSecondary(root.cardBackground, Color.muted, root.barForeground, 3.4)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.cardBackground, Color.muted, root.barForeground)
   // Late-task severity, read by the header ArdoiseIcon (which owns the theme
   // lookup) and handed down to every task row so panel rows, brand mark and
   // bar all render the same amber. The literal fallback covers the window
@@ -1410,7 +1410,7 @@ Item {
           contentItem: Rectangle {
             implicitHeight: Style.space(2)
             radius: Style.space(1)
-            color: profileScrollBar.pressed ? Color.accent : (profileScrollBar.hovered ? Color.accent : Color.muted)
+            color: profileScrollBar.pressed ? Color.accent : (profileScrollBar.hovered ? Color.accent : root.secondaryText)
             opacity: profileScrollBar.active ? 0.9 : 0.4
           }
 
@@ -1455,7 +1455,7 @@ Item {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: String(root.pendingCount)
-                color: root.currentFilter === "all" ? "white" : Color.muted
+                color: root.currentFilter === "all" ? "white" : root.secondaryText
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.space(9)
               }
@@ -1497,7 +1497,7 @@ Item {
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
                   text: TodoStore.getProfileGlyph(profPill.modelData)
-                  color: root.currentFilter === profPill.modelData ? "white" : Color.muted
+                  color: root.currentFilter === profPill.modelData ? "white" : root.secondaryText
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
                 }
@@ -1518,7 +1518,7 @@ Item {
                   visible: profPill.count > 0
                   anchors.verticalCenter: parent.verticalCenter
                   text: String(profPill.count)
-                  color: root.currentFilter === profPill.modelData ? "white" : Color.muted
+                  color: root.currentFilter === profPill.modelData ? "white" : root.secondaryText
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.space(9)
                 }
@@ -1944,7 +1944,7 @@ Item {
         : (root.currentFilter === "all"
             ? "No tasks yet. Type a task above and press Enter!"
             : ("No tasks in #" + (root.currentFilter.length > 20 ? (root.currentFilter.slice(0, 18) + "…") : root.currentFilter) + ". Add one above!"))
-      color: Color.muted
+      color: root.secondaryText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.font.caption
       font.italic: true
@@ -2084,7 +2084,7 @@ Item {
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.completedFoldOpen ? "󰅃" : "󰅀"
-                    color: foldHover.hovered ? Color.accent : Color.muted
+                    color: foldHover.hovered ? Color.accent : root.secondaryText
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption
                   }
@@ -2092,7 +2092,7 @@ Item {
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Completed (" + root.completedCount + ")"
-                    color: foldHover.hovered ? (root.barForeground || Color.foreground) : Color.muted
+                    color: foldHover.hovered ? (root.barForeground || Color.foreground) : root.secondaryText
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.space(9)
                     font.bold: true
@@ -2307,7 +2307,9 @@ Item {
                   if (curIdx >= 0) {
                     root.expandedProfileIndex = curIdx
                     Qt.callLater(function() {
-                      itemRow.ensureReassignProfileVisible(curIdx)
+                      if (typeof itemRow.ensureReassignProfileVisible === "function") {
+                        itemRow.ensureReassignProfileVisible(curIdx)
+                      }
                     })
                   }
                 } else if (root.descArea === descArea) {
@@ -2437,7 +2439,7 @@ Item {
                         iconText: itemRow.isExpanded ? "󰅃" : "󰅀"
                         fontSize: Style.font.caption
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                        foreground: Color.muted
+                        foreground: root.secondaryText
                         hoverColor: Color.accent
                         tooltipText: ""
                         onClicked: {
@@ -2461,7 +2463,7 @@ Item {
                         iconText: "󰏫"
                         fontSize: Style.font.caption
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                        foreground: Color.muted
+                        foreground: root.secondaryText
                         hoverColor: Color.accent
                         tooltipText: ""
                         onClicked: {
@@ -2488,7 +2490,7 @@ Item {
                         iconText: "󰅙"
                         iconSize: Style.font.caption
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                        foreground: rowDeleteBtn.progress > 0 ? (root.bar ? root.bar.urgent : Color.urgent) : Color.muted
+                        foreground: rowDeleteBtn.progress > 0 ? (root.bar ? root.bar.urgent : Color.urgent) : root.secondaryText
                         accent: root.bar ? root.bar.urgent : Color.urgent
                         tooltipText: ""
                         visualsEnabled: false
@@ -2517,8 +2519,8 @@ Item {
                       verticalAlignment: Text.AlignVCenter
                       width: Math.min(implicitWidth, parent.width * 0.28)
                       text: "#" + (itemRow.modelData.profile || "")
-                      color: Color.muted
-                      opacity: itemRow.isDone ? 0.4 : 0.65
+                      color: root.secondaryText
+                      opacity: itemRow.isDone ? 0.7 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(8.5)
                       elide: Text.ElideRight
@@ -2547,7 +2549,7 @@ Item {
                       verticalAlignment: itemRow.isExpanded ? Text.AlignTop : Text.AlignVCenter
                       text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                       color: itemRow.isDone ? root.secondaryText : root.barForeground
-                      opacity: itemRow.isDone ? 0.72 : 1.0
+                      opacity: itemRow.isDone ? 0.85 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption
                       font.bold: itemRow.isHeaderFocused
@@ -2644,7 +2646,7 @@ Item {
                       anchors.verticalCenter: titleLabel.verticalCenter
                       height: Style.space(1.5)
                       radius: height / 2
-                      color: itemRow.isDone ? Color.muted : "transparent"
+                      color: itemRow.isDone ? root.secondaryText : "transparent"
                       visible: opacity > 0.01 && root.editingTaskId !== itemRow.modelData.id && !titleRowItem.titleWraps
                       opacity: itemRow.isDone ? 0.8 : 0.0
                       width: itemRow.isDone ? Math.min(titleLabel.contentWidth, titleLabel.width) : 0
@@ -3032,7 +3034,7 @@ Item {
                     Text {
                       anchors.verticalCenter: parent.verticalCenter
                       text: "󰉋 Target:"
-                      color: Color.muted
+                      color: root.secondaryText
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.space(9.5)
                     }

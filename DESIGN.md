@@ -611,6 +611,14 @@ Resolution order: host `warningOverride` → user theme `bar.warning` (`Color.pi
 - Quick Add Card width: `Math.min(Style.space(560), panel.width - Style.space(32))` (expanded from 480px to accommodate bottom shortcut hints without overlapping action buttons).
 - Urgency progress gradient: Maximum width capped at `35%` (approx `110px`) to prevent visual bloat.
 
+### Dynamic Text Contrast & Theme Adaptation (`secondaryText`)
+- **Theme-Agnostic Mathematical Contrast**: Rather than relying on static or theme-specific hardcoded colors, secondary and muted text across all UI surfaces is derived through `TodoStore.getReadableSecondary(background, muted, foreground, targetContrast)`.
+- **Dynamic Headroom Scaling**: When `targetContrast` is not explicitly provided, the target ratio scales dynamically based on available foreground contrast headroom: `Math.max(3.15, Math.min(3.75, 3.0 + Math.max(0, fgRatio - 6.0) * 0.05))`.
+  - For narrow-spectrum themes (e.g. *Everforest* where raw `muted` `#475258` has 1.55:1 contrast, or *Catppuccin Latte* where `muted` `#acb0be` has 1.91:1 contrast), secondary text dynamically targets ~3.15:1–3.25:1. This satisfies the WCAG 3:1+ threshold for secondary UI text while strictly preventing secondary chips/details from encroaching on or colliding with primary task titles (maintaining a contrast distance > 2.0x from foreground titles).
+  - For high-contrast themes (e.g. *Flexoki Light*, *Vantablack*), the target ratio scales up towards 3.75:1 to utilize available contrast headroom without visual harshness.
+- **Binary Search Interpolation**: When the raw `muted` color fails the target contrast ratio against `background`, a 20-iteration binary search identifies the minimal blend factor towards `foreground` that achieves readability. This strictly preserves the theme author's original color temperature and hue.
+- **Universal Secondary Coverage**: Elements rendered with `secondaryText` include `#profile` indicators (`profInlineLabel`), completed task titles (with an opacity floor of 0.85 to avoid washing out below readable contrast), strikethrough lines (`strikeLine`), unselected profile filter pills, empty list hints, drawer target location labels, modal footers, and chip borders/delete buttons.
+
 ---
 
 ## 6. Verification Checklist for UI Changes

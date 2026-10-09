@@ -14,7 +14,7 @@ Rectangle {
   property var bar: null
   property var barWidget: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 3.4)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground)
 
   property string deviceName: root.barWidget ? String(root.barWidget.deviceName || "") : "omarchy"
   property var snapshots: (root.barWidget && root.barWidget.gitSnapshots) ? root.barWidget.gitSnapshots : []
@@ -523,7 +523,7 @@ Rectangle {
           iconText: "󰅖"
           fontSize: Style.font.caption
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-          foreground: Color.muted
+          foreground: root.secondaryText
           hoverColor: root.bar ? root.bar.urgent : Color.urgent
           tooltipText: ""
           onClicked: root.close()
@@ -566,7 +566,7 @@ Rectangle {
             Text {
               anchors.verticalCenter: parent.verticalCenter
               text: modelData.label
-              color: isActive ? root.barForeground : Color.muted
+              color: isActive ? root.barForeground : root.secondaryText
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
               font.bold: isActive
@@ -696,7 +696,7 @@ Rectangle {
             iconText: "󰅖"
             fontSize: Style.font.caption
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-            foreground: Color.muted
+            foreground: root.secondaryText
             hoverColor: Color.accent
             tooltipText: ""
             onClicked: root.closeSearch()
@@ -855,7 +855,7 @@ Rectangle {
                   iconText: "󰇙"
                   fontSize: Style.font.caption
                   fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  foreground: Color.muted
+                  foreground: root.secondaryText
                   hoverColor: Color.accent
                   tooltipText: "Snapshot options"
                   onClicked: {

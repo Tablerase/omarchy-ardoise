@@ -22,7 +22,7 @@ Rectangle {
   property var bar: null
   property var barWidget: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 3.4)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground)
 
   // Parsed once on open / after a restore.
   property var archivedTasks: []
@@ -425,7 +425,7 @@ Rectangle {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: root.filteredArchived.length + (root.searchQuery.length > 0 ? " / " + root.archivedTasks.length : "") + " archived"
-          color: Color.muted
+          color: root.secondaryText
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -441,7 +441,7 @@ Rectangle {
         iconText: "󰍉"
         fontSize: Style.font.subtitle
         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-        foreground: root.searchActive ? Color.accent : Color.muted
+        foreground: root.searchActive ? Color.accent : root.secondaryText
         hoverColor: Color.accent
         tooltipText: ""
         onClicked: root.searchActive ? root.closeSearch() : root.activateSearch()
@@ -602,7 +602,7 @@ Rectangle {
             iconText: "󰇙"
             fontSize: Style.font.caption
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-            foreground: Color.muted
+            foreground: root.secondaryText
             hoverColor: Color.accent
             tooltipText: "Task options"
             onClicked: {
@@ -621,7 +621,7 @@ Rectangle {
             Text {
               anchors.verticalCenter: parent.verticalCenter
               text: "󰄲"
-              color: Color.muted
+              color: root.secondaryText
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -683,7 +683,7 @@ Rectangle {
 
       Text {
         text: "K options  Enter restore  x hold delete  y copy  / filter"
-        color: Color.muted
+        color: root.secondaryText
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: Style.font.caption * 0.8
         elide: Text.ElideRight

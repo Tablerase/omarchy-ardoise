@@ -29,7 +29,7 @@ Rectangle {
   property color chipColor: Color.accent
   property color textColor: chipColor
   property color iconColor: textColor
-  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground, 3.4)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground)
   property real bgAlpha: 0.12
   property real borderAlpha: 0.35
   property bool removable: false
@@ -170,7 +170,7 @@ Rectangle {
     Text {
       anchors.centerIn: parent
       text: "󰅖"
-      color: removeHover.hovered ? Color.urgent : Color.muted
+      color: removeHover.hovered ? Color.urgent : root.secondaryText
       font.family: root.fontFamily
       font.pixelSize: Style.space(9)
     }

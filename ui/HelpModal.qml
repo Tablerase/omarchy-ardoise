@@ -11,6 +11,7 @@ Rectangle {
   property bool isOpen: false
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground)
   property string detectedShortcut: detectedPanelShortcut
   property string detectedPanelShortcut: "SUPER + ALT + T"
   property string detectedQuickAddShortcut: "SUPER + SHIFT + T"
@@ -636,7 +637,7 @@ Rectangle {
                   iconText: "󰅖"
                   fontSize: Style.font.caption
                   fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  foreground: Color.muted
+                  foreground: root.secondaryText
                   hoverColor: root.bar ? root.bar.urgent : Color.urgent
                   tooltipText: ""
                   onClicked: {
@@ -752,7 +753,7 @@ Rectangle {
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   text: keyHelpRow.modelData.category
-                  color: Color.muted
+                  color: root.secondaryText
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.space(8.5)
                 }
@@ -776,7 +777,7 @@ Rectangle {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       text: "Press Esc or " + root.helpShortcutHint + " to close"
-      color: Color.muted
+      color: root.secondaryText
       font.family: root.bar ? root.bar.fontFamily : Style.font.family
       font.pixelSize: Style.space(9)
     }

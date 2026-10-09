@@ -15,6 +15,7 @@ Item {
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color accentColor: Color.accent
   property color fadeColor: Color.menu.background
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground)
 
   signal profileSelected(string profileName, int index)
 
@@ -107,7 +108,7 @@ Item {
             Text {
               anchors.verticalCenter: parent.verticalCenter
               text: TodoStore.getProfileGlyph(profileBtn.modelData)
-              color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : Color.muted)
+              color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.secondaryText)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }

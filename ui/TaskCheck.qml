@@ -11,7 +11,7 @@ Rectangle {
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color accentColor: Color.accent
-  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground, 3.4)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground)
   // Late-task severity. Supplied by the host from ArdoiseIcon.warningColor so
   // panel rows, the brand mark and the bar all read the same amber. The
   // literal default keeps the row renderable if a host ever omits it.

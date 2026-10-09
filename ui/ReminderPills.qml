@@ -17,6 +17,7 @@ Item {
   property color accentColor: Color.accent
   property color urgentColor: root.bar ? root.bar.urgent : Color.urgent
   property color fadeColor: Color.menu.background
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground)
 
   property bool showCustomPill: true
   readonly property bool isCustomSelected: root.hasReminder && !root.presets.some(function(p) { return p && p.value === root.selectedValue })
@@ -244,7 +245,7 @@ Item {
           id: clearText
           anchors.centerIn: parent
           text: "󰅖 Clear"
-          color: Color.muted
+          color: clearBtn.isClearNavFocused ? root.urgentColor : root.secondaryText
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
         }
