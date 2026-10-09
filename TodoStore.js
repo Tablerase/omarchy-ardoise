@@ -225,8 +225,8 @@ function getTutorialTasks(baseTime) {
     },
     {
       id: t0 + 3,
-      title: "󰐕 Press A (or Super+Shift+T) to open Quick Add modal",
-      description: "Quick Add is Ardoise's premier task entry surface! Try adding a task title, typing a #profile or #tag to route it, or toggling a note/reminder before pressing Enter to submit.",
+      title: "󰐕 Press Shift+A (or Super+Shift+T) to open Quick Add modal",
+      description: "Quick Add is Ardoise's premier task entry surface! Press Shift+A (capital A) to open it from the panel (lowercase 'a' or 'i' focuses the in-panel input field). Try adding a task title, typing a #profile or #tag to route it, or toggling a note/reminder before pressing Enter to submit.",
       profile: "personal",
       done: false,
       isTutorial: true,
