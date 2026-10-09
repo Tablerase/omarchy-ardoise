@@ -1487,5 +1487,3 @@ test("Keybindings setup clipboard formatting: expands newlines without literal \
   assert.ok(confOutput.includes("bindd = "), "Conf output contains bindd =");
 });
 
-
-
