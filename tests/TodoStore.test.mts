@@ -68,7 +68,12 @@ const {
   hasNewRelease,
   markReleaseSeen,
   resetReleaseHighlights,
-  getIpcHelp
+  getIpcHelp,
+  parseColorComponents,
+  getRelativeLuminance,
+  getContrastRatio,
+  rgbToHex,
+  getReadableSecondary
 } = TodoStore;
 
 test("defaultStore: initializes schema v1 default structure", () => {
@@ -2060,6 +2065,7 @@ test("onboarding tutorial & release highlights: task catalog and keyboard invari
   assert.ok(titles[2].includes("h / l"), "Task 3 teaches profile cycling");
   assert.ok(titles[3].includes("Enter to open notes"), "Task 4 teaches Enter for drawer");
   assert.ok(titles[4].includes("global shortcuts"), "Task 5 teaches global shortcuts");
+  assert.ok(tasks[4].description.includes("bindings.lua"), "Task 5 description must specify ~/.config/hypr/bindings.lua");
   assert.ok(titles[5].includes("Press Shift+A (or Super+Shift+T)"), "Task 6 teaches Quick Add modal with Shift+A");
   assert.ok(titles[6].includes("Press ?"), "Task 7 teaches Help cheat sheet");
   assert.ok(titles[7].includes("Hold x"), "Task 8 teaches hold to delete");
@@ -2133,6 +2139,62 @@ test("getIpcHelp: outputs comprehensive CLI reference", () => {
   assert.ok(helpText.includes("addDetailed"));
   assert.ok(helpText.includes("seedTutorial"));
   assert.ok(helpText.includes("resetReleaseHighlights"));
+});
+
+test("WCAG Color Utilities: parseColorComponents, getRelativeLuminance, and getContrastRatio", () => {
+  // Test black & white contrast
+  const black = "#000000";
+  const white = "#ffffff";
+  const cr = getContrastRatio(black, white);
+  assert.equal(Math.round(cr), 21, "Black on white contrast ratio must be 21:1");
+
+  // Same color contrast
+  const same = getContrastRatio("#ffffff", "#ffffff");
+  assert.equal(Math.round(same), 1, "Same color contrast must be 1:1");
+
+  // Relative luminance values
+  assert.equal(getRelativeLuminance(0, 0, 0), 0, "Black relative luminance is 0");
+  assert.equal(Math.round(getRelativeLuminance(1, 1, 1)), 1, "White relative luminance is 1");
+
+  // Parsing formats
+  const parsedHex3 = parseColorComponents("#fff");
+  assert.deepEqual(parsedHex3, [1, 1, 1, 1]);
+
+  const parsedHex6 = parseColorComponents("#1e66f5");
+  assert.ok(parsedHex6[0] > 0.1 && parsedHex6[2] > 0.9);
+
+  const parsedRgb = parseColorComponents("rgb(255, 0, 0)");
+  assert.deepEqual(parsedRgb, [1, 0, 0, 1]);
+
+  const parsedObj = parseColorComponents({ r: 0.5, g: 0.5, b: 0.5, a: 1 });
+  assert.deepEqual(parsedObj, [0.5, 0.5, 0.5, 1]);
+});
+
+test("WCAG Color Utilities: getReadableSecondary dynamically guarantees readability across custom themes", () => {
+  // Scenario 1: Dark theme (matte-black) where muted (#333333) against background (#121212) has low contrast (~1.48:1)
+  const darkBg = "#121212";
+  const darkMuted = "#333333";
+  const darkFg = "#bebebe";
+  const darkSecondary = getReadableSecondary(darkBg, darkMuted, darkFg, 3.5);
+  const darkRatio = getContrastRatio(darkSecondary, darkBg);
+  assert.ok(darkRatio >= 3.5, `Dark theme secondary contrast ratio ${darkRatio} must meet target 3.5`);
+  assert.notEqual(darkSecondary, darkMuted, "Muted color should have been brightened towards foreground");
+
+  // Scenario 2: Light theme (catppuccin-latte) where muted (#acb0be) on light background (#eff1f5) has low contrast (~1.9:1)
+  const lightBg = "#eff1f5";
+  const lightMuted = "#acb0be";
+  const lightFg = "#4c4f69";
+  const lightSecondary = getReadableSecondary(lightBg, lightMuted, lightFg, 3.0);
+  const lightRatio = getContrastRatio(lightSecondary, lightBg);
+  assert.ok(lightRatio >= 3.0, `Light theme secondary contrast ratio ${lightRatio} must meet target 3.0`);
+  assert.notEqual(lightSecondary, lightMuted, "Light muted color should have been darkened towards foreground");
+
+  // Scenario 3: Theme with already sufficient contrast (ethereal, muted contrast 4.9:1)
+  const etherealBg = "#060B1E";
+  const etherealMuted = "#6d7db6";
+  const etherealFg = "#ffcead";
+  const etherealSecondary = getReadableSecondary(etherealBg, etherealMuted, etherealFg, 3.0);
+  assert.equal(etherealSecondary.toLowerCase(), etherealMuted.toLowerCase(), "Already legible muted color should be preserved");
 });
 
 

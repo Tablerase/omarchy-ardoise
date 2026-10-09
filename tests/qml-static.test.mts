@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { execSync, spawnSync } from "node:child_process";
+import { execSync, spawnSync, execFileSync } from "node:child_process";
 import { extractHandler, findOnPath, repoDir } from "./helpers/qml-test-utils.mts";
 
 test("Static QML Analysis: All QQC2 and custom UI components have required imports", () => {
@@ -1406,6 +1406,11 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
       gitModal.includes('+ Recoverable'),
     "GitModal must provide snapshot task preview drawer with recoverable indicator"
   );
+  assert.ok(
+    gitModal.includes('readonly property color secondaryText: TodoStore.getReadableSecondary') &&
+      gitModal.includes(': (itemHover.containsMouse ? Color.menu.selectedBackground : "transparent")'),
+    "GitModal must compute dynamic contrast-safe secondaryText and only fill snapshot item background on hover or selection"
+  );
 
   // 4. Service.qml must NOT pass private titles or reminder descriptions in argv
   assert.ok(
@@ -1455,5 +1460,32 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "BarWidget must never install, modify or touch user git hooks"
   );
 });
+
+test("Keybindings setup clipboard formatting: expands newlines without literal \\n", () => {
+  const panelQml = fs.readFileSync(path.join(repoDir, "Panel.qml"), "utf8");
+  const match = panelQml.match(/id:\s*copyAndOpenProc[\s\S]*?command:\s*\[\s*"bash",\s*"-c",\s*"((?:[^"\\]|\\.)*)"\s*\]/);
+  assert.ok(match, "copyAndOpenProc command found in Panel.qml");
+
+  const bashScript = JSON.parse(`"${match[1]}"`);
+  assert.ok(bashScript.includes("| wl-copy"), "Command pipes snippet into wl-copy");
+
+  // Test snippet generation without running wl-copy or opening editors
+  const snippetEvalBase = bashScript.split("| wl-copy")[0].trim();
+
+  // Test Lua branch
+  const luaScript = snippetEvalBase.replace('[ -f "$HOME/.config/hypr/bindings.lua" ]', '[ 1 -eq 1 ]');
+  const luaOutput = execFileSync("bash", ["-c", luaScript], { encoding: "utf8" });
+  assert.ok(!luaOutput.includes("\\n"), "Lua keybindings output must not contain literal \\n string");
+  assert.strictEqual(luaOutput.trim().split("\n").length, 2, "Lua output must have 2 lines");
+  assert.ok(luaOutput.includes("o.bind"), "Lua output contains o.bind");
+
+  // Test Conf branch
+  const confScript = snippetEvalBase.replace('[ -f "$HOME/.config/hypr/bindings.lua" ]', '[ 1 -eq 0 ]');
+  const confOutput = execFileSync("bash", ["-c", confScript], { encoding: "utf8" });
+  assert.ok(!confOutput.includes("\\n"), "Conf keybindings output must not contain literal \\n string");
+  assert.strictEqual(confOutput.trim().split("\n").length, 2, "Conf output must have 2 lines");
+  assert.ok(confOutput.includes("bindd = "), "Conf output contains bindd =");
+});
+
 
 

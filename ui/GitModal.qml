@@ -14,6 +14,7 @@ Rectangle {
   property var bar: null
   property var barWidget: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 3.5)
 
   property string deviceName: root.barWidget ? String(root.barWidget.deviceName || "") : "omarchy"
   property var snapshots: (root.barWidget && root.barWidget.gitSnapshots) ? root.barWidget.gitSnapshots : []
@@ -748,8 +749,8 @@ Rectangle {
               radius: Style.cornerRadius
               color: isSelected
                 ? Util.alpha(Color.accent, 0.14)
-                : (itemHover.containsMouse ? Color.menu.selectedBackground : Color.menu.selectedBackground)
-              border.color: isSelected ? Color.accent : Color.menu.border
+                : (itemHover.containsMouse ? Color.menu.selectedBackground : "transparent")
+              border.color: isSelected ? Color.accent : (itemHover.containsMouse ? Color.menu.border : "transparent")
               border.width: isSelected ? 1.5 : 1
 
               MouseArea {
@@ -780,13 +781,13 @@ Rectangle {
                   implicitWidth: devLabel.implicitWidth + Style.space(8)
                   implicitHeight: devLabel.implicitHeight + Style.space(4)
                   radius: Style.cornerRadius * 0.5
-                  color: snapshotItem.isLocalDevice ? Util.alpha(Color.accent, 0.25) : Util.alpha(Color.muted, 0.2)
+                  color: snapshotItem.isLocalDevice ? Util.alpha(Color.accent, 0.25) : Util.alpha(root.secondaryText, 0.2)
 
                   Text {
                     id: devLabel
                     anchors.centerIn: parent
                     text: (snapshotItem.modelData && snapshotItem.modelData.deviceName) ? snapshotItem.modelData.deviceName : "unknown"
-                    color: snapshotItem.isLocalDevice ? Color.accent : Color.muted
+                    color: snapshotItem.isLocalDevice ? Color.accent : root.secondaryText
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption * 0.85
                     font.bold: true
@@ -812,13 +813,13 @@ Rectangle {
                     spacing: Style.space(6)
                     Text {
                       text: (snapshotItem.modelData && snapshotItem.modelData.shortHash) ? snapshotItem.modelData.shortHash : ""
-                      color: Color.muted
+                      color: root.secondaryText
                       font.family: "monospace"
                       font.pixelSize: Style.font.caption * 0.8
                     }
                     Text {
                       text: "• " + ((snapshotItem.modelData && snapshotItem.modelData.timestamp) ? GitSync.formatRelativeTime(snapshotItem.modelData.timestamp) : "")
-                      color: Color.muted
+                      color: root.secondaryText
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption * 0.8
                     }
@@ -833,13 +834,13 @@ Rectangle {
                   implicitWidth: countText.implicitWidth + Style.space(6)
                   implicitHeight: countText.implicitHeight + Style.space(2)
                   radius: Style.cornerRadius * 0.4
-                  color: Util.alpha(Color.muted, 0.15)
+                  color: Util.alpha(root.secondaryText, 0.15)
 
                   Text {
                     id: countText
                     anchors.centerIn: parent
                     text: (snapshotItem.modelData && snapshotItem.modelData.pendingCount !== undefined ? snapshotItem.modelData.pendingCount : "") + " pending"
-                    color: Color.muted
+                    color: root.secondaryText
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption * 0.8
                   }
@@ -873,7 +874,7 @@ Rectangle {
             anchors.centerIn: parent
             visible: !root.snapshots || root.snapshots.length === 0
             text: "No git snapshots found. Add or edit tasks to create snapshots."
-            color: Color.muted
+            color: root.secondaryText
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -887,14 +888,14 @@ Rectangle {
             Text {
               anchors.horizontalCenter: parent.horizontalCenter
               text: "󰍉 No snapshots matching \"" + root.searchQuery + "\""
-              color: Color.muted
+              color: root.secondaryText
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }
             Text {
               anchors.horizontalCenter: parent.horizontalCenter
               text: "Press Esc to clear or adjust search"
-              color: Util.alpha(Color.muted, 0.6)
+              color: Util.alpha(root.secondaryText, 0.75)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption * 0.85
             }
@@ -908,8 +909,8 @@ Rectangle {
           width: parent.width
           height: visible ? Style.space(96) : 0
           radius: Style.cornerRadius
-          color: Util.alpha(Color.surface, 0.6)
-          border.color: Util.alpha(Color.menu.border, 0.8)
+          color: Util.alpha(Color.menu.background, 0.95)
+          border.color: Util.alpha(root.secondaryText, 0.4)
           border.width: 1
           clip: true
 
@@ -945,7 +946,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: Boolean(root.selectedSnapshot && root.selectedSnapshot.shortHash)
                 text: "• " + (root.selectedSnapshot ? root.selectedSnapshot.shortHash : "")
-                color: Color.muted
+                color: root.secondaryText
                 font.family: "monospace"
                 font.pixelSize: Style.font.caption * 0.8
               }
@@ -976,7 +977,7 @@ Rectangle {
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.done ? "󰄲" : "󰄱"
-                  color: modelData.done ? Color.muted : (taskRow.isMissing ? Color.accent : root.barForeground)
+                  color: modelData.done ? root.secondaryText : (taskRow.isMissing ? Color.accent : root.barForeground)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption * 0.85
                 }
@@ -989,13 +990,13 @@ Rectangle {
                   implicitWidth: profText.implicitWidth + Style.space(6)
                   implicitHeight: profText.implicitHeight + Style.space(2)
                   radius: Style.cornerRadius * 0.3
-                  color: Util.alpha(Color.muted, 0.15)
+                  color: Util.alpha(root.secondaryText, 0.18)
 
                   Text {
                     id: profText
                     anchors.centerIn: parent
                     text: modelData.profile || ""
-                    color: Color.muted
+                    color: root.secondaryText
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
                     font.pixelSize: Style.font.caption * 0.75
                   }
@@ -1005,7 +1006,7 @@ Rectangle {
                   anchors.verticalCenter: parent.verticalCenter
                   width: Math.max(Style.space(40), parent.width - (profBadge.visible ? profBadge.implicitWidth + Style.space(6) : 0) - (recoverBadge.visible ? recoverBadge.implicitWidth + Style.space(6) : 0) - Style.space(24))
                   text: modelData.title || ""
-                  color: modelData.done ? Color.muted : root.barForeground
+                  color: modelData.done ? root.secondaryText : root.barForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption * 0.85
                   elide: Text.ElideRight
@@ -1042,7 +1043,7 @@ Rectangle {
               Text {
                 anchors.centerIn: parent
                 text: "No active tasks recorded in this snapshot"
-                color: Color.muted
+                color: root.secondaryText
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption * 0.85
               }
@@ -1287,7 +1288,7 @@ Rectangle {
           radius: Style.cornerRadius * 0.6
           color: Color.menu.selectedBackground
           border.width: 1
-          border.color: Color.menu.border
+          border.color: Util.alpha(root.secondaryText, 0.3)
 
           Row {
             id: statusRow
@@ -1310,7 +1311,7 @@ Rectangle {
               text: (root.barWidget && root.barWidget.gitSyncMessage)
                 ? root.barWidget.gitSyncMessage
                 : "Auto-sync runs in background every 1 hour (3-way merge on divergence)."
-              color: (root.barWidget && root.barWidget.gitSyncStatus === "error") ? Color.error : Color.muted
+              color: (root.barWidget && root.barWidget.gitSyncStatus === "error") ? Color.error : root.secondaryText
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption * 0.9
               wrapMode: Text.WordWrap

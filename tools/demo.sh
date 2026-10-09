@@ -489,7 +489,7 @@ show_scenario_card() {
     printf '    3. %sTask 3 (h/l)%s   : Press %sh%s / %sl%s (or %s←%s / %s→%s, or %s[%s / %s]%s) to cycle profiles\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
     printf '       %sNote%s           : %s/%s is reserved for searching tasks, notes & profiles!\n' "$C_YELLOW" "$C_OFF" "$C_BOLD" "$C_OFF"
     printf '    4. %sTask 4 (Enter)%s : Press %sEnter%s to open notes drawer & test reminder presets\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
-    printf '    5. %sTask 5 (Binds)%s : Check header pill or hyprland shortcuts\n' "$C_CYAN" "$C_OFF"
+    printf '    5. %sTask 5 (Binds)%s : Check header pill (%s󰌌%s) or add to %s~/.config/hypr/bindings.lua%s\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
     printf '    6. %sTask 6 (Quick)%s : Press %sShift+A%s (or %sSuper+Shift+T%s) to summon Quick Add modal\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF" "$C_BOLD" "$C_OFF"
     printf '    7. %sTask 7 (Help)%s  : Press %s?%s to view keybinding cheat sheet\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"
     printf '    8. %sTask 8 (Delete)%s: Hold %sx%s for 800ms to test laser confirmation bar\n' "$C_CYAN" "$C_OFF" "$C_BOLD" "$C_OFF"

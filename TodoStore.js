@@ -210,7 +210,7 @@ function getTutorialTasks(baseTime) {
     {
       id: t0 + 4,
       title: "󰌌 Set up global shortcuts for Panel & QuickAdd (expand for setup)",
-      description: "Summon Ardoise from anywhere in Hyprland!\n\nAdd to ~/.config/hypr/hyprland.conf:\nbind = $mainMod ALT, T, exec, omarchy-shell tablerase.ardoise toggle\nbind = $mainMod SHIFT, T, exec, omarchy-shell shell toggle tablerase.ardoise '{}'",
+      description: "Summon Ardoise from anywhere in Hyprland!\n\nAdd to ~/.config/hypr/bindings.lua (or click 󰌌 in header to copy & open):\no.bind(\"SUPER + ALT + T\", \"Ardoise Panel\", \"omarchy-shell tablerase.ardoise toggle\")\no.bind(\"SUPER + SHIFT + T\", \"Ardoise Quick Add\", \"omarchy-shell shell toggle tablerase.ardoise '{}'\")",
       profile: "personal",
       done: false,
       isTutorial: true,
@@ -2457,6 +2457,132 @@ function filterMissingTasks(currentRaw, snapshotRaw) {
   return missing
 }
 
+/**
+ * Parses a hex color string or QColor-like object into normalized [r, g, b, a] in [0, 1].
+ * @param {any} color
+ * @returns {[number, number, number, number]}
+ */
+function parseColorComponents(color) {
+  if (!color) return [0, 0, 0, 1]
+  if (typeof color === "object" && typeof color.r === "number" && typeof color.g === "number" && typeof color.b === "number") {
+    var a = (typeof color.a === "number") ? color.a : 1.0
+    return [color.r, color.g, color.b, a]
+  }
+  var str = String(color).trim()
+  if (str.charAt(0) === "#") {
+    var hex = str.slice(1)
+    if (hex.length === 3 || hex.length === 4) {
+      var r = parseInt(hex.charAt(0) + hex.charAt(0), 16) / 255
+      var g = parseInt(hex.charAt(1) + hex.charAt(1), 16) / 255
+      var b = parseInt(hex.charAt(2) + hex.charAt(2), 16) / 255
+      var alpha = hex.length === 4 ? parseInt(hex.charAt(3) + hex.charAt(3), 16) / 255 : 1.0
+      return [r, g, b, alpha]
+    }
+    if (hex.length === 6 || hex.length === 8) {
+      var r6 = parseInt(hex.slice(0, 2), 16) / 255
+      var g6 = parseInt(hex.slice(2, 4), 16) / 255
+      var b6 = parseInt(hex.slice(4, 6), 16) / 255
+      var alpha6 = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1.0
+      return [r6, g6, b6, alpha6]
+    }
+  }
+  // Check rgba(...)
+  var rgbMatch = str.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i)
+  if (rgbMatch) {
+    var cr = parseFloat(rgbMatch[1]) / 255
+    var cg = parseFloat(rgbMatch[2]) / 255
+    var cb = parseFloat(rgbMatch[3]) / 255
+    var ca = rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1.0
+    return [cr, cg, cb, ca]
+  }
+  return [0, 0, 0, 1]
+}
+
+/**
+ * Calculates WCAG 2.1 relative luminance for given RGB values in [0, 1].
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {number}
+ */
+function getRelativeLuminance(r, g, b) {
+  var rs = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4)
+  var gs = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4)
+  var bs = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4)
+  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs
+}
+
+/**
+ * Calculates WCAG 2.1 contrast ratio between two colors.
+ * Result is between 1.0 and 21.0.
+ * @param {any} color1
+ * @param {any} color2
+ * @returns {number}
+ */
+function getContrastRatio(color1, color2) {
+  var c1 = parseColorComponents(color1)
+  var c2 = parseColorComponents(color2)
+  var l1 = getRelativeLuminance(c1[0], c1[1], c1[2])
+  var l2 = getRelativeLuminance(c2[0], c2[1], c2[2])
+  var lighter = Math.max(l1, l2)
+  var darker = Math.min(l1, l2)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * Converts normalized RGB [0, 1] to hex color string (#rrggbb).
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {string}
+ */
+function rgbToHex(r, g, b) {
+  var ir = Math.round(Math.max(0, Math.min(1, r)) * 255)
+  var ig = Math.round(Math.max(0, Math.min(1, g)) * 255)
+  var ib = Math.round(Math.max(0, Math.min(1, b)) * 255)
+  return "#" + (ir < 16 ? "0" : "") + ir.toString(16) +
+               (ig < 16 ? "0" : "") + ig.toString(16) +
+               (ib < 16 ? "0" : "") + ib.toString(16)
+}
+
+/**
+ * Returns a readable secondary/muted color that achieves at least targetContrast (default 3.0)
+ * against the provided background color. If the current muted color already has sufficient
+ * contrast, it is returned. Otherwise, it blends or steps towards foreground until targetContrast
+ * is reached.
+ *
+ * @param {any} background - The surface background color
+ * @param {any} muted - The candidate muted or secondary color
+ * @param {any} foreground - The primary high-contrast foreground color
+ * @param {number} [targetContrast=3.0] - Target minimum contrast ratio (default 3.0 for secondary text/badges)
+ * @returns {string} Hex color string (#rrggbb)
+ */
+function getReadableSecondary(background, muted, foreground, targetContrast) {
+  var minRatio = typeof targetContrast === "number" && targetContrast > 0 ? targetContrast : 3.0
+  var currentRatio = getContrastRatio(muted, background)
+  if (currentRatio >= minRatio) {
+    var mParsed = parseColorComponents(muted)
+    return rgbToHex(mParsed[0], mParsed[1], mParsed[2])
+  }
+
+  // Current muted has low contrast. Blend muted towards foreground in increments until target reached.
+  var m = parseColorComponents(muted)
+  var f = parseColorComponents(foreground)
+  for (var step = 1; step <= 10; step++) {
+    var factor = step / 10
+    var blendedR = m[0] + (f[0] - m[0]) * factor
+    var blendedG = m[1] + (f[1] - m[1]) * factor
+    var blendedB = m[2] + (f[2] - m[2]) * factor
+    var hex = rgbToHex(blendedR, blendedG, blendedB)
+    if (getContrastRatio(hex, background) >= minRatio) {
+      return hex
+    }
+  }
+
+  // Fallback: return foreground directly if blending didn't reach target
+  return rgbToHex(f[0], f[1], f[2])
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CURRENT_SCHEMA_VERSION,
@@ -2521,7 +2647,12 @@ if (typeof module !== "undefined" && module.exports) {
     hasNewRelease,
     markReleaseSeen,
     resetReleaseHighlights,
-    getIpcHelp
+    getIpcHelp,
+    parseColorComponents,
+    getRelativeLuminance,
+    getContrastRatio,
+    rgbToHex,
+    getReadableSecondary
   }
 }
 
