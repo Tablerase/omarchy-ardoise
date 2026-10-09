@@ -630,7 +630,7 @@ Item {
         TextField {
           id: taskInput
           width: parent.width
-          placeholderText: "What needs to be done? (#tag or #profile optional)"
+          placeholderText: "What needs to be done? (e.g. #work Fix navbar #ui)"
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           color: Color.menu.text || Color.foreground

@@ -1282,6 +1282,34 @@ test("parseTaskInput: parses leading #project/repo, #tags, and preserves title",
   assert.equal(res5.repo, null);
   assert.deepEqual(res5.tags, []);
   assert.equal(res5.title, "Simple standalone task");
+
+  // Trailing tags after task title (#profile at first, text, #tag at end)
+  const res6 = parseTaskInput("#work Fix navbar #ui", "personal");
+  assert.equal(res6.profile, "work");
+  assert.equal(res6.repo, null);
+  assert.deepEqual(res6.tags, ["ui"]);
+  assert.equal(res6.title, "Fix navbar");
+
+  // Multiple trailing tags
+  const res7 = parseTaskInput("#work Fix navbar #ui #urgent", "personal");
+  assert.equal(res7.profile, "work");
+  assert.equal(res7.repo, null);
+  assert.deepEqual(res7.tags, ["ui", "urgent"]);
+  assert.equal(res7.title, "Fix navbar");
+
+  // Embedded hashtags in fallback with trailing tag
+  const res8 = parseTaskInput("Buy milk #work #shopping", "personal");
+  assert.equal(res8.profile, "work");
+  assert.equal(res8.repo, null);
+  assert.deepEqual(res8.tags, ["shopping"]);
+  assert.equal(res8.title, "Buy milk");
+
+  // Issue numbers (#42) preserved in title while trailing tags are parsed
+  const res9 = parseTaskInput("#work Fix issue #42 in C# #ui", "personal");
+  assert.equal(res9.profile, "work");
+  assert.equal(res9.repo, null);
+  assert.deepEqual(res9.tags, ["ui"]);
+  assert.equal(res9.title, "Fix issue #42 in C#");
 });
 
 test("parseTaskInput & addTodo: input containing only hashtags yields empty title and prevents task creation", () => {

@@ -566,6 +566,9 @@ Item {
   property var justCompletedTaskIds: []
   property bool completedFoldOpen: true
 
+  readonly property real clearProgress: (typeof clearBtn !== "undefined" && clearBtn) ? clearBtn.progress : 0.0
+  readonly property color clearChargeColor: (typeof clearBtn !== "undefined" && clearBtn) ? clearBtn.chargeColor : Color.accent
+
   readonly property int filteredPendingCount: {
     var raw = TodoStore.getPendingCount(root.store, root.currentFilter)
     return Math.max(0, raw - root.pendingCompletionIds.length)
@@ -1995,6 +1998,7 @@ Item {
             readonly property bool isDone: Boolean(delegateRoot.modelData.done || isPendingCompletion)
             readonly property bool isFirstCompleted: delegateRoot.modelData.done && !isPendingCompletion && (delegateRoot.index === 0 || !root.filteredTodos[delegateRoot.index - 1].done)
             readonly property bool isHiddenByFold: delegateRoot.modelData.done && !isPendingCompletion && !root.completedFoldOpen
+            readonly property bool isTargetedByClear: delegateRoot.isDone && (!root.currentFilter || root.currentFilter === "all" || delegateRoot.modelData.profile === root.currentFilter)
 
             readonly property alias descAreaInstance: itemRow.descAreaInstance
             function updateModelData(data) {

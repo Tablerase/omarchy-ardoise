@@ -629,21 +629,22 @@ function normalize(raw) {
 }
 
 /**
- * Parses user input for leading #project/repo and following #tags syntax.
+ * Parses user input for leading #project/repo and following/trailing #tags syntax.
  *
  * Rules:
  * 1. Normalize spaces after hashtag prefix (e.g. "# work" -> "#work").
- * 2. Only scan leading hashtag tokens until the first non-hashtag word.
+ * 2. Scan leading hashtag tokens until the first non-hashtag word.
  * 3. First hashtag token:
  *    - #project/repo -> profile: "project", repo: "repo"
  *    - #project -> profile: "project", repo: null
  * 4. Subsequent leading hashtag tokens:
  *    - #tag1 #tag2 -> tags: ["tag1", "tag2"]
- * 5. Remainder after leading hashtags:
- *    - Everything following is preserved as the title (even if it contains #42 or C#).
+ * 5. Trailing hashtag tokens:
+ *    - Trailing #tags placed after the title (e.g. "#work Fix navbar #ui") are extracted as tags.
+ *    - Issue numbers (e.g. #42) are preserved as part of the title.
  * 6. Fallback for inputs without leading hashtags:
- *    - If no leading hashtags, but contains a hashtag (e.g. "Buy milk #shopping"),
- *      extracts the profile as fallback for backward compatibility.
+ *    - If no leading hashtags, but contains hashtags (e.g. "Buy milk #shopping" or "Buy milk #work #shopping"),
+ *      first embedded hashtag sets the profile, subsequent ones become tags, and they are cleanly removed from title.
  *
  * @param {string} input
  * @param {string} [defaultProfile]
@@ -682,12 +683,33 @@ function parseTaskInput(input, defaultProfile) {
       }
     }
 
+    // Extract trailing hashtag tokens from titleTokens (e.g. "#work Fix navbar #ui #urgent")
+    // Preserve issue numbers (e.g. #42) as part of the title
+    var trailingHashtags = []
+    while (titleTokens.length > 0) {
+      var lastTok = titleTokens[titleTokens.length - 1]
+      if (lastTok && lastTok.startsWith("#") && !/^#\d+$/.test(lastTok)) {
+        var popped = titleTokens.pop()
+        if (popped) {
+          trailingHashtags.unshift(popped)
+        }
+      } else {
+        break
+      }
+    }
+    for (var k = 0; k < trailingHashtags.length; k++) {
+      var tTok = trailingHashtags[k]
+      if (tTok) {
+        hashtagTokens.push(tTok)
+      }
+    }
+
     var profile = defProf
     var repo = null
     /** @type {string[]} */
     var tags = []
 
-    if (hashtagTokens.length > 0) {
+    if (hashtagTokens.length > 0 && hashtagTokens[0]) {
       var first = hashtagTokens[0].replace(/^#+/, "")
       if (first.indexOf("/") !== -1) {
         var parts = first.split("/")
@@ -698,9 +720,12 @@ function parseTaskInput(input, defaultProfile) {
       }
 
       for (var j = 1; j < hashtagTokens.length; j++) {
-        var cleanTag = cleanProfileName(hashtagTokens[j])
-        if (cleanTag && tags.indexOf(cleanTag) === -1) {
-          tags.push(cleanTag)
+        var hTok = hashtagTokens[j]
+        if (hTok) {
+          var cleanTag = cleanProfileName(hTok)
+          if (cleanTag && tags.indexOf(cleanTag) === -1) {
+            tags.push(cleanTag)
+          }
         }
       }
     }
@@ -713,25 +738,59 @@ function parseTaskInput(input, defaultProfile) {
     }
   }
 
-  // Fallback: No leading hashtags. Check for embedded hashtag (e.g. "Buy milk #shopping")
+  // Fallback: No leading hashtags. Check for embedded hashtag (e.g. "Buy milk #shopping" or "Fix bug #work #ui")
   var embedded = normalized.match(/#([a-zA-Z0-9_\-\.\/]+)/)
   if (embedded) {
-    var embeddedStr = embedded[1]
-    var embProfile = defProf
-    var embRepo = null
-    if (embeddedStr.indexOf("/") !== -1) {
-      var embParts = embeddedStr.split("/")
-      embProfile = cleanProfileName(embParts[0])
-      embRepo = cleanProfileName(embParts.slice(1).join("-"))
-    } else {
-      embProfile = cleanProfileName(embeddedStr)
+    var rawMatches = normalized.match(/#([a-zA-Z0-9_\-\.\/]+)/g) || []
+    var validHashtags = []
+    for (var m = 0; m < rawMatches.length; m++) {
+      var mTok = rawMatches[m]
+      if (mTok && !/^#\d+$/.test(mTok)) {
+        validHashtags.push(mTok)
+      }
     }
-    var cleanTitle = normalized.replace(/#[a-zA-Z0-9_\-\.\/]+/g, "").replace(/\s+/g, " ").trim()
-    return {
-      title: cleanTitle,
-      profile: embProfile,
-      repo: embRepo,
-      tags: []
+
+    if (validHashtags.length > 0 && validHashtags[0]) {
+      var embFirst = validHashtags[0].replace(/^#+/, "")
+      var embProfile = defProf
+      var embRepo = null
+      if (embFirst.indexOf("/") !== -1) {
+        var embParts = embFirst.split("/")
+        embProfile = cleanProfileName(embParts[0])
+        embRepo = cleanProfileName(embParts.slice(1).join("-"))
+      } else {
+        embProfile = cleanProfileName(embFirst)
+      }
+
+      /** @type {string[]} */
+      var embTags = []
+      for (var n = 1; n < validHashtags.length; n++) {
+        var nTok = validHashtags[n]
+        if (nTok) {
+          var embTag = cleanProfileName(nTok)
+          if (embTag && embTags.indexOf(embTag) === -1) {
+            embTags.push(embTag)
+          }
+        }
+      }
+
+      // Remove valid hashtags from title while preserving issue numbers (#42)
+      var cleanTitle = normalized
+      for (var p = 0; p < validHashtags.length; p++) {
+        var pTok = validHashtags[p]
+        if (pTok) {
+          var escaped = pTok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+          cleanTitle = cleanTitle.replace(new RegExp("(^|\\s)" + escaped + "(?=\\s|$)", "g"), " ")
+        }
+      }
+      cleanTitle = cleanTitle.replace(/\s+/g, " ").trim()
+
+      return {
+        title: cleanTitle,
+        profile: embProfile,
+        repo: embRepo,
+        tags: embTags
+      }
     }
   }
 
