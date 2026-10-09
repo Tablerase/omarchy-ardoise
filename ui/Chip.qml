@@ -29,7 +29,7 @@ Rectangle {
   property color chipColor: Color.accent
   property color textColor: chipColor
   property color iconColor: textColor
-  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground, 4.5)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground, 3.4)
   property real bgAlpha: 0.12
   property real borderAlpha: 0.35
   property bool removable: false

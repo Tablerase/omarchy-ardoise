@@ -14,7 +14,7 @@ Rectangle {
   property var bar: null
   property var barWidget: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 4.5)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.color, Color.muted, root.barForeground, 3.4)
 
   property string deviceName: root.barWidget ? String(root.barWidget.deviceName || "") : "omarchy"
   property var snapshots: (root.barWidget && root.barWidget.gitSnapshots) ? root.barWidget.gitSnapshots : []

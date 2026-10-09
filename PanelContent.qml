@@ -46,7 +46,7 @@ Item {
   property alias taskMenu: taskMenu
 
   readonly property color barForeground: root.bar ? root.bar.foreground : Color.foreground
-  readonly property color secondaryText: TodoStore.getReadableSecondary(root.cardBackground, Color.muted, root.barForeground, 4.5)
+  readonly property color secondaryText: TodoStore.getReadableSecondary(root.cardBackground, Color.muted, root.barForeground, 3.4)
   // Late-task severity, read by the header ArdoiseIcon (which owns the theme
   // lookup) and handed down to every task row so panel rows, brand mark and
   // bar all render the same amber. The literal fallback covers the window
@@ -2513,7 +2513,7 @@ Item {
                       verticalAlignment: itemRow.isExpanded ? Text.AlignTop : Text.AlignVCenter
                       text: TodoStore.capitalizeTitle(itemRow.modelData.title || "")
                       color: itemRow.isDone ? root.secondaryText : root.barForeground
-                      opacity: itemRow.isDone ? 0.85 : 1.0
+                      opacity: itemRow.isDone ? 0.72 : 1.0
                       font.family: root.bar ? root.bar.fontFamily : Style.font.family
                       font.pixelSize: Style.font.caption
                       font.bold: itemRow.isHeaderFocused
