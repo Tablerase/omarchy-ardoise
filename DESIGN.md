@@ -866,7 +866,7 @@ On fresh installation (when initializing `todos.json` via `BarWidget.qml` or `To
 
 1. **`󰞔 Navigate with j / k (or ↓ / ↑)`**: Teaches directional navigation down the task list.
 2. **`󰄬 Press Space to complete this task (not Enter!)`**: Reinforces the fundamental key separation invariant (<kbd>Space</kbd> for toggle, <kbd>Enter</kbd> for drawer expansion).
-3. **`󰭤 Press [ / ] to switch between profiles`**: Teaches instant profile switching without touching the mouse.
+3. **`󰭤 Press h / l (or ← / →) to switch between profiles`**: Teaches instant profile switching without touching the mouse (with bracket motions <kbd>[</kbd> / <kbd>]</kbd> supported as aliases; <kbd>/</kbd> is reserved for search).
 4. **`󰅂 Press Enter to open notes & explore reminders`**: Teaches hierarchical drawer expansion, markdown notes editing, and preset reminder scheduling.
 5. **`󰌌 Set up global shortcuts for Panel & QuickAdd (expand for setup)`**: Guides configuring `SUPER + ALT + T` and `SUPER + SHIFT + T` in Hyprland or copying bindings from the header pill.
 6. **`󰐕 Press A (or Super+Shift+T) to open Quick Add modal`**: Teaches summoning the Quick Add modal directly from the panel using <kbd>A</kbd> (<kbd>Shift+A</kbd>) or the global shortcut.

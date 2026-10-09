@@ -126,7 +126,7 @@ var RELEASE_HIGHLIGHTS = {
     { icon: "󰄬", title: "Urgency Ladder & Reminders", desc: "Smart presets, dynamic color escalation, and quiet background notifications." }
   ],
   highlights: [
-    "Keyboard-First Task Slate: Full vim motions (j/k, [/], g/G, Tab, Space, Enter)",
+    "Keyboard-First Task Slate: Full vim motions (j/k, h/l, g/G, Tab, Space, Enter)",
     "Two-Stage Escape: Blurs to container mode without losing draft notes or input text",
     "Custom Reminder Picker: Natural language parsing ('2h', '17:30', 'tomorrow 9am') & mini-calendar",
     "Intelligent 3-Tier Profile Resolution: Detects workspace context across Zed, VS Code, Neovim, and Tmux",
@@ -177,8 +177,8 @@ function getTutorialTasks(baseTime) {
     },
     {
       id: t0 + 6,
-      title: "󰭤 Press [ / ] to switch between profiles",
-      description: "Filter tasks by profile (personal, work, #projects). You can also press Tab to focus the profile pills.",
+      title: "󰭤 Press h / l (or ← / →) to switch between profiles",
+      description: "Filter tasks by profile (personal, work, #projects). Use vim motions h and l (or [ and ]) to cycle profiles, or press Tab to focus the profile pills.",
       profile: "personal",
       done: false,
       isTutorial: true,

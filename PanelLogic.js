@@ -830,11 +830,11 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     handleMove(root, 0, -1, TodoStore);
     return;
   }
-  if (action === "cycle_left") {
+  if (action === "cycle_left" || (!map && text === "[")) {
     handleMove(root, -1, 0, TodoStore);
     return;
   }
-  if (action === "cycle_right") {
+  if (action === "cycle_right" || (!map && text === "]")) {
     handleMove(root, 1, 0, TodoStore);
     return;
   }

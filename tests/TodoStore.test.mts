@@ -2057,7 +2057,7 @@ test("onboarding tutorial & release highlights: task catalog and keyboard invari
   const titles = tasks.map((t: any) => t.title);
   assert.ok(titles[0].includes("j / k"), "Task 1 teaches j/k navigation");
   assert.ok(titles[1].includes("Space to complete"), "Task 2 teaches Space key invariant");
-  assert.ok(titles[2].includes("[ / ]"), "Task 3 teaches profile cycling");
+  assert.ok(titles[2].includes("h / l"), "Task 3 teaches profile cycling");
   assert.ok(titles[3].includes("Enter to open notes"), "Task 4 teaches Enter for drawer");
   assert.ok(titles[4].includes("global shortcuts"), "Task 5 teaches global shortcuts");
   assert.ok(titles[5].includes("Press A (or Super+Shift+T)"), "Task 6 teaches Quick Add modal with A");

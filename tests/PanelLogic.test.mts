@@ -707,6 +707,22 @@ test("search activation & keybindings: '/' triggers search, and catalog lists '/
   assert.equal(searchItem.desc, "Search tasks, notes & profiles");
 });
 
+test("handleTextKey: '[' and ']' bracket keys cycle profiles left and right", () => {
+  let cycledDelta = 0;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cycleProfileFilter: (dx: number) => {
+      cycledDelta = dx;
+    }
+  };
+
+  handleTextKey(mockRoot, "[", TodoStore);
+  assert.equal(cycledDelta, -1, "'[' must trigger cycleProfileFilter(-1)");
+
+  handleTextKey(mockRoot, "]", TodoStore);
+  assert.equal(cycledDelta, 1, "']' must trigger cycleProfileFilter(1)");
+});
+
 test("handleEscape: two-stage escape for in-panel search", () => {
   let clearedTextCalled = false;
   let closedSearchCalled = false;
