@@ -1050,6 +1050,11 @@ test("Hold-to-Confirm Deletion & Clear Integrity: HoldActionButton laser bar, ca
     panelContent.includes("Ui.HoldActionButton {\n          id: clearBtn"),
     "PanelContent must use HoldActionButton for clearBtn"
   );
+  // Clear completed: laser bar, tint, and shake across all completed tasks targeted by clear
+  assert.ok(panelContent.includes("id: clearLaserBar"), "PanelContent must implement clearLaserBar on task row");
+  assert.ok(panelContent.includes("id: clearTintOverlay"), "PanelContent must implement clearTintOverlay on task row");
+  assert.ok(panelContent.includes("isTargetedByClear"), "PanelContent must identify completed tasks targeted by clear action");
+  assert.ok(panelContent.includes("root.clearProgress"), "PanelContent clearLaserBar must bind to root.clearProgress");
 
   assert.ok(
     panelContent.includes("function startDeleteHold") && panelContent.includes("function stopDeleteHold"),

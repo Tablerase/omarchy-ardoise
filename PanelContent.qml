@@ -2199,7 +2199,15 @@ Item {
                 },
                 Translate {
                   id: rowShakeTranslate
-                  x: (rowDeleteBtn.progress > 0.6) ? Math.sin(rowDeleteBtn.progress * 50) * 1.5 : 0
+                  x: {
+                    if (rowDeleteBtn.progress > 0.6) {
+                      return Math.sin(rowDeleteBtn.progress * 50) * 1.5
+                    }
+                    if (root.clearProgress > 0.6 && delegateRoot.isTargetedByClear) {
+                      return Math.sin(root.clearProgress * 50) * 1.5
+                    }
+                    return 0
+                  }
                 }
               ]
 
@@ -2222,6 +2230,28 @@ Item {
                 color: root.bar ? root.bar.urgent : Color.urgent
                 radius: Style.cornerRadius
                 visible: rowDeleteBtn.progress > 0
+                z: 10
+              }
+
+              Rectangle {
+                id: clearTintOverlay
+                anchors.fill: parent
+                radius: itemRow.radius
+                color: root.clearChargeColor
+                opacity: root.clearProgress * 0.16
+                visible: root.clearProgress > 0 && delegateRoot.isTargetedByClear
+                z: 0
+              }
+
+              Rectangle {
+                id: clearLaserBar
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                height: Style.space(3)
+                width: parent.width * root.clearProgress
+                color: root.clearChargeColor
+                radius: Style.cornerRadius
+                visible: root.clearProgress > 0 && delegateRoot.isTargetedByClear
                 z: 10
               }
 
