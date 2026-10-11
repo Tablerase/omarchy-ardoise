@@ -20,6 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-11
+
+> **Feature & Ergonomics Release: Dynamic Contrast Calibration, Layout Safety, Laser Confirmations, and Task Notes Invariants.**
+>
+> This release enhances UI readability across diverse Omarchy themes with dynamic binary-search WCAG contrast calibration, introduces wrapping profile selectors in QuickAdd, adds hold-action laser animations on completed tasks, and fixes task notes editing focus transitions.
+
+### Added
+- **Dynamic Theme Contrast Calibration**: Precision binary search algorithm (`WCAG 2.1`) calculating secondary and muted text colors on the fly to maintain optimal readability (calibrated to ~3.4:1 contrast ratio) while preserving visual hierarchy from task titles across all custom palettes.
+- **Completed Task Laser Confirmation**: Added animated laser charge indicators and tint overlays on completed tasks during clear hold operations (`c` / clear button).
+- **Profile Context in Reminder Alerts**: Enriched desktop reminder notification headers with profile tag context (`[#profile]`) while strictly preserving command line argument privacy.
+- **Onboarding Tutorial & Demo Enhancements**: Added dedicated onboarding tutorial scenario to `tools/demo.sh` (`npm run demo:tuto`) and clarified keyboard shortcuts in tutorial quest tasks (<kbd>Shift+A</kbd> for Quick Add, <kbd>h</kbd>/<kbd>l</kbd> or <kbd>[</kbd>/<kbd>]</kbd> for profiles).
+
+### Changed
+- **QuickAdd Profile Pill Layout**: Refactored profile selector into a responsive `Flow` layout, eliminating horizontal edge clipping and text truncation on small screen configurations or long profile lists.
+- **QuickAdd Input Parsing**: Added support for trailing `#hashtags` anywhere in the Quick Add title box and updated input placeholder guidance.
+- **Keybindings Snippet Formatting**: Copying keybindings configuration to clipboard now outputs standard native multi-line strings instead of literal `\n` characters.
+
+### Fixed
+- **Task Notes Editing & Escape Freeze**:
+  - Preserved existing `updatedAt` timestamps on notes/description updates so active tasks do not jump to the top of the list upon editing notes.
+  - Ensured note draft text is committed before releasing focus and firing escape handlers, cleanly returning active keyboard dispatch to `PanelKeyCatcher` in motion mode.
+  - Synchronized `cursorIndex` to follow `expandedTaskId` when task lists update, preventing selection drift.
+
+
 ## [1.0.1] - 2026-10-08
 
 > **Security & Privacy Hardening Release**.
