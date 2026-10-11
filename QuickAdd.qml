@@ -210,7 +210,11 @@ Item {
     focusSection = "title"
     optionIndex = 0
     actionIndex = 1
+    if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
+      quickAddProfileSelector.resetScroll()
+    }
     Qt.callLater(function() {
+      root.ensureProfileVisible(root.selectedProfile)
       taskInput.forceActiveFocus()
     })
   }
@@ -252,8 +256,12 @@ Item {
       root.detectedContext = null
       root.attachLocation = false
       selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
+      if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
+        quickAddProfileSelector.resetScroll()
+      }
     }
     Qt.callLater(function() {
+      root.ensureProfileVisible(root.selectedProfile)
       taskInput.forceActiveFocus()
     })
   }
@@ -301,6 +309,9 @@ Item {
     if (root.opened) {
       root.showTitleError = false
       root.refreshReminderPresets()
+      Qt.callLater(function() {
+        root.ensureProfileVisible(root.selectedProfile)
+      })
     }
   }
 
@@ -1124,7 +1135,7 @@ Item {
         Item {
           id: quickAddProfileContainer
           width: parent.width
-          implicitHeight: Style.space(24)
+          implicitHeight: Style.space(26)
 
           Row {
             id: quickAddProfileLabelRow
@@ -1147,7 +1158,9 @@ Item {
             anchors.left: quickAddProfileLabelRow.right
             anchors.leftMargin: Style.space(6)
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            fadeColor: Color.menu.background
             profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
             selectedProfile: root.selectedProfile
             focusedIndex: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile).indexOf(root.selectedProfile)

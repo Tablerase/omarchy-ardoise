@@ -22,17 +22,26 @@ Item {
   implicitHeight: Style.space(26)
   implicitWidth: profileRow.implicitWidth
 
+  function resetScroll() {
+    profileFlickable.contentX = 0
+  }
+
   function ensureVisible(idx) {
     if (!profileRepeater || idx < 0 || idx >= profileRepeater.count) return
     var item = profileRepeater.itemAt(idx)
     if (!item) return
+    var padLeft = leftFadeEdge.width + Style.space(4)
+    var padRight = rightFadeEdge.width + Style.space(4)
     var itemLeft = item.x
     var itemRight = item.x + item.width
-    if (itemLeft - Style.space(6) < profileFlickable.contentX) {
-      profileFlickable.contentX = Math.max(0, itemLeft - Style.space(6))
-    } else if (itemRight + Style.space(6) > profileFlickable.contentX + profileFlickable.width) {
+
+    if (idx === 0 || itemLeft - padLeft <= 0) {
+      profileFlickable.contentX = 0
+    } else if (itemLeft - padLeft < profileFlickable.contentX) {
+      profileFlickable.contentX = Math.max(0, itemLeft - padLeft)
+    } else if (itemRight + padRight > profileFlickable.contentX + profileFlickable.width) {
       var maxContentX = Math.max(0, profileFlickable.contentWidth - profileFlickable.width)
-      profileFlickable.contentX = Math.min(maxContentX, itemRight + Style.space(6) - profileFlickable.width)
+      profileFlickable.contentX = Math.min(maxContentX, itemRight + padRight - profileFlickable.width)
     }
   }
 
@@ -48,6 +57,22 @@ Item {
     }
   }
 
+  onSelectedProfileChanged: {
+    if (profiles && profiles.length > 0) {
+      var idx = profiles.indexOf(selectedProfile)
+      if (idx !== -1) {
+        Qt.callLater(function() { ensureVisible(idx) })
+      }
+    }
+  }
+
+  Component.onCompleted: {
+    var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+    if (targetIdx >= 0) {
+      Qt.callLater(function() { ensureVisible(targetIdx) })
+    }
+  }
+
   Flickable {
     id: profileFlickable
     anchors.fill: parent
@@ -56,6 +81,12 @@ Item {
     contentHeight: height
     clip: true
     boundsBehavior: Flickable.StopAtBounds
+    onWidthChanged: {
+      var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+      if (targetIdx >= 0) {
+        Qt.callLater(function() { root.ensureVisible(targetIdx) })
+      }
+    }
 
     Behavior on contentX {
       NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -83,6 +114,12 @@ Item {
       Repeater {
         id: profileRepeater
         model: root.profiles
+        onCountChanged: {
+          var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+          if (targetIdx >= 0) {
+            Qt.callLater(function() { root.ensureVisible(targetIdx) })
+          }
+        }
 
         Rectangle {
           id: profileBtn

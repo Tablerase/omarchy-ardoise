@@ -171,6 +171,11 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     quickAddContent.includes("TodoStore.resolveDefaultProfile"),
     "QuickAdd must call TodoStore.resolveDefaultProfile for intelligent default profile selection"
   );
+  assert.ok(
+    quickAddContent.includes("quickAddProfileSelector.resetScroll") &&
+      quickAddContent.includes("root.ensureProfileVisible(root.selectedProfile)"),
+    "QuickAdd must reset profile selector scroll offset and synchronize profile visibility on open and draft clearing"
+  );
 
 
 
@@ -405,6 +410,12 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     profileSelectorContent.includes("leftPadding: Style.space(6)") &&
       profileSelectorContent.includes("rightPadding: Style.space(6)"),
     "ProfileSelector must include left and right padding to avoid edge chip scale cropping"
+  );
+  assert.ok(
+    profileSelectorContent.includes("function resetScroll()") &&
+      profileSelectorContent.includes("padLeft = leftFadeEdge.width") &&
+      profileSelectorContent.includes("padRight = rightFadeEdge.width"),
+    "ProfileSelector must implement resetScroll and clearance padding for left and right fade edges in ensureVisible"
   );
   const reminderPickerContent = fs.readFileSync(path.join(repoDir, "ui", "ReminderPicker.qml"), "utf8");
   assert.ok(
