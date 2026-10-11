@@ -417,6 +417,13 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       profileSelectorContent.includes("padRight = rightFadeEdge.width"),
     "ProfileSelector must implement resetScroll and clearance padding for left and right fade edges in ensureVisible"
   );
+  assert.ok(
+    profileSelectorContent.includes("property bool wrap: false") &&
+      profileSelectorContent.includes("Flow {") &&
+      profileSelectorContent.includes("id: profileFlow") &&
+      quickAddContent.includes("wrap: true"),
+    "ProfileSelector must support Flow wrapping mode and QuickAdd must configure wrap: true to prevent horizontal clipping"
+  );
   const reminderPickerContent = fs.readFileSync(path.join(repoDir, "ui", "ReminderPicker.qml"), "utf8");
   assert.ok(
     reminderPickerContent.includes("TodoStore.parseCustomReminder") &&

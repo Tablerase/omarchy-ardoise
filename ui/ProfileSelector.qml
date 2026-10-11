@@ -11,6 +11,7 @@ Item {
   property string selectedProfile: ""
   property int focusedIndex: -1
   property bool isNavFocused: false
+  property bool wrap: false
   property var bar: null
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color accentColor: Color.accent
@@ -19,15 +20,17 @@ Item {
 
   signal profileSelected(string profileName, int index)
 
-  implicitHeight: Style.space(26)
-  implicitWidth: profileRow.implicitWidth
+  implicitHeight: root.wrap ? (profileFlow.implicitHeight + Style.space(4)) : Style.space(26)
+  implicitWidth: root.wrap ? parent.width : profileRow.implicitWidth
 
   function resetScroll() {
-    profileFlickable.contentX = 0
+    if (!root.wrap) {
+      profileFlickable.contentX = 0
+    }
   }
 
   function ensureVisible(idx) {
-    if (!profileRepeater || idx < 0 || idx >= profileRepeater.count) return
+    if (root.wrap || !profileRepeater || idx < 0 || idx >= profileRepeater.count) return
     var item = profileRepeater.itemAt(idx)
     if (!item) return
     var padLeft = leftFadeEdge.width + Style.space(4)
@@ -46,19 +49,19 @@ Item {
   }
 
   onFocusedIndexChanged: {
-    if (focusedIndex >= 0) {
+    if (!root.wrap && focusedIndex >= 0) {
       ensureVisible(focusedIndex)
     }
   }
 
   onIsNavFocusedChanged: {
-    if (isNavFocused && focusedIndex >= 0) {
+    if (!root.wrap && isNavFocused && focusedIndex >= 0) {
       ensureVisible(focusedIndex)
     }
   }
 
   onSelectedProfileChanged: {
-    if (profiles && profiles.length > 0) {
+    if (!root.wrap && profiles && profiles.length > 0) {
       var idx = profiles.indexOf(selectedProfile)
       if (idx !== -1) {
         Qt.callLater(function() { ensureVisible(idx) })
@@ -67,14 +70,104 @@ Item {
   }
 
   Component.onCompleted: {
-    var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
-    if (targetIdx >= 0) {
-      Qt.callLater(function() { ensureVisible(targetIdx) })
+    if (!root.wrap) {
+      var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+      if (targetIdx >= 0) {
+        Qt.callLater(function() { ensureVisible(targetIdx) })
+      }
     }
   }
 
+  // Component definition for individual profile button pill
+  Component {
+    id: profileButtonComponent
+
+    Rectangle {
+      id: profileBtn
+      required property string modelData
+      required property int index
+      readonly property bool isSelected: root.selectedProfile === modelData
+      readonly property bool isBtnNavFocused: root.isNavFocused && (root.focusedIndex === index)
+
+      implicitWidth: pillContent.implicitWidth + Style.space(12)
+      implicitHeight: Style.space(20)
+      radius: implicitHeight / 2
+      color: isSelected ? root.accentColor : (isBtnNavFocused ? Util.alpha(root.accentColor, 0.25) : Color.menu.background)
+      border.color: isBtnNavFocused ? root.accentColor : (isSelected ? root.accentColor : Color.menu.border)
+      border.width: isBtnNavFocused ? 1.5 : 1
+      scale: isBtnNavFocused ? 1.05 : 1.0
+      Behavior on scale { NumberAnimation { duration: 80 } }
+
+      Row {
+        id: pillContent
+        anchors.centerIn: parent
+        spacing: Style.space(4)
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: TodoStore.getProfileGlyph(profileBtn.modelData)
+          color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.secondaryText)
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.caption
+        }
+
+        Text {
+          id: profileText
+          anchors.verticalCenter: parent.verticalCenter
+          width: Math.min(implicitWidth, Style.space(80))
+          text: profileBtn.modelData
+          color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.barForeground)
+          font.family: root.bar ? root.bar.fontFamily : Style.font.family
+          font.pixelSize: Style.font.caption
+          font.bold: profileBtn.isSelected || profileBtn.isBtnNavFocused
+          elide: Text.ElideRight
+        }
+      }
+
+      MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: {
+          root.profileSelected(profileBtn.modelData, profileBtn.index)
+          if (!root.wrap) {
+            root.ensureVisible(profileBtn.index)
+          }
+        }
+      }
+
+      HoverHandler {
+        id: profileHover
+      }
+
+      PanelToolTip {
+        visible: profileHover.hovered && profileText.truncated
+        text: profileBtn.modelData
+        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+      }
+    }
+  }
+
+  // Wrap Mode (Flow Layout) - no clipping, wraps pills cleanly across rows
+  Flow {
+    id: profileFlow
+    visible: root.wrap
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    spacing: Style.space(4)
+
+    Repeater {
+      id: profileFlowRepeater
+      model: root.wrap ? root.profiles : []
+      delegate: profileButtonComponent
+    }
+  }
+
+  // Horizontal Scroll Mode (Single-line Flickable with fade edges)
   Flickable {
     id: profileFlickable
+    visible: !root.wrap
     anchors.fill: parent
     anchors.bottomMargin: Style.space(4)
     contentWidth: profileRow.implicitWidth
@@ -82,9 +175,11 @@ Item {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     onWidthChanged: {
-      var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
-      if (targetIdx >= 0) {
-        Qt.callLater(function() { root.ensureVisible(targetIdx) })
+      if (!root.wrap) {
+        var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+        if (targetIdx >= 0) {
+          Qt.callLater(function() { root.ensureVisible(targetIdx) })
+        }
       }
     }
 
@@ -94,7 +189,7 @@ Item {
 
     ScrollBar.horizontal: ScrollBar {
       id: hScrollBar
-      policy: profileFlickable.contentWidth > profileFlickable.width ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+      policy: (!root.wrap && profileFlickable.contentWidth > profileFlickable.width) ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
       implicitHeight: Style.space(3)
       contentItem: Rectangle {
         radius: height / 2
@@ -113,76 +208,16 @@ Item {
 
       Repeater {
         id: profileRepeater
-        model: root.profiles
+        model: !root.wrap ? root.profiles : []
         onCountChanged: {
-          var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
-          if (targetIdx >= 0) {
-            Qt.callLater(function() { root.ensureVisible(targetIdx) })
+          if (!root.wrap) {
+            var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+            if (targetIdx >= 0) {
+              Qt.callLater(function() { root.ensureVisible(targetIdx) })
+            }
           }
         }
-
-        Rectangle {
-          id: profileBtn
-          required property string modelData
-          required property int index
-          readonly property bool isSelected: root.selectedProfile === modelData
-          readonly property bool isBtnNavFocused: root.isNavFocused && (root.focusedIndex === index)
-
-          implicitWidth: pillContent.implicitWidth + Style.space(12)
-          implicitHeight: Style.space(20)
-          radius: implicitHeight / 2
-          color: isSelected ? root.accentColor : (isBtnNavFocused ? Util.alpha(root.accentColor, 0.25) : Color.menu.background)
-          border.color: isBtnNavFocused ? root.accentColor : (isSelected ? root.accentColor : Color.menu.border)
-          border.width: isBtnNavFocused ? 1.5 : 1
-          scale: isBtnNavFocused ? 1.05 : 1.0
-          Behavior on scale { NumberAnimation { duration: 80 } }
-
-          Row {
-            id: pillContent
-            anchors.centerIn: parent
-            spacing: Style.space(4)
-
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: TodoStore.getProfileGlyph(profileBtn.modelData)
-              color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.secondaryText)
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.caption
-            }
-
-            Text {
-              id: profileText
-              anchors.verticalCenter: parent.verticalCenter
-              width: Math.min(implicitWidth, Style.space(80))
-              text: profileBtn.modelData
-              color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.barForeground)
-              font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.caption
-              font.bold: profileBtn.isSelected || profileBtn.isBtnNavFocused
-              elide: Text.ElideRight
-            }
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              root.profileSelected(profileBtn.modelData, profileBtn.index)
-              root.ensureVisible(profileBtn.index)
-            }
-          }
-
-          HoverHandler {
-            id: profileHover
-          }
-
-          PanelToolTip {
-            visible: profileHover.hovered && profileText.truncated
-            text: profileBtn.modelData
-            fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-          }
-        }
+        delegate: profileButtonComponent
       }
     }
   }
@@ -196,8 +231,8 @@ Item {
     anchors.bottom: parent.bottom
     width: Style.space(24)
     enabled: false
-    visible: opacity > 0
-    opacity: (profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX > 2) ? 1.0 : 0.0
+    visible: !root.wrap && opacity > 0
+    opacity: (!root.wrap && profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX > 2) ? 1.0 : 0.0
 
     Behavior on opacity {
       NumberAnimation { duration: 150 }
@@ -219,8 +254,8 @@ Item {
     anchors.bottom: parent.bottom
     width: Style.space(32)
     enabled: false
-    visible: opacity > 0
-    opacity: (profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX < (profileFlickable.contentWidth - profileFlickable.width - 2)) ? 1.0 : 0.0
+    visible: !root.wrap && opacity > 0
+    opacity: (!root.wrap && profileFlickable.contentWidth > profileFlickable.width && profileFlickable.contentX < (profileFlickable.contentWidth - profileFlickable.width - 2)) ? 1.0 : 0.0
 
     Behavior on opacity {
       NumberAnimation { duration: 150 }

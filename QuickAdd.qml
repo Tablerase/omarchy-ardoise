@@ -1135,12 +1135,13 @@ Item {
         Item {
           id: quickAddProfileContainer
           width: parent.width
-          implicitHeight: Style.space(26)
+          implicitHeight: Math.max(quickAddProfileLabelRow.implicitHeight, quickAddProfileSelector.implicitHeight)
 
           Row {
             id: quickAddProfileLabelRow
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.top: parent.top
+            anchors.topMargin: Style.space(2)
             spacing: Style.space(4)
 
             Text {
@@ -1159,7 +1160,7 @@ Item {
             anchors.leftMargin: Style.space(6)
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.bottom: parent.bottom
+            wrap: true
             fadeColor: Color.menu.background
             profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
             selectedProfile: root.selectedProfile
