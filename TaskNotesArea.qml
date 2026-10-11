@@ -150,9 +150,9 @@ ScrollView {
 
     Keys.onEscapePressed: function(event) {
       event.accepted = true
+      root.save()
       root.releaseFocus()
       root.escapePressed()
-      root.save()
     }
 
     Keys.onTabPressed: function(event) {

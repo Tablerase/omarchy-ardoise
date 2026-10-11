@@ -369,6 +369,14 @@ Item {
   }
 
   onFilteredTodosChanged: {
+    if (expandedTaskId !== -1 && filteredTodos) {
+      for (var i = 0; i < filteredTodos.length; i++) {
+        if (filteredTodos[i].id === expandedTaskId) {
+          cursorIndex = i
+          return
+        }
+      }
+    }
     if (cursorIndex >= filteredTodos.length) {
       cursorIndex = Math.max(0, filteredTodos.length - 1)
     }
@@ -2854,6 +2862,7 @@ Item {
                     }
                   }
                   onEscapePressed: {
+                    root.savePendingNotes()
                     root.focusSection = "tasks"
                     root.cursorActive = true
                     root.expandedViaKeyboard = true
@@ -2867,7 +2876,6 @@ Item {
                       root.descArea.focus = false
                     }
                     root.releaseFocus()
-                    root.savePendingNotes()
                   }
                   onSubmitted: {
                     root.focusSection = "tasks"
@@ -2908,7 +2916,10 @@ Item {
                   }
                   onSaved: function(newText) {
                     if (itemRow.modelData && newText !== (itemRow.modelData.description || "")) {
-                      root.updateTodo(itemRow.modelData.id, { description: newText })
+                      root.updateTodo(itemRow.modelData.id, {
+                        description: newText,
+                        updatedAt: itemRow.modelData.updatedAt
+                      })
                     }
                   }
                 }

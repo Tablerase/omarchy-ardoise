@@ -724,7 +724,29 @@ test("addTodo & updateTodo: tracks updatedAt timestamp", () => {
   store = updateTodo(store, task.id, { title: "Updated task", updatedAt: beforeUpdate + 1000 });
   assert.equal(store.todos[0].title, "Updated task");
   assert.equal(store.todos[0].updatedAt, beforeUpdate + 1000);
+
+  // Updating task notes/description while preserving updatedAt maintains task ordering
+  store = addTodo(store, "Second task (newer)", "", "personal", null);
+  const secondTask = store.todos.find(t => t.title === "Second task (newer)");
+  assert.ok(secondTask);
+  // Ensure "Second task (newer)" has a strictly higher timestamp than beforeUpdate + 1000
+  store = updateTodo(store, secondTask.id, { updatedAt: beforeUpdate + 2000 });
+  const tasksBeforeNoteEdit = getFilteredTodos(store, "all");
+  assert.equal(tasksBeforeNoteEdit[0].title, "Second task (newer)");
+  assert.equal(tasksBeforeNoteEdit[1].title, "Updated task");
+
+  // Edit notes of the older task while passing its existing updatedAt
+  const olderTaskId = tasksBeforeNoteEdit[1].id;
+  store = updateTodo(store, olderTaskId, {
+    description: "Added note text",
+    updatedAt: tasksBeforeNoteEdit[1].updatedAt
+  });
+  const tasksAfterNoteEdit = getFilteredTodos(store, "all");
+  assert.equal(tasksAfterNoteEdit[0].title, "Second task (newer)");
+  assert.equal(tasksAfterNoteEdit[1].title, "Updated task");
+  assert.equal(tasksAfterNoteEdit[1].description, "Added note text");
 });
+
 
 test("getSortedProfiles: sorts descending by pending task count", () => {
   let store = defaultStore();

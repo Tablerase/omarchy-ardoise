@@ -1527,3 +1527,34 @@ test("Keybindings setup clipboard formatting: expands newlines without literal \
   assert.ok(confOutput.includes("bindd = "), "Conf output contains bindd =");
 });
 
+test("Task notes edit & Escape navigation invariants: preserves task position and returns focus cleanly", () => {
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+  const taskNotesArea = fs.readFileSync(path.join(repoDir, "TaskNotesArea.qml"), "utf8");
+
+  // 1. TaskNotesArea onEscapePressed must save before releasing focus / emitting escapePressed
+  const escHandlerMatch = taskNotesArea.match(/Keys\.onEscapePressed:\s*function\(event\)\s*\{([\s\S]*?)\}/);
+  assert.ok(escHandlerMatch, "TaskNotesArea must define Keys.onEscapePressed");
+  const escBody = escHandlerMatch[1];
+  const saveIdx = escBody.indexOf("root.save()");
+  const relFocusIdx = escBody.indexOf("root.releaseFocus()");
+  const escSignalIdx = escBody.indexOf("root.escapePressed()");
+  assert.ok(saveIdx !== -1 && relFocusIdx !== -1 && escSignalIdx !== -1, "TaskNotesArea escape handler must call save, releaseFocus, and escapePressed");
+  assert.ok(saveIdx < relFocusIdx, "root.save() must execute before root.releaseFocus() in TaskNotesArea onEscapePressed");
+  assert.ok(saveIdx < escSignalIdx, "root.save() must execute before root.escapePressed() in TaskNotesArea onEscapePressed");
+
+  // 2. PanelContent descArea onSaved must preserve itemRow.modelData.updatedAt
+  assert.ok(
+    panelContent.includes("updatedAt: itemRow.modelData.updatedAt"),
+    "PanelContent descArea onSaved must pass existing updatedAt to preserve list ordering"
+  );
+
+  // 3. PanelContent onFilteredTodosChanged must track expandedTaskId to update cursorIndex
+  assert.ok(
+    panelContent.includes("expandedTaskId !== -1 && filteredTodos") &&
+      panelContent.includes("filteredTodos[i].id === expandedTaskId") &&
+      panelContent.includes("cursorIndex = i"),
+    "PanelContent onFilteredTodosChanged must keep cursorIndex synchronized with expandedTaskId"
+  );
+});
+
+
