@@ -71,8 +71,9 @@ Item {
     // Fire notifications only for unsent reminders
     for (var j = 0; j < toNotify.length; j++) {
       var t = toNotify[j]
-      var headline = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "") + "Task Reminder"
-      var desc = "Scheduled reminder is due"
+      var prof = TodoStore.cleanProfileName(t.profile)
+      var headline = "[" + prof + "] Task Reminder"
+      var desc = "Scheduled reminder is due in #" + prof
 
       Quickshell.execDetached([
         bin,

@@ -1443,13 +1443,15 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "GitModal must compute dynamic contrast-safe secondaryText and only fill snapshot item background on hover or selection"
   );
 
-  // 4. Service.qml must NOT pass private titles or reminder descriptions in argv
+  // 4. Service.qml must NOT pass private titles or reminder descriptions in argv, but must clearly identify profile
   assert.ok(
     !service.includes('headline = "Todo: " + t.title') &&
       !service.includes('t.description') &&
-      service.includes('headline = (t.profile && t.profile !== "personal" ? "[" + t.profile + "] " : "") + "Task Reminder"') &&
-      service.includes('desc = "Scheduled reminder is due"'),
-    "Service.qml must not expose private task titles or reminder descriptions in notification process arguments"
+      !service.includes('t.title') &&
+      service.includes('var prof = TodoStore.cleanProfileName(t.profile)') &&
+      service.includes('var headline = "[" + prof + "] Task Reminder"') &&
+      service.includes('var desc = "Scheduled reminder is due in #" + prof'),
+    "Service.qml must not expose private task titles or reminder descriptions in notification process arguments while maintaining profile clarity"
   );
   // 5. BarWidget must enforce restrictive permissions on data directory and files
   assert.ok(
