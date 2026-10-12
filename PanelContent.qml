@@ -3234,7 +3234,7 @@ Item {
                     visible: Boolean(itemRow.modelData.location && itemRow.modelData.location.localPath)
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    iconText: "󰏫"
+                    iconText: "󰅩"
                     text: "Codebase"
                     fontSize: Style.space(9)
                     fontFamily: root.bar ? root.bar.fontFamily : Style.font.family

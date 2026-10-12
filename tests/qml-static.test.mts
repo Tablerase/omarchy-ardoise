@@ -253,8 +253,8 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "PanelContent must display repoBadge for multi-repo task identification"
   );
   assert.ok(
-    panelContent.includes("id: openLocBtn") && panelContent.includes("Codebase"),
-    "PanelContent must display openLocBtn to launch editor directly in target codebase"
+    panelContent.includes("id: openLocBtn") && panelContent.includes("Codebase") && panelContent.includes('iconText: "󰅩"'),
+    "PanelContent must display openLocBtn with code glyph 󰅩 to launch editor directly in target codebase"
   );
   assert.ok(
     quickAddContent.includes('if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")'),

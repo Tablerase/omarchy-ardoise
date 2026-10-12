@@ -965,6 +965,8 @@ test("task context menu: getTaskMenuItems adapts to the task and taskMenuActionF
   const richIds = rich.map((i: any) => i.id);
   assert.ok(richIds.includes("copy_notes"));
   assert.ok(richIds.includes("open_codebase"));
+  const openCodebaseItem = rich.find((i: any) => i.id === "open_codebase");
+  assert.equal(openCodebaseItem?.icon, "󰅩", "open_codebase uses code braces glyph distinct from pen/notes");
 
   const editItem = bare.find((i: any) => i.id === "edit_title");
   assert.equal(editItem?.shortcut, "r");

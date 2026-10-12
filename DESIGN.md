@@ -612,6 +612,7 @@ Resolution order: host `warningOverride` → user theme `bar.warning` (`Color.pi
 - **Check Complete**: `󰄬` (`\U000f012c`) — *Task-row completion indicator only. Not the brand mark; the brand mark is the ladder above.*
 - **Check Empty**: `󰄱` (`\U000f0131`)
 - **Git Branch / Snapshots**: `󰊢` (`\U000f02a2`)
+- **Codebase / Editor Launch**: `󰅩` (`\U000f0169`) — *Distinct from Pen / Notes `󰏫` (`\U000f03eb`). Used in task context menu and expanded drawer codebase button.*
 
 ### Spacing & Metrics
 - Standard padding: `Style.space(8)`, `Style.space(12)`, `Style.space(16)`.
