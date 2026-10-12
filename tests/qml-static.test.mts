@@ -304,6 +304,12 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     "QuickAdd must integrate quickAddTagsContainer and Ui.TagProfileSearchBox for tag management"
   );
   assert.ok(
+    quickAddContent.includes("id: quickAddProfileSearchChip") &&
+      quickAddContent.includes("id: quickAddProfileSearchBox") &&
+      quickAddContent.includes('mode: "profile"'),
+    "QuickAdd must integrate quickAddProfileSearchChip and Ui.TagProfileSearchBox in profile mode for profile management"
+  );
+  assert.ok(
     quickAddContent.includes('if (root.focusSection === "tags")') &&
       quickAddContent.includes("root.removeEditTag(root.editTags[root.tagChipIndex])"),
     "QuickAdd must support deleting tags via x/Del/Backspace when tags section is focused"

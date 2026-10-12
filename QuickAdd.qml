@@ -64,6 +64,8 @@ Item {
   readonly property bool isEditMode: editingTaskId !== null && editingTaskId !== undefined
   property var editingTask: null
   property var editTags: []
+  property int profileChipIndex: 0
+  property bool showProfileSearchBox: false
   property int tagChipIndex: -1
   property bool showTagSearchBox: false
 
@@ -210,11 +212,22 @@ Item {
 
   function cycleProfileSelection(step) {
     var profs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
-    if (!profs || profs.length === 0) return
-    var curIdx = profs.indexOf(root.selectedProfile)
-    if (curIdx === -1) curIdx = 0
-    var nextIdx = (curIdx + step + profs.length) % profs.length
-    root.selectedProfile = profs[nextIdx]
+    var count = profs ? profs.length : 0
+    if (count === 0) {
+      root.profileChipIndex = -1
+      return
+    }
+    // Total items: index -1 (search chip) + indices 0..(count-1) (profile pills) -> (count + 1) items
+    // Map -1..count-1 to 0..count
+    var cur = root.profileChipIndex + 1
+    var total = count + 1
+    var next = (cur + step + total) % total
+    var nextIdx = next - 1
+    root.profileChipIndex = nextIdx
+    if (nextIdx >= 0 && nextIdx < count) {
+      root.selectedProfile = profs[nextIdx]
+      root.ensureProfileVisible(root.selectedProfile)
+    }
   }
 
   function cycleReminderPreset(step) {
@@ -244,6 +257,8 @@ Item {
     focusSection = "title"
     optionIndex = 0
     actionIndex = 1
+    profileChipIndex = 0
+    showProfileSearchBox = false
     if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
       quickAddProfileSelector.resetScroll()
     }
@@ -258,6 +273,8 @@ Item {
     root.focusSection = "title"
     root.optionIndex = 0
     root.actionIndex = 1
+    root.profileChipIndex = 0
+    root.showProfileSearchBox = false
     root.tagChipIndex = -1
     root.showTagSearchBox = false
     root.refreshReminderPresets()
@@ -380,6 +397,8 @@ Item {
     root.editingTaskId = null
     root.editingTask = null
     root.editTags = []
+    root.showProfileSearchBox = false
+    root.profileChipIndex = 0
     root.showTagSearchBox = false
   }
 
@@ -649,6 +668,15 @@ Item {
           return
         }
 
+        if (root.focusSection === "profiles") {
+          if (event.text === "/") {
+            event.accepted = true
+            root.profileChipIndex = -1
+            root.showProfileSearchBox = true
+            return
+          }
+        }
+
         if (root.focusSection === "tags") {
           if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace || event.text === "x" || event.text === "X" || event.key === Qt.Key_X) {
             event.accepted = true
@@ -739,7 +767,9 @@ Item {
               }
             }
           } else if (root.focusSection === "profiles") {
-            // Profile selection confirmed with Space/Enter
+            if (root.profileChipIndex === -1) {
+              root.showProfileSearchBox = !root.showProfileSearchBox
+            }
           } else if (root.focusSection === "actions") {
             if (root.actionIndex === 0) root.dismiss()
             else root.submit()
@@ -1314,18 +1344,15 @@ Item {
           }
         }
 
-        // Profile Selector Pills
-        Item {
+        // Profile Selector & Chips Row
+        Column {
           id: quickAddProfileContainer
           width: parent.width
-          implicitHeight: Math.max(quickAddProfileLabelRow.implicitHeight, quickAddProfileSelector.implicitHeight)
+          spacing: Style.space(6)
 
           Row {
-            id: quickAddProfileLabelRow
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.topMargin: Style.space(2)
-            spacing: Style.space(4)
+            width: parent.width
+            spacing: Style.space(6)
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
@@ -1335,22 +1362,102 @@ Item {
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
             }
+
+            Flow {
+              id: quickAddProfilesFlow
+              width: parent.width - Style.space(48)
+              spacing: Style.space(6)
+
+              // Profile Search Chip (󰍉)
+              Rectangle {
+                id: quickAddProfileSearchChip
+                width: Style.space(22)
+                height: Style.space(20)
+                implicitWidth: Style.space(22)
+                implicitHeight: Style.space(20)
+                radius: height / 2
+                readonly property bool isSearchNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex === -1)
+                color: root.showProfileSearchBox
+                  ? Color.accent
+                  : (isSearchNavFocused
+                      ? Util.alpha(Color.accent, 0.25)
+                      : (profSearchMouse.containsMouse ? Util.alpha(Color.foreground, 0.1) : Util.alpha(Color.foreground, 0.05)))
+                border.color: isSearchNavFocused ? Color.accent : Util.alpha(Color.foreground, 0.15)
+                border.width: isSearchNavFocused ? 1.5 : 1
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "󰍉"
+                  color: root.showProfileSearchBox ? (Color.menu.background || Color.background) : (quickAddProfileSearchChip.isSearchNavFocused ? Color.accent : Color.muted)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+
+                MouseArea {
+                  id: profSearchMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.showProfileSearchBox = !root.showProfileSearchBox
+                    if (root.showProfileSearchBox) {
+                      root.focusSection = "profiles"
+                      root.profileChipIndex = -1
+                    }
+                  }
+                }
+              }
+
+              // Divider between search chip and profiles
+              Item {
+                width: Style.space(5)
+                height: Style.space(20)
+
+                Rectangle {
+                  width: 1
+                  height: Style.space(12)
+                  anchors.centerIn: parent
+                  color: Util.alpha(Color.foreground, 0.15)
+                }
+              }
+
+              Ui.ProfileSelector {
+                id: quickAddProfileSelector
+                width: parent.width - quickAddProfileSearchChip.width - Style.space(12)
+                wrap: true
+                fadeColor: Color.menu.background
+                profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+                selectedProfile: root.selectedProfile
+                focusedIndex: (root.focusSection === "profiles" && root.profileChipIndex >= 0)
+                  ? root.profileChipIndex
+                  : -1
+                isNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex >= 0)
+                onProfileSelected: function(name, idx) {
+                  root.selectedProfile = name
+                  root.profileChipIndex = idx
+                }
+              }
+            }
           }
 
-          Ui.ProfileSelector {
-            id: quickAddProfileSelector
-            anchors.left: quickAddProfileLabelRow.right
-            anchors.leftMargin: Style.space(6)
-            anchors.right: parent.right
-            anchors.top: parent.top
-            wrap: true
-            fadeColor: Color.menu.background
-            profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
-            selectedProfile: root.selectedProfile
-            focusedIndex: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile).indexOf(root.selectedProfile)
-            isNavFocused: root.focusSection === "profiles"
-            onProfileSelected: function(name, idx) {
-              root.selectedProfile = name
+          // Embedded TagProfileSearchBox for Profiles
+          Ui.TagProfileSearchBox {
+            id: quickAddProfileSearchBox
+            visible: root.showProfileSearchBox
+            width: parent.width
+            mode: "profile"
+            store: root.store
+            currentProfile: root.selectedProfile
+            onProfileSelected: function(prof) {
+              root.selectedProfile = prof
+              root.showProfileSearchBox = false
+              var profs = TodoStore.getSortedProfiles(root.store, false, prof)
+              root.profileChipIndex = profs ? profs.indexOf(prof) : 0
+              card.forceActiveFocus()
+            }
+            onClosed: {
+              root.showProfileSearchBox = false
+              card.forceActiveFocus()
             }
           }
         }
@@ -1541,6 +1648,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: {
               if (root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)) return "⚠ Title required before sending  •  Esc Cancel"
+              if (root.focusSection === "profiles") return "󰍉 / Search Profile  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "tags") return "󰆴 x/Del Tag  •  / Search  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.isEditMode) return "󰌑 Enter Save Changes  •  Tab/Vim Nav  •  Esc Cancel"
