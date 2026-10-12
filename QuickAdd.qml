@@ -59,6 +59,39 @@ Item {
 
   property var reminderPresets: TodoStore.getReminderPresets()
 
+  // --- Task Edit Mode State ---
+  property var editingTaskId: null
+  readonly property bool isEditMode: editingTaskId !== null && editingTaskId !== undefined
+  property var editingTask: null
+  property var editTags: []
+  property int tagChipIndex: -1
+  property bool showTagSearchBox: false
+
+  function removeEditTag(tag) {
+    if (!tag || !Array.isArray(root.editTags)) return
+    var next = []
+    for (var i = 0; i < root.editTags.length; i++) {
+      if (root.editTags[i] !== tag) next.push(root.editTags[i])
+    }
+    root.editTags = next
+    if (root.tagChipIndex >= root.editTags.length) {
+      root.tagChipIndex = Math.max(-1, root.editTags.length - 1)
+    }
+  }
+
+  function addEditTag(tag) {
+    if (!tag) return
+    var clean = (typeof TodoStore !== "undefined" && typeof TodoStore.cleanProfileName === "function")
+      ? TodoStore.cleanProfileName(tag)
+      : String(tag).replace(/^#+/, "").trim()
+    if (!clean) return
+    var current = Array.isArray(root.editTags) ? root.editTags.slice() : []
+    if (current.indexOf(clean) === -1) {
+      current.push(clean)
+      root.editTags = current
+    }
+  }
+
   function refreshReminderPresets() {
     reminderPresets = TodoStore.getReminderPresets()
   }
@@ -151,6 +184,7 @@ Item {
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
     secs.push("profiles")
+    if (root.isEditMode || (root.editTags && root.editTags.length > 0) || root.showTagSearchBox) secs.push("tags")
     if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
     secs.push("actions")
     return secs
@@ -224,7 +258,81 @@ Item {
     root.focusSection = "title"
     root.optionIndex = 0
     root.actionIndex = 1
+    root.tagChipIndex = -1
+    root.showTagSearchBox = false
     root.refreshReminderPresets()
+
+    var payload = null
+    try {
+      if (payloadJson && typeof payloadJson === "string") {
+        payload = JSON.parse(payloadJson)
+      } else if (payloadJson && typeof payloadJson === "object") {
+        payload = payloadJson
+      }
+    } catch (_e) {
+      payload = null
+    }
+
+    var targetId = (payload && (payload.taskId !== undefined ? payload.taskId : (payload.mode === "edit" ? payload.id : null)))
+    var targetTask = null
+    if (targetId !== null && targetId !== undefined && root.store && Array.isArray(root.store.todos)) {
+      for (var i = 0; i < root.store.todos.length; i++) {
+        if (String(root.store.todos[i].id) === String(targetId)) {
+          targetTask = root.store.todos[i]
+          break
+        }
+      }
+    }
+
+    if (targetTask) {
+      root.editingTaskId = targetTask.id
+      root.editingTask = targetTask
+      root.editTags = Array.isArray(targetTask.tags) ? targetTask.tags.slice() : []
+      taskInput.text = targetTask.title || ""
+      root.selectedProfile = targetTask.profile || "personal"
+      if (targetTask.description && targetTask.description.trim().length > 0) {
+        root.showNote = true
+        Qt.callLater(function() {
+          if (descNotesArea) {
+            descNotesArea.text = targetTask.description
+            if (descNotesArea.textArea) descNotesArea.textArea.text = targetTask.description
+          }
+        })
+      } else {
+        root.showNote = false
+        if (descNotesArea) {
+          descNotesArea.text = ""
+          if (descNotesArea.textArea) descNotesArea.textArea.text = ""
+        }
+      }
+      if (targetTask.reminder) {
+        root.selectedReminder = targetTask.reminder
+        root.showReminderOptions = true
+      } else {
+        root.selectedReminder = ""
+        root.showReminderOptions = false
+      }
+      if (targetTask.location) {
+        root.detectedContext = targetTask.location
+        root.attachLocation = true
+      } else {
+        root.detectedContext = null
+        root.attachLocation = false
+      }
+      if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
+        quickAddProfileSelector.resetScroll()
+      }
+      Qt.callLater(function() {
+        root.ensureProfileVisible(root.selectedProfile)
+        taskInput.forceActiveFocus()
+      })
+      return
+    }
+
+    // Normal Add Mode:
+    root.editingTaskId = null
+    root.editingTask = null
+    root.editTags = []
     detectContextProc.running = true
     if (root.hasDraft) {
       taskInput.text = root.draftTitle
@@ -269,6 +377,10 @@ Item {
   function close() {
     root.opened = false
     root.closeAutocomplete()
+    root.editingTaskId = null
+    root.editingTask = null
+    root.editTags = []
+    root.showTagSearchBox = false
   }
 
   function dismiss() {
@@ -293,14 +405,14 @@ Item {
   }
 
   onSelectedProfileChanged: {
-    if (root.opened) {
+    if (root.opened && !root.isEditMode) {
       root.draftProfile = root.selectedProfile
     }
     Qt.callLater(function() { root.ensureProfileVisible(root.selectedProfile) })
   }
 
   onSelectedReminderChanged: {
-    if (root.opened) {
+    if (root.opened && !root.isEditMode) {
       root.draftReminder = root.selectedReminder
     }
   }
@@ -333,6 +445,37 @@ Item {
     var desc = (showNote && descNotesArea) ? descNotesArea.text.trim() : ""
     var rem = selectedReminder || null
     var loc = (root.attachLocation && root.detectedContext) ? root.detectedContext : null
+
+    if (root.isEditMode && root.editingTaskId) {
+      var parsed = TodoStore.parseTaskInput(rawText, root.selectedProfile)
+      var finalTitle = (parsed && parsed.title && parsed.title.trim().length > 0) ? parsed.title.trim() : rawText
+      var finalProfile = root.selectedProfile
+      if (parsed && parsed.profile && rawText.indexOf("#" + parsed.profile) !== -1) {
+        finalProfile = parsed.profile
+      }
+      var mergedTags = (Array.isArray(root.editTags) ? root.editTags.slice() : [])
+      if (parsed && Array.isArray(parsed.tags)) {
+        for (var pi = 0; pi < parsed.tags.length; pi++) {
+          var pt = parsed.tags[pi]
+          if (pt && mergedTags.indexOf(pt) === -1) mergedTags.push(pt)
+        }
+      }
+      var newStore = TodoStore.updateTodo(root.store, root.editingTaskId, {
+        title: finalTitle,
+        description: desc,
+        profile: finalProfile,
+        tags: mergedTags,
+        reminder: rem,
+        location: loc
+      })
+      root.store = newStore
+      todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")
+      root.editingTaskId = null
+      root.editingTask = null
+      root.editTags = []
+      root.dismiss()
+      return
+    }
 
     var newStore = TodoStore.addTodo(root.store, rawText, desc, root.selectedProfile, rem, loc)
     root.store = newStore
@@ -468,6 +611,13 @@ Item {
           event.accepted = true
           if (root.focusSection === "profiles") {
             root.cycleProfileSelection(-1)
+          } else if (root.focusSection === "tags") {
+            var tagCountL = root.editTags ? root.editTags.length : 0
+            if (root.tagChipIndex > -1) {
+              root.tagChipIndex--
+            } else {
+              root.tagChipIndex = tagCountL - 1
+            }
           } else if (root.focusSection === "options") {
             root.optionIndex = 0
           } else if (root.focusSection === "reminders") {
@@ -482,6 +632,13 @@ Item {
           event.accepted = true
           if (root.focusSection === "profiles") {
             root.cycleProfileSelection(1)
+          } else if (root.focusSection === "tags") {
+            var tagCountR = root.editTags ? root.editTags.length : 0
+            if (root.tagChipIndex < tagCountR - 1) {
+              root.tagChipIndex++
+            } else {
+              root.tagChipIndex = -1
+            }
           } else if (root.focusSection === "options") {
             root.optionIndex = 1
           } else if (root.focusSection === "reminders") {
@@ -490,6 +647,22 @@ Item {
             root.actionIndex = 1
           }
           return
+        }
+
+        if (root.focusSection === "tags") {
+          if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace || event.text === "x" || event.text === "X" || event.key === Qt.Key_X) {
+            event.accepted = true
+            if (root.tagChipIndex >= 0 && root.editTags && root.tagChipIndex < root.editTags.length) {
+              root.removeEditTag(root.editTags[root.tagChipIndex])
+            }
+            return
+          }
+          if (event.text === "/") {
+            event.accepted = true
+            root.tagChipIndex = -1
+            root.showTagSearchBox = true
+            return
+          }
         }
 
         if (root.focusSection === "location") {
@@ -503,6 +676,14 @@ Item {
 
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
           event.accepted = true
+          if (root.focusSection === "tags") {
+            if (root.tagChipIndex === -1) {
+              root.showTagSearchBox = !root.showTagSearchBox
+            } else if (root.tagChipIndex >= 0 && root.editTags && root.tagChipIndex < root.editTags.length) {
+              root.removeEditTag(root.editTags[root.tagChipIndex])
+            }
+            return
+          }
           if (root.focusSection === "location") {
             root.attachLocation = false
             root.advanceSection(1)
@@ -628,7 +809,7 @@ Item {
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "Quick Add Task"
+            text: root.isEditMode ? "Edit Task" : "Quick Add Task"
             color: Color.menu.text || Color.foreground
             font.family: Style.font.family
             font.pixelSize: Style.font.subtitle
@@ -759,7 +940,9 @@ Item {
             root.checkAutocompleteAtCursor()
           }
           onTextChanged: {
-            root.draftTitle = text
+            if (!root.isEditMode) {
+              root.draftTitle = text
+            }
             if (root.hasValidTitle) {
               root.showTitleError = false
             }
@@ -1077,14 +1260,14 @@ Item {
               root.advanceSection(direction)
             }
             onTextChanged: {
-              if (root.opened) {
+              if (root.opened && !root.isEditMode) {
                 root.draftDescription = text
               }
             }
             Connections {
               target: descNotesArea.textArea
               function onTextChanged() {
-                if (root.opened) {
+                if (root.opened && !root.isEditMode) {
                   root.draftDescription = descNotesArea.textArea.text
                 }
               }
@@ -1172,6 +1355,132 @@ Item {
           }
         }
 
+        // Tags Selector & Chips Row
+        Column {
+          id: quickAddTagsContainer
+          width: parent.width
+          spacing: Style.space(6)
+          visible: root.isEditMode || (root.editTags && root.editTags.length > 0) || root.showTagSearchBox
+
+          Row {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Tags:"
+              color: (root.focusSection === "tags") ? Color.accent : Color.muted
+              font.bold: (root.focusSection === "tags")
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+
+            Flow {
+              id: quickAddTagsFlow
+              width: parent.width - Style.space(48)
+              spacing: Style.space(6)
+
+              // Tag Search / Add Chip (󰍉)
+              Rectangle {
+                id: quickAddTagSearchChip
+                width: Style.space(22)
+                height: Style.space(20)
+                implicitWidth: Style.space(22)
+                implicitHeight: Style.space(20)
+                radius: height / 2
+                readonly property bool isSearchNavFocused: (root.focusSection === "tags") && (root.tagChipIndex === -1)
+                color: root.showTagSearchBox
+                  ? Color.accent
+                  : (isSearchNavFocused
+                      ? Util.alpha(Color.accent, 0.25)
+                      : (tagSearchMouse.containsMouse ? Util.alpha(Color.foreground, 0.1) : Util.alpha(Color.foreground, 0.05)))
+                border.color: isSearchNavFocused ? Color.accent : Util.alpha(Color.foreground, 0.15)
+                border.width: isSearchNavFocused ? 1.5 : 1
+
+                Text {
+                  anchors.centerIn: parent
+                  text: "󰍉"
+                  color: root.showTagSearchBox ? (Color.menu.background || Color.background) : (quickAddTagSearchChip.isSearchNavFocused ? Color.accent : Color.muted)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+
+                MouseArea {
+                  id: tagSearchMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    root.showTagSearchBox = !root.showTagSearchBox
+                    if (root.showTagSearchBox) {
+                      root.focusSection = "tags"
+                      root.tagChipIndex = -1
+                    }
+                  }
+                }
+              }
+
+              // Divider between add chip and tags
+              Item {
+                width: Style.space(5)
+                height: Style.space(20)
+                visible: root.editTags && root.editTags.length > 0
+
+                Rectangle {
+                  width: 1
+                  height: Style.space(12)
+                  anchors.centerIn: parent
+                  color: Util.alpha(Color.foreground, 0.15)
+                }
+              }
+
+              Repeater {
+                model: root.editTags || []
+
+                Ui.Chip {
+                  required property string modelData
+                  required property int index
+                  readonly property bool isChipNavFocused: (root.focusSection === "tags") && (root.tagChipIndex === index)
+                  text: "#" + modelData
+                  variant: "tag"
+                  removable: true
+                  chipColor: isChipNavFocused ? Color.accent : Color.muted
+                  textColor: isChipNavFocused ? Color.accent : Color.muted
+                  maximumWidth: Style.space(120)
+                  fontFamily: Style.font.family
+                  onRemoved: {
+                    root.removeEditTag(modelData)
+                  }
+                  onClicked: {
+                    root.focusSection = "tags"
+                    root.tagChipIndex = index
+                    root.applySectionFocus()
+                  }
+                }
+              }
+            }
+          }
+
+          // Embedded TagProfileSearchBox
+          Ui.TagProfileSearchBox {
+            id: quickAddTagSearchBox
+            visible: root.showTagSearchBox
+            width: parent.width
+            mode: "tag"
+            store: root.store
+            currentTags: root.editTags || []
+            onTagSelected: function(tag) {
+              root.addEditTag(tag)
+              root.showTagSearchBox = false
+              card.forceActiveFocus()
+            }
+            onClosed: {
+              root.showTagSearchBox = false
+              card.forceActiveFocus()
+            }
+          }
+        }
+
         // Auto-detected codebase context pill (positioned above actions)
         Row {
           visible: Boolean(root.detectedContext && root.attachLocation)
@@ -1232,7 +1541,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: {
               if (root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)) return "⚠ Title required before sending  •  Esc Cancel"
+              if (root.focusSection === "tags") return "󰆴 x / Del Remove Tag  •  / Search Tags  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
+              if (root.isEditMode) return "󰌑 Enter Save Changes  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
               return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Cancel"
             }
@@ -1267,8 +1578,8 @@ Item {
 
             Button {
               id: addBtn
-              iconText: "󰐕"
-              text: "Add"
+              iconText: root.isEditMode ? "󰆓" : "󰐕"
+              text: root.isEditMode ? "Save" : "Add"
               fontSize: Style.font.caption
               fontFamily: Style.font.family
               bordered: true

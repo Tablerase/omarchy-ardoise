@@ -557,7 +557,14 @@ Item {
       else root.startClearHold()
     }
     else if (idx === 1) root.openArchive()
-    else if (idx === 2) root.openEditor()
+    else if (idx === 2) {
+      var curId = null
+      if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+        var ct = root.filteredTodos[root.cursorIndex]
+        if (ct) curId = ct.id
+      }
+      root.openEditor(curId)
+    }
     else if (idx === 3) root.openQuickAdd()
   }
 
@@ -981,6 +988,8 @@ Item {
       root.copyToClipboard(String(task.description || ""), "Notes copied")
     } else if (id === "open_codebase") {
       root.openCodebase(task)
+    } else if (id === "edit_task") {
+      root.openEditor(task.id)
     } else if (id === "edit_title") {
       root.focusSection = "tasks"
       root.cursorActive = true
@@ -1032,6 +1041,13 @@ Item {
 
   function openEditor(taskId) {
     savePendingNotes()
+    if (taskId) {
+      if (bar && bar.shell) {
+        bar.shell.summon(root.moduleName, JSON.stringify({ mode: "edit", taskId: taskId }))
+      }
+      root.closeRequested()
+      return
+    }
     var p = barWidget ? barWidget.todoFilePath : (Quickshell.env("HOME") + "/.config/omarchy/tablerase.ardoise/todos.json")
     if (bar) {
       bar.run(Logic.buildEditorCommand(p, taskId))
@@ -3463,12 +3479,21 @@ Item {
           fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           hasCursor: root.cursorActive && (root.focusSection === "footer") && (root.footerButtonIndex === 2)
           tooltipText: ""
-          onClicked: root.openEditor()
+          onClicked: {
+            var curId = null
+            if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+              var ct = root.filteredTodos[root.cursorIndex]
+              if (ct) curId = ct.id
+            }
+            root.openEditor(curId)
+          }
 
           HoverHandler { id: editBtnHover }
           Ui.ShortcutToolTip {
             visible: editBtnHover.hovered
-            description: "Open todos.json in editor"
+            description: (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0)
+              ? "Edit selected task in modal (e)"
+              : "Open todos.json in editor (e)"
             shortcut: "e"
             fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
           }

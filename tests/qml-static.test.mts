@@ -274,6 +274,50 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("id: itemHeaderCol") && panelContent.includes("id: chipsRow"),
     "PanelContent must feature a two-line layout separating title and chips when badges are present"
   );
+
+  // 4b. QuickAdd Task Edit Mode, Tag Management, and Shell Summon Bridge
+  assert.ok(
+    quickAddContent.includes("property var editingTaskId:") &&
+      quickAddContent.includes("readonly property bool isEditMode:") &&
+      quickAddContent.includes("property var editTags:"),
+    "QuickAdd must declare editingTaskId, isEditMode, and editTags state properties"
+  );
+  assert.ok(
+    quickAddContent.includes("function removeEditTag(tag)") &&
+      quickAddContent.includes("function addEditTag(tag)"),
+    "QuickAdd must provide removeEditTag and addEditTag helper functions"
+  );
+  assert.ok(
+    quickAddContent.includes('text: root.isEditMode ? "Edit Task" : "Quick Add Task"') &&
+      quickAddContent.includes('text: root.isEditMode ? "Save" : "Add"'),
+    "QuickAdd must adapt header title and primary action button for edit mode"
+  );
+  assert.ok(
+    quickAddContent.includes("TodoStore.updateTodo(root.store, root.editingTaskId,") &&
+      quickAddContent.includes("tags: mergedTags"),
+    "QuickAdd submit must update existing task via TodoStore.updateTodo including tags in edit mode"
+  );
+  assert.ok(
+    quickAddContent.includes("id: quickAddTagsContainer") &&
+      quickAddContent.includes("id: quickAddTagSearchBox") &&
+      quickAddContent.includes("Ui.TagProfileSearchBox"),
+    "QuickAdd must integrate quickAddTagsContainer and Ui.TagProfileSearchBox for tag management"
+  );
+  assert.ok(
+    quickAddContent.includes('if (root.focusSection === "tags")') &&
+      quickAddContent.includes("root.removeEditTag(root.editTags[root.tagChipIndex])"),
+    "QuickAdd must support deleting tags via x/Del/Backspace when tags section is focused"
+  );
+  assert.ok(
+    panelContent.includes('mode: "edit"') &&
+      panelContent.includes('bar.shell.summon(root.moduleName, JSON.stringify({ mode: "edit", taskId: taskId }))'),
+    "PanelContent must summon QuickAdd overlay in edit mode when editing a task"
+  );
+  assert.ok(
+    panelContent.includes('id === "edit_task"') &&
+      panelContent.includes("root.openEditor(task.id)"),
+    "PanelContent must support edit_task in task context menu to open task editor"
+  );
   assert.ok(
     panelContent.includes("cleanRepoName") &&
       panelContent.includes("root.cleanRepoName(itemRow.modelData.repo)"),

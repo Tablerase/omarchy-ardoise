@@ -955,6 +955,7 @@ test("task context menu: getTaskMenuItems adapts to the task and taskMenuActionF
   const bare = getTaskMenuItems({ title: "Bare", description: "", location: null });
   const ids = bare.map((i: any) => i.id);
   assert.ok(ids.includes("copy_llm"));
+  assert.ok(ids.includes("edit_task"));
   assert.ok(ids.includes("edit_title"));
   assert.ok(ids.includes("delete_task"));
   assert.ok(!ids.includes("copy_notes"), "no notes -> no copy-notes item");
@@ -967,13 +968,15 @@ test("task context menu: getTaskMenuItems adapts to the task and taskMenuActionF
 
   const editItem = bare.find((i: any) => i.id === "edit_title");
   assert.equal(editItem?.shortcut, "r");
+  const editTaskItem = bare.find((i: any) => i.id === "edit_task");
+  assert.equal(editTaskItem?.shortcut, "e");
 
   assert.equal(taskMenuActionForKey("y"), "copy_llm");
   assert.equal(taskMenuActionForKey("T"), "copy_title");
   assert.equal(taskMenuActionForKey("n"), "copy_notes");
   assert.equal(taskMenuActionForKey("o"), "open_codebase");
+  assert.equal(taskMenuActionForKey("e"), "edit_task");
   assert.equal(taskMenuActionForKey("r"), "edit_title");
-  assert.equal(taskMenuActionForKey("e"), "edit_title");
   assert.equal(taskMenuActionForKey("x"), "delete_task");
   assert.equal(taskMenuActionForKey("z"), null);
 });

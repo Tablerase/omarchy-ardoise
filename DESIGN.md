@@ -151,25 +151,31 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
     - Responsive wrapping profile selector (`Ui.ProfileSelector`, `wrap: true`) using `Flow` layout, ensuring all configured profiles wrap cleanly onto subsequent lines without horizontal overflow, edge clipping, or pill truncation (Invariant #4).
     - Features profile glyphs, active pop, and full keyboard/mouse profile selection.
     - <kbd>h</kbd> / <kbd>l</kbd> / arrows cycle selected profile.
-11. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
+11. **Tags Selector & Chips Row (`quickAddTagsContainer`)** (Conditional: `isEditMode || editTags.length > 0 || showTagSearchBox`):
+    - Displays `󰓹 Tags:` followed by an add/search icon chip (`quickAddTagSearchChip` `󰍉`) at index `-1` separated by a subtle vertical divider, followed by assigned tag chips rendered with `Ui.Chip` (`variant: "tag"`, `removable: true`).
+    - **Unified Search Experience**: Activating index `-1` (<kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>/</kbd>) opens `Ui.TagProfileSearchBox` in tag mode for searching existing tags or creating new tags on the fly with live `(N used)` indicators, matching the panel drawer experience.
+    - **Keyboard Deletion (<kbd>x</kbd>)**: In normal navigation mode on `"tags"`, <kbd>h</kbd>/<kbd>l</kbd> moves selection across chips; pressing <kbd>x</kbd>, <kbd>Del</kbd>, or <kbd>Backspace</kbd> on a highlighted tag chip removes it immediately.
+    - **Tag Deletion Isolation & Lifecycle**: Deleting a tag on a task strictly modifies that task's tag array; tasks sharing the same tag remain untouched. If a tag is no longer used across any task, `TodoStore.getAllTags` dynamically purges it so no orphan ghost tags linger.
+12. **Auto-Detected Codebase Context Chip (`locationPill`)** (Conditional: `detectedContext && attachLocation`):
     - Positioned above actions and divider.
     - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
-    - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
-12. **Separator**: Bottom dividing line (`PanelSeparator`).
-13. **Footer Actions Item**:
-    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision. When title is missing or error state is active, hints update to `"⚠ Title required before sending • Esc Cancel"`.
-    - Right: Action buttons [Cancel] and [Add]:
+    - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after tags/profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
+13. **Separator**: Bottom dividing line (`PanelSeparator`).
+14. **Footer Actions Item**:
+    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision. When in edit mode, displays `"󰌑 Enter Save Changes • Tab/Vim Nav • Esc Cancel"`. When tags are focused, displays `"󰆴 x / Del Remove Tag • / Search Tags • Tab/Vim Nav • Esc Cancel"`.
+    - Right: Action buttons [Cancel] and [Add] / [Save]:
+      - When in **Task Edit Mode** (`mode: "edit"`, `taskId`), header title adapts to **"Edit Task"** and the primary action button adapts to **"Save"** (`iconText: "󰆓"`), saving updates through `TodoStore.updateTodo(...)` without overwriting uncommitted new-task drafts.
       - Both buttons use `bordered: true`, 2px `Color.accent` focus border on navigation, and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
-      - When Cancel is navigated to (`actionIndex === 0`), Cancel receives 2px accent focus border, selected fill, and an animated 1.05 scale pop, while Add remains at neutral unselected rest state.
-      - When Add is navigated to (`actionIndex === 1`), Add receives 2px accent focus border, selected fill, and an animated 1.05 scale pop.
+      - When Cancel is navigated to (`actionIndex === 0`), Cancel receives 2px accent focus border, selected fill, and an animated 1.05 scale pop, while Add/Save remains at neutral unselected rest state.
+      - When Add/Save is navigated to (`actionIndex === 1`), Add/Save receives 2px accent focus border, selected fill, and an animated 1.05 scale pop.
       - At neutral rest state (e.g. while typing title or notes), neither button is selected, preventing misleading highlights.
-      - **Add Button Disabled State**: When the task title is missing (`canSubmit === false`), the [Add] button is visibly disabled (`enabled: false`, `opacity: 0.4`), preventing accidental submission. Clicking or pressing <kbd>Enter</kbd> on a disabled Add button blocks creation, sets `showTitleError: true`, and refocuses `taskInput`.
+      - **Submit Button Disabled State**: When the task title is missing (`canSubmit === false`), the primary button is visibly disabled (`enabled: false`, `opacity: 0.4`), preventing accidental submission. Clicking or pressing <kbd>Enter</kbd> on a disabled button blocks action, sets `showTitleError: true`, and refocuses `taskInput`.
 
 #### Navigation State Flow (`focusSection`)
 ```
-[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [(location)] ──Tab/Down──► [actions]
-   ▲                                                                                                                                                    │
-   └──────────────────────────────────────────────────Tab/Down (Loops around)───────────────────────────────────────────────────────────────────────────┘
+[title] ──Tab/Down──► [options] ──Tab/Down──► [(notes)] ──Tab/Down──► [(reminders)] ──Tab/Down──► [profiles] ──Tab/Down──► [(tags)] ──Tab/Down──► [(location)] ──Tab/Down──► [actions]
+   ▲                                                                                                                                                                          │
+   └──────────────────────────────────────────────────────────Tab/Down (Loops around)─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -303,7 +309,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
      - Two-stage escape: <kbd>Escape</kbd> in any expanded sub-section returns focus to `"header"`; <kbd>Escape</kbd> on `"header"` collapses the drawer; <kbd>Escape</kbd> on a collapsed task dismisses the panel.
 7. **Footer Bar**:
    - Urgency visual progress bar (overdue / due today / later).
-   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>Hold c</kbd> or pointer press for 800ms, charging a 3px `Color.accent` laser line along the bottom of the button and across all targeted completed task cards with subtle surface tint, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open Archive browser modal `ui/ArchiveModal.qml` to browse, filter, and restore completed tasks) • [Edit] (<kbd>e</kbd>, open todos.json in editor) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
+   - Action buttons with `ShortcutToolTip` badges: [Clear] (<kbd>Hold c</kbd> or pointer press for 800ms, charging a 3px `Color.accent` laser line along the bottom of the button and across all targeted completed task cards with subtle surface tint, archive and clear completed tasks in current profile) • [Archive] (<kbd>d</kbd>, open Archive browser modal `ui/ArchiveModal.qml` to browse, filter, and restore completed tasks) • [Edit] (<kbd>e</kbd>, edit selected task in Quick Add modal, or open todos.json in editor if no task selected) • [Quick Add] (<kbd>A</kbd> / detected shortcut).
 8. **Searchable Help Overlay Modal (`showKeyHelp`)**:
    - Fuzzy filter text field (`keySearchField`) wrapped in `BorderSurface`.
    - **Universal Input Handling**:
@@ -389,13 +395,13 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `r` / `F2` | Edit title of selected task in-place |
 | **Panel** | `K` | Open the focused task's context menu (copy for LLM, copy title/notes, open codebase, edit, delete) |
 | **Panel (Task Menu)** | `j` / `k` / `↓` / `↑` | Move the context menu selection |
-| **Panel (Task Menu)** | `y` / `t` / `n` / `o` / `r` | Copy for LLM / copy title / copy notes / open codebase / edit title |
+| **Panel (Task Menu)** | `y` / `t` / `n` / `o` / `r` / `e` | Copy for LLM / copy title / copy notes / open codebase / edit title / edit in modal |
 | **Panel (Task Menu)** | `x` (hold 800ms) | Delete the task (hold-to-confirm charge on the menu row) |
 | **Panel (Task Menu)** | `Enter` / `Space` | Activate the selected item; on the delete item, hold to charge |
 | **Panel (Task Menu)** | `Escape` / `q` | Dismiss the context menu |
 | **Panel (Title Editor)** | `Enter` | Commit edited title (trims input; updates profile/tags if hashtag included) |
 | **Panel (Title Editor)** | `Escape` | Cancel title edit, restore original title, and return to task row |
-| **Panel** | `e` | Open `todos.json` in editor (jumps to selected task line if on a task) |
+| **Panel** | `e` | Edit selected task in Quick Add modal (or open `todos.json` in editor if no task selected) |
 | **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
 | **Panel** | `Hold c` / `C` | Archive and clear completed tasks in current profile (hold 800ms) |
 | **Panel** | `d` | Open the Archive browser (`ui/ArchiveModal.qml`) — restore completed tasks |
@@ -511,7 +517,7 @@ ardoise.bind("a", "quick_add")
 | `copy_task` | `y` | Copy task for LLM (compact markdown) |
 | `edit_title` | `r`, `F2` | In-place edit of task title |
 | `task_menu` | `K` | Open the focused task's context menu |
-| `open_editor` | `e` | Open `todos.json` in default editor |
+| `open_editor` | `e` | Edit selected task in Quick Add modal, or open `todos.json` in default editor |
 | `git_undo` | `u` | Toggle Git Snapshots & Undo modal |
 | `clear_completed` | `c` | Archive and clear completed tasks in current profile (hold 800ms) |
 | `open_archive` | `d` | Open the Archive browser (restore completed tasks) |

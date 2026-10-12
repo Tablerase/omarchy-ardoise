@@ -1891,6 +1891,40 @@ test("searchTags: searches tags with substring and hashtag support", () => {
   assert.deepEqual(searchTags(store, "nonexistent"), []);
 });
 
+test("updateTodo tag removal: preserves other tasks sharing the tag and cleans up orphans from getAllTags", () => {
+  let store: any = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: 1, title: "Task 1", tags: ["alpha", "beta"], done: false, createdAt: 1000, updatedAt: 1000 },
+      { id: 2, title: "Task 2", tags: ["beta", "gamma"], done: false, createdAt: 1000, updatedAt: 1000 }
+    ]
+  };
+
+  // 1. Initial state check
+  assert.ok(getAllTags(store).includes("beta"));
+
+  // 2. Remove "beta" from Task 1 only
+  store = updateTodo(store, 1, { tags: ["alpha"] });
+  const t1 = store.todos.find((t: any) => t.id === 1);
+  const t2 = store.todos.find((t: any) => t.id === 2);
+  assert.deepEqual(t1.tags, ["alpha"]);
+  // Task 2 must strictly preserve its tags (isolation guarantee)
+  assert.deepEqual(t2.tags, ["beta", "gamma"]);
+  // "beta" must still exist in the store because Task 2 still uses it
+  assert.ok(getAllTags(store).includes("beta"));
+  assert.ok(searchTags(store, "beta").includes("beta"));
+
+  // 3. Remove "beta" from Task 2 as well
+  store = updateTodo(store, 2, { tags: ["gamma"] });
+  const t2After = store.todos.find((t: any) => t.id === 2);
+  assert.deepEqual(t2After.tags, ["gamma"]);
+  // Now "beta" is not used anywhere; it must disappear from getAllTags without lingering ghost entries
+  assert.equal(getAllTags(store).includes("beta"), false);
+  assert.equal(searchTags(store, "beta").includes("beta"), false);
+});
+
 test("getFilteredTodos: live search across title, notes, tags, repo, and #profile", () => {
   const store = {
     version: 1,
