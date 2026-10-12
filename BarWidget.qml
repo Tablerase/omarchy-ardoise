@@ -183,6 +183,8 @@ BarWidget {
       act = fields.reminder ? ("Set reminder in " + prof + "task").trim() : ("Clear reminder in " + prof + "task").trim()
     } else if (fields && fields.profile) {
       act = "Move task to #" + fields.profile
+    } else if (fields && fields.tags) {
+      act = "Update tags on " + prof + "task"
     }
     saveStore(TodoStore.updateTodo(root.store, id, fields), act)
   }

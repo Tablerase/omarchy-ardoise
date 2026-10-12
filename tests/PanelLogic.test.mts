@@ -101,15 +101,22 @@ test("getNextSubSection & getPrevSubSection: navigates expanded task drawer hier
   assert.equal(getNextSubSection("header", false), "notes");
   assert.equal(getNextSubSection("notes", false), "reminders");
   assert.equal(getNextSubSection("reminders", false), "profiles");
-  assert.equal(getNextSubSection("profiles", false), null);
+  assert.equal(getNextSubSection("profiles", false), "tags");
+  assert.equal(getNextSubSection("tags", false), null);
 
   // Forward with codebase
   assert.equal(getNextSubSection("profiles", true), "codebase");
-  assert.equal(getNextSubSection("codebase", true), null);
+  assert.equal(getNextSubSection("codebase", true), "tags");
+  assert.equal(getNextSubSection("tags", true), null);
 
-  // Backward
-  assert.equal(getPrevSubSection("codebase"), "profiles");
-  assert.equal(getPrevSubSection("profiles"), "reminders");
+  // Backward without codebase
+  assert.equal(getPrevSubSection("tags", false), "profiles");
+  assert.equal(getPrevSubSection("profiles", false), "reminders");
+
+  // Backward with codebase
+  assert.equal(getPrevSubSection("tags", true), "codebase");
+  assert.equal(getPrevSubSection("codebase", true), "profiles");
+  assert.equal(getPrevSubSection("profiles", true), "reminders");
   assert.equal(getPrevSubSection("reminders"), "notes");
   assert.equal(getPrevSubSection("notes"), "header");
   assert.equal(getPrevSubSection("header"), null);
@@ -260,6 +267,15 @@ test("handleMove: 2D navigation across tasks, sub-sections, and sections", () =>
   // Horizontal motion on codebase should be isolated
   handleMove(mockRoot, 1, 0, TodoStore);
   assert.equal(cycleFilterCallCount, 0, "dx on codebase should not cycle profile filter");
+
+  // Down -> tags
+  handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.expandedSubSection, "tags");
+  assert.equal(mockRoot.expandedTagIndex, -1);
+
+  // Up -> codebase
+  handleMove(mockRoot, 0, -1, TodoStore);
+  assert.equal(mockRoot.expandedSubSection, "codebase");
 
   // Up -> profiles
   handleMove(mockRoot, 0, -1, TodoStore);
@@ -1065,4 +1081,95 @@ test("handleTextKey: 'y' / copy_task triggers copySelectedTask on focused task",
   mockRoot.focusSection = "input";
   handleTextKey(mockRoot, "y", TodoStore);
   assert.equal(copied, false);
+});
+
+test("Tag and Profile Search Chips: navigation, activation, autocompletion trigger, and deletion", () => {
+  const store = TodoStore.defaultStore();
+  const storeWithTags = TodoStore.addTodo(store, "Test Task with Tags #work #ui #bug", "", "work");
+  const task = storeWithTags.todos[0];
+  assert.deepEqual(task.tags, ["ui", "bug"]);
+
+  let openedSearchMode: string | null = null;
+  let openedTaskId: any = null;
+  let removedTag: string | null = null;
+  let updatedTodoFields: any = null;
+
+  const mockRoot: any = {
+    store: storeWithTags,
+    filteredTodos: [task],
+    cursorIndex: 0,
+    focusSection: "tasks",
+    expandedTaskId: task.id,
+    expandedViaKeyboard: true,
+    expandedSubSection: "profiles",
+    expandedProfileIndex: 0,
+    expandedTagIndex: -1,
+    activeSearchTaskId: null,
+    activeSearchMode: "",
+    openTaskSearch: (id: any, mode: string) => {
+      openedTaskId = id;
+      openedSearchMode = mode;
+      mockRoot.activeSearchTaskId = id;
+      mockRoot.activeSearchMode = mode;
+    },
+    closeTaskSearch: () => {
+      mockRoot.activeSearchTaskId = null;
+      mockRoot.activeSearchMode = "";
+    },
+    removeTagFromTask: (id: any, tag: string) => {
+      removedTag = tag;
+    },
+    updateTodo: (id: any, fields: any) => {
+      updatedTodoFields = fields;
+    }
+  };
+
+  // 1. In profiles: lateral left moves from index 0 to -1 (Search Chip)
+  handleMove(mockRoot, -1, 0, TodoStore);
+  assert.equal(mockRoot.expandedProfileIndex, -1, "Profile search chip is focused at index -1");
+
+  // Activating at -1 opens profile search
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(openedTaskId, task.id);
+  assert.equal(openedSearchMode, "profile");
+
+  // Escape dismisses task search
+  const escHandled = handleEscape(mockRoot);
+  assert.equal(escHandled, true);
+  assert.equal(mockRoot.activeSearchTaskId, null);
+  assert.equal(mockRoot.activeSearchMode, "");
+
+  // Lateral right moves back to profile index 0
+  handleMove(mockRoot, 1, 0, TodoStore);
+  assert.equal(mockRoot.expandedProfileIndex, 0);
+
+  // Pressing '/' on profiles opens profile search
+  openedSearchMode = null;
+  handleTextKey(mockRoot, "/", TodoStore);
+  assert.equal(openedSearchMode, "profile");
+  handleEscape(mockRoot);
+
+  // 2. Down to tags sub-section
+  handleMove(mockRoot, 0, 1, TodoStore);
+  assert.equal(mockRoot.expandedSubSection, "tags");
+  assert.equal(mockRoot.expandedTagIndex, -1, "Tags start on search chip at index -1");
+
+  // Activating at -1 opens tag search
+  openedSearchMode = null;
+  handleActivate(mockRoot, TodoStore);
+  assert.equal(openedSearchMode, "tag");
+  handleEscape(mockRoot);
+
+  // Lateral right navigates into existing tags (index 0: 'ui', index 1: 'bug')
+  handleMove(mockRoot, 1, 0, TodoStore);
+  assert.equal(mockRoot.expandedTagIndex, 0);
+
+  // Pressing Delete / x on tag removes the tag
+  handleDelete(mockRoot);
+  assert.equal(removedTag, "ui");
+
+  // Pressing '/' on tags opens tag search
+  openedSearchMode = null;
+  handleTextKey(mockRoot, "/", TodoStore);
+  assert.equal(openedSearchMode, "tag");
 });

@@ -381,16 +381,19 @@ function getNextSubSection(current, hasCodebase) {
   if (current === "header") return "notes";
   if (current === "notes") return "reminders";
   if (current === "reminders") return "profiles";
-  if (current === "profiles") return hasCodebase ? "codebase" : null;
+  if (current === "profiles") return hasCodebase ? "codebase" : "tags";
+  if (current === "codebase") return "tags";
   return null;
 }
 
 /**
  * Returns the previous expanded sub-section inside an expanded task.
  * @param {string} current
+ * @param {boolean} [hasCodebase]
  * @returns {string|null}
  */
-function getPrevSubSection(current) {
+function getPrevSubSection(current, hasCodebase) {
+  if (current === "tags") return hasCodebase ? "codebase" : "profiles";
   if (current === "codebase") return "profiles";
   if (current === "profiles") return "reminders";
   if (current === "reminders") return "notes";
@@ -425,6 +428,14 @@ function handleEscape(root) {
   }
   if (root.showKeyHelp) {
     root.showKeyHelp = false;
+    return true;
+  }
+  if (root.activeSearchTaskId !== undefined && root.activeSearchTaskId !== null && root.activeSearchTaskId !== -1) {
+    if (typeof root.closeTaskSearch === "function") root.closeTaskSearch();
+    else {
+      root.activeSearchTaskId = null;
+      root.activeSearchMode = "";
+    }
     return true;
   }
   if (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) {
@@ -513,16 +524,13 @@ function handleMove(root, dx, dy, TodoStore) {
           if (currentTask.location && currentTask.location.localPath) {
             root.expandedSubSection = "codebase";
           } else {
-            if (root.cursorIndex < root.filteredTodos.length - 1) {
-              root.cursorIndex++;
-              root.expandedSubSection = "header";
-              if (typeof root.ensureTaskVisible === "function") root.ensureTaskVisible(root.cursorIndex, false);
-            } else {
-              root.focusSection = "footer";
-              root.footerButtonIndex = 0;
-            }
+            root.expandedSubSection = "tags";
+            root.expandedTagIndex = -1;
           }
         } else if (root.expandedSubSection === "codebase") {
+          root.expandedSubSection = "tags";
+          root.expandedTagIndex = -1;
+        } else if (root.expandedSubSection === "tags") {
           if (root.cursorIndex < root.filteredTodos.length - 1) {
             root.cursorIndex++;
             root.expandedSubSection = "header";
@@ -534,7 +542,9 @@ function handleMove(root, dx, dy, TodoStore) {
         }
         return;
       } else if (dy < 0) {
-        if (root.expandedSubSection === "codebase") {
+        if (root.expandedSubSection === "tags") {
+          root.expandedSubSection = (currentTask.location && currentTask.location.localPath) ? "codebase" : "profiles";
+        } else if (root.expandedSubSection === "codebase") {
           root.expandedSubSection = "profiles";
         } else if (root.expandedSubSection === "profiles") {
           root.expandedSubSection = "reminders";
@@ -566,10 +576,15 @@ function handleMove(root, dx, dy, TodoStore) {
           return;
         } else if (root.expandedSubSection === "profiles") {
           var allProfs = TodoStore.getSortedProfiles(root.store, false, "");
-          root.expandedProfileIndex = Math.max(0, Math.min(allProfs.length - 1, root.expandedProfileIndex + dx));
+          root.expandedProfileIndex = Math.max(-1, Math.min(allProfs.length - 1, root.expandedProfileIndex + dx));
           if (typeof root.ensureReassignProfileVisible === "function") {
             root.ensureReassignProfileVisible(root.expandedProfileIndex);
           }
+          return;
+        } else if (root.expandedSubSection === "tags") {
+          var taskTags = (currentTask && Array.isArray(currentTask.tags)) ? currentTask.tags : [];
+          var maxTagIdx = Math.max(-1, taskTags.length - 1);
+          root.expandedTagIndex = Math.max(-1, Math.min(maxTagIdx, (root.expandedTagIndex !== undefined ? root.expandedTagIndex : -1) + dx));
           return;
         } else if (root.expandedSubSection === "notes" || root.expandedSubSection === "codebase") {
           return;
@@ -691,17 +706,21 @@ function handleTab(root, direction, TodoStore) {
             if (typeof root.ensureReassignProfileVisible === "function") {
               root.ensureReassignProfileVisible(root.expandedProfileIndex);
             }
+          } else if (nextSub === "tags") {
+            root.expandedTagIndex = -1;
           }
           return true;
         }
       } else if (direction < 0) {
-        var prevSub = getPrevSubSection(root.expandedSubSection);
+        var prevSub = getPrevSubSection(root.expandedSubSection, Boolean(currentTask.location && currentTask.location.localPath));
         if (prevSub) {
           root.expandedSubSection = prevSub;
           if (prevSub === "reminders" && typeof root.ensureReminderVisible === "function") {
             root.ensureReminderVisible(root.expandedReminderIndex);
           } else if (prevSub === "profiles" && typeof root.ensureReassignProfileVisible === "function") {
             root.ensureReassignProfileVisible(root.expandedProfileIndex);
+          } else if (prevSub === "tags") {
+            root.expandedTagIndex = -1;
           }
           return true;
         }
@@ -869,6 +888,13 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     return;
   }
   if (action === "search" || (!map && text === "/")) {
+    if (root.focusSection === "tasks" && root.expandedTaskId && (root.expandedSubSection === "profiles" || root.expandedSubSection === "tags")) {
+      var mode = (root.expandedSubSection === "profiles") ? "profile" : "tag";
+      if (typeof root.openTaskSearch === "function") {
+        root.openTaskSearch(root.expandedTaskId, mode);
+        return;
+      }
+    }
     if (typeof root.activateSearch === "function") root.activateSearch();
     return;
   }
@@ -964,9 +990,21 @@ function handleActivate(root, TodoStore) {
               }
             }
           } else if (root.expandedSubSection === "profiles") {
-            var profs = TodoStore.getSortedProfiles(root.store, false, "");
-            if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
-              root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] });
+            if (root.expandedProfileIndex === -1) {
+              if (typeof root.openTaskSearch === "function") root.openTaskSearch(task.id, "profile");
+            } else {
+              var profs = TodoStore.getSortedProfiles(root.store, false, "");
+              if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
+                root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] });
+              }
+            }
+          } else if (root.expandedSubSection === "tags") {
+            if (root.expandedTagIndex === -1) {
+              if (typeof root.openTaskSearch === "function") root.openTaskSearch(task.id, "tag");
+            } else if (Array.isArray(task.tags) && root.expandedTagIndex >= 0 && root.expandedTagIndex < task.tags.length) {
+              if (typeof root.removeTagFromTask === "function") {
+                root.removeTagFromTask(task.id, task.tags[root.expandedTagIndex]);
+              }
             }
           } else if (root.expandedSubSection === "codebase") {
             if (typeof root.openCodebase === "function") root.openCodebase(task);
@@ -1049,9 +1087,21 @@ function handleReturn(root, TodoStore) {
               }
             }
           } else if (root.expandedSubSection === "profiles") {
-            var profs = TodoStore.getSortedProfiles(root.store, false, "");
-            if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
-              root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] });
+            if (root.expandedProfileIndex === -1) {
+              if (typeof root.openTaskSearch === "function") root.openTaskSearch(task.id, "profile");
+            } else {
+              var profs = TodoStore.getSortedProfiles(root.store, false, "");
+              if (root.expandedProfileIndex >= 0 && root.expandedProfileIndex < profs.length) {
+                root.updateTodo(task.id, { profile: profs[root.expandedProfileIndex] });
+              }
+            }
+          } else if (root.expandedSubSection === "tags") {
+            if (root.expandedTagIndex === -1) {
+              if (typeof root.openTaskSearch === "function") root.openTaskSearch(task.id, "tag");
+            } else if (Array.isArray(task.tags) && root.expandedTagIndex >= 0 && root.expandedTagIndex < task.tags.length) {
+              if (typeof root.removeTagFromTask === "function") {
+                root.removeTagFromTask(task.id, task.tags[root.expandedTagIndex]);
+              }
             }
           } else if (root.expandedSubSection === "codebase") {
             if (typeof root.openCodebase === "function") root.openCodebase(task);
@@ -1089,6 +1139,20 @@ function handleDelete(root) {
     if (root.taskMenu && typeof root.taskMenu.startHoldFor === "function" && root.taskMenu.startHoldFor("delete_task")) return;
     if (typeof root.activateTaskMenuItem === "function") root.activateTaskMenuItem("delete_task");
     return;
+  }
+  if (root.focusSection === "tasks" && root.expandedTaskId && root.expandedSubSection === "tags" && root.expandedTagIndex >= 0) {
+    if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+      var curTask = root.filteredTodos[root.cursorIndex];
+      if (curTask && Array.isArray(curTask.tags) && root.expandedTagIndex < curTask.tags.length) {
+        if (typeof root.removeTagFromTask === "function") {
+          root.removeTagFromTask(curTask.id, curTask.tags[root.expandedTagIndex]);
+          if (root.expandedTagIndex >= curTask.tags.length - 1) {
+            root.expandedTagIndex = Math.max(-1, curTask.tags.length - 2);
+          }
+        }
+        return;
+      }
+    }
   }
   root.cursorActive = true;
   root.mouseMovementDetected = false;

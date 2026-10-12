@@ -309,6 +309,15 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       panelContent.includes("itemRow.ensureReassignProfileVisible"),
     "profReassignFlickable must support ensureVisible auto-scrolling on profile navigation"
   );
+  assert.ok(
+    panelContent.includes("id: profSearchChip") &&
+      panelContent.includes("id: profDivider") &&
+      panelContent.includes("id: tagSearchChip") &&
+      panelContent.includes("id: tagDivider") &&
+      panelContent.includes("TagProfileSearchBox") &&
+      panelContent.includes("openTaskSearch"),
+    "PanelContent must feature separate search chips (󰍉) and TagProfileSearchBox autocompletion for profile and tags"
+  );
 
   // 4b. Task Completion Satisfaction & Dedicated Completed Fold
   const taskCheckContent = fs.readFileSync(path.join(repoDir, "ui", "TaskCheck.qml"), "utf8");
