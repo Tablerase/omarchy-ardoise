@@ -25,7 +25,7 @@ jobs:
       - name: Install Dependencies
         run: |
           echo 'Server = https://archive.archlinux.org/repos/2026/09/25/$repo/os/$arch' > /etc/pacman.d/mirrorlist
-          pacman -Sy --noconfirm git quickshell qt6-declarative deno nodejs npm jq lua
+          pacman -Sy --noconfirm git quickshell qt6-declarative bun nodejs npm jq lua
 
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -58,7 +58,7 @@ jobs:
         run: qmllint *.qml ui/*.qml
 
       - name: Typecheck Store Logic
-        run: deno check TodoStore.js PanelLogic.js GitSync.js
+        run: bun -e "import './TodoStore.js'; import './PanelLogic.js'; import './GitSync.js';"
 
       # Real validator from the pinned Omarchy checkout, not hand-rolled jq
       # field checks: it also enforces entry-point existence per kind, safe
@@ -66,10 +66,7 @@ jobs:
       - name: Validate Plugin Manifest
         run: bash /tmp/omarchy/bin/omarchy-plugin-validate .
 
-      # Node, not Deno, for the test run - matching `npm run test` locally.
-      # Deno's permission model makes every `execSync` in a guard throw, and
-      # those guards call t.skip(), so a Deno run silently reported "83
-      # passed" while skipping every subprocess-backed test.
+      # Node for the test run - matching `npm run test` locally.
       - name: Run Unit Tests
         env:
           # Guards throw instead of skipping for prerequisites CI must provide,

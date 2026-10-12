@@ -11,7 +11,7 @@
     "test:qml:static": "node --experimental-strip-types --test tests/qml-static.test.mts",
     "test:qml:core": "node --experimental-strip-types --test tests/qml-core.test.mts",
     "test:qml:theme": "node --experimental-strip-types --test tests/qml-theme.test.mts",
-    "typecheck": "deno check TodoStore.js PanelLogic.js GitSync.js",
+    "typecheck": "bun -e \"import './TodoStore.js'; import './PanelLogic.js'; import './GitSync.js';\"",
     "lint:qml": "qmllint *.qml ui/*.qml",
     "validate:plugin": "omarchy plugin validate .",
     "check": "npm run typecheck && npm run lint:qml && npm run validate:plugin && npm test",

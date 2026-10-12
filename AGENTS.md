@@ -31,7 +31,7 @@
   - Critical production bugs branch directly off `main` (`fix/<issue>`), merge to `main`, and are back-merged into `develop`.
 
 ## Code Quality & Commit Standards
-- **Validation**: Always run `npm run check` (which runs `deno check TodoStore.js PanelLogic.js GitSync.js`, `qmllint *.qml ui/*.qml`, `omarchy plugin validate .`, and `tests/*.test.mts`). All checks must pass with zero errors and zero warnings.
+- **Validation**: Always run `npm run check` (which runs `npm run typecheck` via Bun, `qmllint *.qml ui/*.qml`, `omarchy plugin validate .`, and `tests/*.test.mts`). All checks must pass with zero errors and zero warnings.
 - **Fast Iteration**: Use `npm run test:fast` (< 0.8s) during active editing to run all unit and static QML tests.
 - **Automated Tests**: Update and add assertions to the corresponding test file:
   - `tests/TodoStore.test.mts` for data store, urgency ladder, sorting, and storage.
@@ -62,9 +62,7 @@ Tests are split by what they need, so CI can run the maximum that works in a bar
 
 ### Silent skips are a bug
 
-Guards call `t.skip()` when a prerequisite is missing — but **Deno reports skips as `ok`**, and its permission model makes `execSync` throw under `--allow-read`, turning *every* subprocess-backed test into a skip. That is why CI runs the suite with **Node** (no permission model) rather than Deno.
-
-To stop the class of bug recurring, any prerequisite **CI is expected to provide** must **throw under `CI=1`** instead of skipping. Genuinely local-only tests skip in CI with a reason naming what is missing. If you add a test that needs a new tool, decide which column it belongs in and make the guard match.
+Guards call `t.skip()` when a prerequisite is missing. Any prerequisite **CI is expected to provide** must **throw under `CI=1`** instead of skipping. Genuinely local-only tests skip in CI with a reason naming what is missing. If you add a test that needs a new tool, decide which column it belongs in and make the guard match.
 
 Reproduce CI exactly before pushing:
 

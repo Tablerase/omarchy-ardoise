@@ -39,7 +39,7 @@ Ardoise is an Omarchy desktop extension designed for instant, zero-friction task
 8. **Clean Separation of UI and Logic (`PanelLogic.js`)**:
    - `PanelContent.qml` strictly handles visual hierarchy, layout items, styling, animations, and QtQuick property bindings.
    - Core 2D navigation state machine transitions (`handleMove`, `handleTab`, `handleActivate`, `handleReturn`, `handleEscape`, `handleTextKey`, `handleDelete`), section / sub-section stepping (`getNextSection`, `getNextSubSection`, `getPrevSubSection`), editor and codebase command generation (`buildEditorCommand`, `buildCodebaseCommand`), repo name formatting (`cleanRepoName`), and keybinding catalogs/filtering (`getKeybindingsList`, `filterKeybindings`) are isolated in `PanelLogic.js`.
-   - This separation facilitates rapid manual styling tweaks without risk of breaking navigation algorithms, while enabling comprehensive automated unit testing in Node and Deno.
+   - This separation facilitates rapid manual styling tweaks without risk of breaking navigation algorithms, while enabling comprehensive automated unit testing in Node and Bun.
 
 ---
 
