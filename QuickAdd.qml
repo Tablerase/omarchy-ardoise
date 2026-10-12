@@ -1350,92 +1350,102 @@ Item {
           width: parent.width
           spacing: Style.space(6)
 
-          Row {
+          Item {
+            id: quickAddProfileRow
             width: parent.width
-            spacing: Style.space(6)
+            implicitHeight: Style.space(26)
 
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: "Profile:"
-              color: (root.focusSection === "profiles") ? Color.accent : Color.muted
-              font.bold: (root.focusSection === "profiles")
-              font.family: Style.font.family
-              font.pixelSize: Style.font.caption
+            Row {
+              id: quickAddProfileLabelRow
+              anchors.left: parent.left
+              anchors.top: parent.top
+              anchors.topMargin: (Style.space(22) - implicitHeight) / 2
+              spacing: Style.space(4)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Profile:"
+                color: (root.focusSection === "profiles") ? Color.accent : Color.muted
+                font.bold: (root.focusSection === "profiles")
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
             }
 
-            Flow {
-              id: quickAddProfilesFlow
-              width: parent.width - Style.space(48)
-              spacing: Style.space(6)
+            // Profile Search Chip (󰍉)
+            Rectangle {
+              id: quickAddProfileSearchChip
+              anchors.left: quickAddProfileLabelRow.right
+              anchors.leftMargin: Style.space(4)
+              anchors.top: parent.top
+              anchors.topMargin: (Style.space(22) - height) / 2
+              width: Style.space(22)
+              height: Style.space(20)
+              implicitWidth: Style.space(22)
+              implicitHeight: Style.space(20)
+              radius: height / 2
+              readonly property bool isSearchNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex === -1)
+              color: root.showProfileSearchBox
+                ? Color.accent
+                : (isSearchNavFocused
+                    ? Util.alpha(Color.accent, 0.25)
+                    : (profSearchMouse.containsMouse ? Util.alpha(Color.foreground, 0.1) : Util.alpha(Color.foreground, 0.05)))
+              border.color: isSearchNavFocused ? Color.accent : Util.alpha(Color.foreground, 0.15)
+              border.width: isSearchNavFocused ? 1.5 : 1
 
-              // Profile Search Chip (󰍉)
-              Rectangle {
-                id: quickAddProfileSearchChip
-                width: Style.space(22)
-                height: Style.space(20)
-                implicitWidth: Style.space(22)
-                implicitHeight: Style.space(20)
-                radius: height / 2
-                readonly property bool isSearchNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex === -1)
-                color: root.showProfileSearchBox
-                  ? Color.accent
-                  : (isSearchNavFocused
-                      ? Util.alpha(Color.accent, 0.25)
-                      : (profSearchMouse.containsMouse ? Util.alpha(Color.foreground, 0.1) : Util.alpha(Color.foreground, 0.05)))
-                border.color: isSearchNavFocused ? Color.accent : Util.alpha(Color.foreground, 0.15)
-                border.width: isSearchNavFocused ? 1.5 : 1
+              Text {
+                anchors.centerIn: parent
+                text: "󰍉"
+                color: root.showProfileSearchBox ? (Color.menu.background || Color.background) : (quickAddProfileSearchChip.isSearchNavFocused ? Color.accent : Color.muted)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
 
-                Text {
-                  anchors.centerIn: parent
-                  text: "󰍉"
-                  color: root.showProfileSearchBox ? (Color.menu.background || Color.background) : (quickAddProfileSearchChip.isSearchNavFocused ? Color.accent : Color.muted)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-
-                MouseArea {
-                  id: profSearchMouse
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: {
-                    root.showProfileSearchBox = !root.showProfileSearchBox
-                    if (root.showProfileSearchBox) {
-                      root.focusSection = "profiles"
-                      root.profileChipIndex = -1
-                    }
+              MouseArea {
+                id: profSearchMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  root.showProfileSearchBox = !root.showProfileSearchBox
+                  if (root.showProfileSearchBox) {
+                    root.focusSection = "profiles"
+                    root.profileChipIndex = -1
                   }
                 }
               }
+            }
 
-              // Divider between search chip and profiles
-              Item {
-                width: Style.space(5)
-                height: Style.space(20)
+            // Divider between search chip and profiles
+            Rectangle {
+              id: quickAddProfileDivider
+              anchors.left: quickAddProfileSearchChip.right
+              anchors.leftMargin: Style.space(4)
+              anchors.verticalCenter: quickAddProfileSearchChip.verticalCenter
+              width: 1
+              height: Style.space(12)
+              color: Util.alpha(Color.foreground, 0.15)
+            }
 
-                Rectangle {
-                  width: 1
-                  height: Style.space(12)
-                  anchors.centerIn: parent
-                  color: Util.alpha(Color.foreground, 0.15)
-                }
-              }
-
-              Ui.ProfileSelector {
-                id: quickAddProfileSelector
-                width: parent.width - quickAddProfileSearchChip.width - Style.space(12)
-                wrap: true
-                fadeColor: Color.menu.background
-                profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
-                selectedProfile: root.selectedProfile
-                focusedIndex: (root.focusSection === "profiles" && root.profileChipIndex >= 0)
-                  ? root.profileChipIndex
-                  : -1
-                isNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex >= 0)
-                onProfileSelected: function(name, idx) {
-                  root.selectedProfile = name
-                  root.profileChipIndex = idx
-                }
+            Ui.ProfileSelector {
+              id: quickAddProfileSelector
+              anchors.left: quickAddProfileDivider.right
+              anchors.leftMargin: Style.space(4)
+              anchors.right: parent.right
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              wrap: false
+              fadeColor: Color.menu.background
+              profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+              selectedProfile: root.selectedProfile
+              focusedIndex: (root.focusSection === "profiles" && root.profileChipIndex >= 0)
+                ? root.profileChipIndex
+                : -1
+              isNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex >= 0)
+              onProfileSelected: function(name, idx) {
+                root.selectedProfile = name
+                root.profileChipIndex = idx
+                root.ensureProfileVisible(name)
               }
             }
           }

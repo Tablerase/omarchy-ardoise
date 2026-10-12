@@ -488,8 +488,9 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     profileSelectorContent.includes("property bool wrap: false") &&
       profileSelectorContent.includes("Flow {") &&
       profileSelectorContent.includes("id: profileFlow") &&
-      quickAddContent.includes("wrap: true"),
-    "ProfileSelector must support Flow wrapping mode and QuickAdd must configure wrap: true to prevent horizontal clipping"
+      quickAddContent.includes("id: quickAddProfileSelector") &&
+      quickAddContent.includes("wrap: false"),
+    "ProfileSelector must support Flow wrapping mode and QuickAdd must configure wrap: false for single-line horizontal scrolling"
   );
   const reminderPickerContent = fs.readFileSync(path.join(repoDir, "ui", "ReminderPicker.qml"), "utf8");
   assert.ok(
