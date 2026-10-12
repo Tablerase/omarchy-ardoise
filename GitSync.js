@@ -35,13 +35,16 @@ function extractDeviceName(message, fallbackAuthor) {
 }
 
 /**
- * Extracts clean message without "[DeviceName]" prefix.
+ * Extracts clean message without "[DeviceName]" prefix and trailing "(N pending)" count.
  * @param {string} message
  * @returns {string}
  */
 function extractCleanMessage(message) {
   if (!message) return ""
-  return String(message).replace(/^\[[^\]]+\]\s*/, "").trim()
+  return String(message)
+    .replace(/^\[[^\]]+\]\s*/, "")
+    .replace(/\s*\(\d+\s+pending\)\s*$/, "")
+    .trim()
 }
 
 /**
@@ -189,7 +192,7 @@ function filterSnapshots(snapshots, query) {
       // Normalize device-tag syntax: strip leading # or surrounding [...]
       var deviceToken = token.replace(/^\[(.+)\]$/, "$1").replace(/^#/, "")
 
-      var msg = (snap.cleanMessage || snap.message || "").toLowerCase()
+      var msg = ((snap.cleanMessage || "") + " " + (snap.message || "")).toLowerCase()
       var device = (snap.deviceName || "").toLowerCase()
       var shortH = (snap.shortHash || "").toLowerCase()
       var fullH = (snap.hash || "").toLowerCase()
@@ -253,6 +256,148 @@ function diagnoseGitSyncError(rawOutput, exitCode) {
   return "Sync failed: " + text.split("\n")[0].substring(0, 80)
 }
 
+/**
+ * Computes a structured diff between snapshot tasks and parent tasks (and active store).
+ *
+ * @param {any[]} snapshotTasks - Tasks recorded in snapshot (hash:todos.json)
+ * @param {any[]} parentTasks - Tasks recorded in parent commit (hash^:todos.json)
+ * @param {any[]} [liveTasks] - Active tasks in current store (store.todos)
+ * @returns {{
+ *   tasks: any[],
+ *   summary: { added: number, removed: number, completed: number, reopened: number, modified: number, unchanged: number },
+ *   hasChanges: boolean
+ * }}
+ */
+function computeSnapshotDiff(snapshotTasks, parentTasks, liveTasks) {
+  var sTasks = Array.isArray(snapshotTasks) ? snapshotTasks : []
+  var pTasks = Array.isArray(parentTasks) ? parentTasks : []
+  var lTasks = Array.isArray(liveTasks) ? liveTasks : []
+
+  var pMap = new Map()
+  for (var i = 0; i < pTasks.length; i++) {
+    if (pTasks[i] && pTasks[i].id !== undefined) {
+      pMap.set(String(pTasks[i].id), pTasks[i])
+    }
+  }
+
+  var sMap = new Map()
+  for (var j = 0; j < sTasks.length; j++) {
+    if (sTasks[j] && sTasks[j].id !== undefined) {
+      sMap.set(String(sTasks[j].id), sTasks[j])
+    }
+  }
+
+  var lMap = new Map()
+  for (var k = 0; k < lTasks.length; k++) {
+    if (lTasks[k] && lTasks[k].id !== undefined) {
+      lMap.set(String(lTasks[k].id), lTasks[k])
+    }
+  }
+
+  var summary = {
+    added: 0,
+    removed: 0,
+    completed: 0,
+    reopened: 0,
+    modified: 0,
+    unchanged: 0
+  }
+
+  var resultTasks = []
+  var isInitial = pTasks.length === 0
+
+  // 1. Process tasks present in snapshot
+  for (var m = 0; m < sTasks.length; m++) {
+    var task = sTasks[m]
+    var idStr = String(task.id)
+    var isMissing = !lMap.has(idStr)
+    var diffStatus = "unchanged"
+    var diffDetail = ""
+
+    if (isInitial) {
+      diffStatus = "added"
+      summary.added++
+    } else if (!pMap.has(idStr)) {
+      diffStatus = "added"
+      summary.added++
+    } else {
+      var pTask = pMap.get(idStr)
+      if (!pTask.done && task.done) {
+        diffStatus = "completed"
+        summary.completed++
+      } else if (pTask.done && !task.done) {
+        diffStatus = "reopened"
+        summary.reopened++
+      } else if (
+        pTask.title !== task.title ||
+        pTask.description !== task.description ||
+        pTask.profile !== task.profile ||
+        JSON.stringify(pTask.tags || []) !== JSON.stringify(task.tags || []) ||
+        pTask.reminder !== task.reminder
+      ) {
+        diffStatus = "modified"
+        summary.modified++
+        if (pTask.title !== task.title) diffDetail = "title"
+        else if (pTask.description !== task.description) diffDetail = "notes"
+        else if (pTask.profile !== task.profile) diffDetail = "profile"
+        else if (pTask.reminder !== task.reminder) diffDetail = "reminder"
+        else diffDetail = "tags"
+      } else {
+        diffStatus = "unchanged"
+        summary.unchanged++
+      }
+    }
+
+    resultTasks.push(Object.assign({}, task, {
+      diffStatus: diffStatus,
+      diffDetail: diffDetail,
+      isMissing: isMissing
+    }))
+  }
+
+  // 2. Process tasks deleted in this snapshot (present in parent, absent in snapshot)
+  if (!isInitial) {
+    for (var n = 0; n < pTasks.length; n++) {
+      var pt = pTasks[n]
+      var ptIdStr = String(pt.id)
+      if (!sMap.has(ptIdStr)) {
+        summary.removed++
+        resultTasks.push(Object.assign({}, pt, {
+          diffStatus: "removed",
+          diffDetail: "deleted",
+          isMissing: !lMap.has(ptIdStr)
+        }))
+      }
+    }
+  }
+
+  // 3. Sort order: changed tasks first
+  /** @type {Record<string, number>} */
+  var priority = {
+    added: 0,
+    removed: 1,
+    completed: 2,
+    reopened: 3,
+    modified: 4,
+    unchanged: 5
+  }
+
+  resultTasks.sort(function(a, b) {
+    var pa = (a.diffStatus && priority[a.diffStatus] !== undefined) ? priority[a.diffStatus] : 5
+    var pb = (b.diffStatus && priority[b.diffStatus] !== undefined) ? priority[b.diffStatus] : 5
+    if (pa !== pb) return pa - pb
+    return (a.title || "").localeCompare(b.title || "")
+  })
+
+  var hasChanges = (summary.added + summary.removed + summary.completed + summary.reopened + summary.modified) > 0
+
+  return {
+    tasks: resultTasks,
+    summary: summary,
+    hasChanges: hasChanges
+  }
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     extractDeviceName,
@@ -263,7 +408,8 @@ if (typeof module !== "undefined" && module.exports) {
     formatRelativeTime,
     isValidRemoteUrl,
     filterSnapshots,
-    diagnoseGitSyncError
+    diagnoseGitSyncError,
+    computeSnapshotDiff
   }
 }
 

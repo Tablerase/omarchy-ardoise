@@ -1522,8 +1522,18 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
   assert.ok(
     gitModal.includes('id: previewBox') &&
       gitModal.includes('model: root.inspectedTasks') &&
-      gitModal.includes('+ Recoverable'),
-    "GitModal must provide snapshot task preview drawer with recoverable indicator"
+      gitModal.includes('+ Recoverable') &&
+      gitModal.includes('root.snapshotSection = "preview"') &&
+      gitModal.includes('ensurePreviewVisible') &&
+      gitModal.includes('- Deleted') &&
+      gitModal.includes('+ Added') &&
+      gitModal.includes('font.strikeout: taskItemDelegate.status === "removed"'),
+    "GitModal must provide snapshot task preview drawer with recoverable indicator, diff status, and vim/tab navigation"
+  );
+  assert.ok(
+    barWidget.includes('property var inspectedSnapshotDiff: null') &&
+      barWidget.includes('function recoverSingleTask(task) {'),
+    "BarWidget must provide inspectedSnapshotDiff property and recoverSingleTask method"
   );
   assert.ok(
     gitModal.includes('readonly property color secondaryText: TodoStore.getReadableSecondary') &&

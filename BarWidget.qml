@@ -51,6 +51,7 @@ BarWidget {
   property string recoveringHash: ""
   property string inspectingHash: ""
   property var inspectedSnapshotTasks: []
+  property var inspectedSnapshotDiff: null
   property string lastArchiveText: ""
 
   // Durable archive-operation state. Restore/purge read both files fresh from
@@ -517,11 +518,48 @@ BarWidget {
         } catch (_) {
           root.inspectedSnapshotTasks = []
         }
+        if (root.inspectingHash) {
+          inspectParentSnapshotProc.running = true
+        } else {
+          root.inspectedSnapshotDiff = null
+        }
       }
     }
     onExited: function(code) {
       if (code !== 0) {
         root.inspectedSnapshotTasks = []
+        root.inspectedSnapshotDiff = null
+      }
+    }
+  }
+
+  Process {
+    id: inspectParentSnapshotProc
+    command: ["git", "-C", root.dataDirPath, "show", root.inspectingHash + "^:todos.json"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var parentTasks = []
+        try {
+          var parsed = JSON.parse(text)
+          parentTasks = (parsed && Array.isArray(parsed.todos)) ? parsed.todos : []
+        } catch (_) {
+          parentTasks = []
+        }
+        root.inspectedSnapshotDiff = GitSync.computeSnapshotDiff(
+          root.inspectedSnapshotTasks,
+          parentTasks,
+          (root.store && Array.isArray(root.store.todos)) ? root.store.todos : []
+        )
+      }
+    }
+    onExited: function(code) {
+      if (code !== 0) {
+        root.inspectedSnapshotDiff = GitSync.computeSnapshotDiff(
+          root.inspectedSnapshotTasks,
+          [],
+          (root.store && Array.isArray(root.store.todos)) ? root.store.todos : []
+        )
       }
     }
   }
@@ -719,16 +757,30 @@ BarWidget {
     recoverProc.running = true
   }
 
+  function recoverSingleTask(task) {
+    if (!task || task.id === undefined) return false
+    if (root.store && TodoStore.getTaskById(root.store, task.id)) return false
+    var updated = TodoStore.cloneStore(root.store)
+    var recovered = TodoStore.cloneTask(task)
+    recovered.done = false
+    updated.todos.push(recovered)
+    updated.todos.sort(TodoStore.compareTasks)
+    root.saveStore(updated, "Recover task: " + String(task.title || "").substring(0, 30))
+    return true
+  }
+
   function inspectSnapshot(hashStr) {
     if (!hashStr) {
       root.inspectingHash = ""
       root.inspectedSnapshotTasks = []
+      root.inspectedSnapshotDiff = null
       return
     }
     var h = String(hashStr).trim()
     if (!/^[0-9a-fA-F]{4,40}$/.test(h)) {
       root.inspectingHash = ""
       root.inspectedSnapshotTasks = []
+      root.inspectedSnapshotDiff = null
       return
     }
     if (root.inspectingHash === h && inspectSnapshotProc.running) return

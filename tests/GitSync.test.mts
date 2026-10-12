@@ -19,7 +19,8 @@ const {
   formatRelativeTime,
   isValidRemoteUrl,
   filterSnapshots,
-  diagnoseGitSyncError
+  diagnoseGitSyncError,
+  computeSnapshotDiff
 } = GitSync;
 
 test("extractDeviceName: extracts device bracket tag or falls back to author", () => {
@@ -29,10 +30,12 @@ test("extractDeviceName: extracts device bracket tag or falls back to author", (
   assert.equal(extractDeviceName("", "fallback"), "fallback");
 });
 
-test("extractCleanMessage: removes device tag from commit message", () => {
+test("extractCleanMessage: removes device tag and pending count suffix from commit message", () => {
   assert.equal(extractCleanMessage("[omarchy] Auto-save: added task"), "Auto-save: added task");
   assert.equal(extractCleanMessage("[laptop] Manual backup"), "Manual backup");
   assert.equal(extractCleanMessage("No tag commit"), "No tag commit");
+  assert.equal(extractCleanMessage("[omarchy] Complete #work task (2 pending)"), "Complete #work task");
+  assert.equal(extractCleanMessage("[thinkpad] Delete #ardoise task (5 pending)"), "Delete #ardoise task");
 });
 
 test("extractPendingCount: extracts pending task count if formatted", () => {
@@ -80,7 +83,7 @@ c3d4e5f67890123|dev-box|rcutte@dev|1790000000|Initial task repository`;
   assert.equal(snapshots[0].shortHash, "4a57f98");
   assert.equal(snapshots[0].author, "omarchy");
   assert.equal(snapshots[0].deviceName, "omarchy");
-  assert.equal(snapshots[0].cleanMessage, "Auto-save: add task (12 pending)");
+  assert.equal(snapshots[0].cleanMessage, "Auto-save: add task");
   assert.equal(snapshots[0].pendingCount, 12);
   assert.equal(snapshots[0].timestamp, 1790200000 * 1000);
 
@@ -121,7 +124,7 @@ const FIXTURE_SNAPSHOTS = [
     email: "rcutte@omarchy",
     timestamp: 1790200000000,
     message: "[omarchy] Auto-save: added task (12 pending)",
-    cleanMessage: "Auto-save: added task (12 pending)",
+    cleanMessage: "Auto-save: added task",
     deviceName: "omarchy",
     pendingCount: 12
   },
@@ -132,7 +135,7 @@ const FIXTURE_SNAPSHOTS = [
     email: "pierre@thinkpad",
     timestamp: 1790100000000,
     message: "[thinkpad] Completed 3 tasks (9 pending)",
-    cleanMessage: "Completed 3 tasks (9 pending)",
+    cleanMessage: "Completed 3 tasks",
     deviceName: "thinkpad",
     pendingCount: 9
   },
@@ -585,6 +588,100 @@ test("sync safety: multi-device divergence merges remote changes without droppin
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
+});
+
+test("computeSnapshotDiff: computes added, removed, completed, reopened, modified, and unchanged diffs", () => {
+  const parentTasks = [
+    { id: 1, title: "Keep unchanged", done: false, description: "desc", profile: "personal", tags: [] },
+    { id: 2, title: "Will be completed", done: false, description: "", profile: "work", tags: [] },
+    { id: 3, title: "Will be deleted", done: false, description: "", profile: "personal", tags: [] },
+    { id: 4, title: "Original title", done: false, description: "", profile: "personal", tags: [] },
+    { id: 5, title: "Was done", done: true, description: "", profile: "work", tags: [] }
+  ];
+
+  const snapshotTasks = [
+    { id: 1, title: "Keep unchanged", done: false, description: "desc", profile: "personal", tags: [] },
+    { id: 2, title: "Will be completed", done: true, description: "", profile: "work", tags: [] },
+    { id: 4, title: "Edited title", done: false, description: "", profile: "personal", tags: [] },
+    { id: 5, title: "Was done", done: false, description: "", profile: "work", tags: [] },
+    { id: 6, title: "Brand new task", done: false, description: "", profile: "personal", tags: [] }
+  ];
+
+  const liveStoreTasks = [
+    { id: 1, title: "Keep unchanged", done: false },
+    { id: 2, title: "Will be completed", done: true },
+    { id: 4, title: "Edited title", done: false }
+    // Note: id 3, 5, 6 are missing from live store
+  ];
+
+  const diff = computeSnapshotDiff(snapshotTasks, parentTasks, liveStoreTasks);
+
+  assert.equal(diff.hasChanges, true);
+  assert.equal(diff.summary.added, 1);
+  assert.equal(diff.summary.removed, 1);
+  assert.equal(diff.summary.completed, 1);
+  assert.equal(diff.summary.reopened, 1);
+  assert.equal(diff.summary.modified, 1);
+  assert.equal(diff.summary.unchanged, 1);
+
+  // Assert tasks are sorted by changed status first
+  const added = diff.tasks.find((t: any) => t.id === 6);
+  assert.ok(added);
+  assert.equal(added.diffStatus, "added");
+  assert.equal(added.isMissing, true);
+
+  const removed = diff.tasks.find((t: any) => t.id === 3);
+  assert.ok(removed);
+  assert.equal(removed.diffStatus, "removed");
+  assert.equal(removed.isMissing, true);
+
+  const completed = diff.tasks.find((t: any) => t.id === 2);
+  assert.ok(completed);
+  assert.equal(completed.diffStatus, "completed");
+  assert.equal(completed.isMissing, false);
+
+  const reopened = diff.tasks.find((t: any) => t.id === 5);
+  assert.ok(reopened);
+  assert.equal(reopened.diffStatus, "reopened");
+  assert.equal(reopened.isMissing, true);
+
+  const modified = diff.tasks.find((t: any) => t.id === 4);
+  assert.ok(modified);
+  assert.equal(modified.diffStatus, "modified");
+  assert.equal(modified.diffDetail, "title");
+  assert.equal(modified.isMissing, false);
+
+  const unchanged = diff.tasks.find((t: any) => t.id === 1);
+  assert.ok(unchanged);
+  assert.equal(unchanged.diffStatus, "unchanged");
+  assert.equal(unchanged.isMissing, false);
+
+  // Assert order: added, removed, completed, reopened, modified, unchanged
+  const statuses = diff.tasks.map((t: any) => t.diffStatus);
+  assert.deepEqual(statuses, ["added", "removed", "completed", "reopened", "modified", "unchanged"]);
+});
+
+test("computeSnapshotDiff: handles initial root commit (no parent)", () => {
+  const snapshotTasks = [
+    { id: 10, title: "Initial task", done: false }
+  ];
+
+  const diff = computeSnapshotDiff(snapshotTasks, [], []);
+  assert.equal(diff.summary.added, 1);
+  assert.equal(diff.summary.removed, 0);
+  assert.equal(diff.tasks.length, 1);
+  assert.equal(diff.tasks[0].diffStatus, "added");
+  assert.equal(diff.tasks[0].isMissing, true);
+});
+
+test("computeSnapshotDiff: handles empty or invalid inputs safely", () => {
+  const diff1 = computeSnapshotDiff(null as any, null as any, null as any);
+  assert.equal(diff1.hasChanges, false);
+  assert.equal(diff1.tasks.length, 0);
+
+  const diff2 = computeSnapshotDiff(undefined as any, undefined as any, undefined as any);
+  assert.equal(diff2.hasChanges, false);
+  assert.equal(diff2.tasks.length, 0);
 });
 
 

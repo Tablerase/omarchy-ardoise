@@ -21,7 +21,8 @@ Rectangle {
   property int selectedIndex: 0
   property int activeTab: 0 // 0: Snapshots & Rollback, 1: Sync Settings
   property int syncFocusIndex: 0 // 0: remoteField, 1: autoCreateRemoteBtn, 2: saveRemoteBtn, 3: syncNowBtn
-  property string snapshotSection: "snapshots" // "snapshots" | "actions"
+  property string snapshotSection: "snapshots" // "snapshots" | "preview" | "actions"
+  property int previewIndex: 0
   property int actionButtonIndex: 0 // 0: rollback, 1: recover
   property alias contextMenu: contextMenu
 
@@ -36,9 +37,17 @@ Rectangle {
     ? root.filteredSnapshots[root.selectedIndex]
     : null
 
-  readonly property var inspectedTasks: (root.barWidget && root.barWidget.inspectedSnapshotTasks) ? root.barWidget.inspectedSnapshotTasks : []
+  readonly property var previewDiff: (root.barWidget && root.barWidget.inspectedSnapshotDiff) ? root.barWidget.inspectedSnapshotDiff : null
+  readonly property var inspectedTasks: (root.previewDiff && Array.isArray(root.previewDiff.tasks))
+    ? root.previewDiff.tasks
+    : ((root.barWidget && root.barWidget.inspectedSnapshotTasks) ? root.barWidget.inspectedSnapshotTasks : [])
+  readonly property var previewTasks: root.inspectedTasks
+  readonly property var selectedPreviewTask: (root.inspectedTasks && root.inspectedTasks.length > root.previewIndex)
+    ? root.inspectedTasks[root.previewIndex]
+    : null
 
   onSelectedSnapshotChanged: {
+    root.previewIndex = 0
     if (root.barWidget && typeof root.barWidget.inspectSnapshot === "function") {
       root.barWidget.inspectSnapshot(root.selectedSnapshot ? root.selectedSnapshot.hash : "")
     }
@@ -50,6 +59,7 @@ Rectangle {
     if (contextMenu) contextMenu.close()
     if (activeTab === 0) {
       root.snapshotSection = "snapshots"
+      root.previewIndex = 0
       root.actionButtonIndex = 0
       root.ensureSnapshotVisible()
     } else {
@@ -65,6 +75,7 @@ Rectangle {
     isOpen = true
     activeTab = 0
     snapshotSection = "snapshots"
+    previewIndex = 0
     actionButtonIndex = 0
     selectedIndex = 0
     syncFocusIndex = 0
@@ -166,6 +177,12 @@ Rectangle {
     }
   }
 
+  function ensurePreviewVisible() {
+    if (inspectedTaskList && root.previewIndex >= 0 && root.previewIndex < inspectedTaskList.count) {
+      inspectedTaskList.positionViewAtIndex(root.previewIndex, ListView.Contain)
+    }
+  }
+
   // Unconditional mouse event blocker — prevents hover/click bleed-through to items below
   MouseArea {
     anchors.fill: parent
@@ -219,10 +236,19 @@ Rectangle {
     }
 
     if (root.activeTab === 0) {
-      // Tab / Shift+Tab section transitions in Tab 0
+      // Tab / Shift+Tab section transitions in Tab 0: snapshots -> preview -> actions
       if (event.key === Qt.Key_Tab) {
         event.accepted = true
         if (root.snapshotSection === "snapshots") {
+          if (root.previewTasks && root.previewTasks.length > 0) {
+            root.snapshotSection = "preview"
+            root.previewIndex = 0
+            root.ensurePreviewVisible()
+          } else {
+            root.snapshotSection = "actions"
+            root.actionButtonIndex = 0
+          }
+        } else if (root.snapshotSection === "preview") {
           root.snapshotSection = "actions"
           root.actionButtonIndex = 0
         } else {
@@ -230,6 +256,7 @@ Rectangle {
             root.actionButtonIndex = 1
           } else {
             root.snapshotSection = "snapshots"
+            root.ensureSnapshotVisible()
           }
         }
         return
@@ -240,8 +267,18 @@ Rectangle {
           if (root.actionButtonIndex === 1) {
             root.actionButtonIndex = 0
           } else {
-            root.snapshotSection = "snapshots"
+            if (root.previewTasks && root.previewTasks.length > 0) {
+              root.snapshotSection = "preview"
+              root.previewIndex = Math.min(root.previewIndex, root.previewTasks.length - 1)
+              root.ensurePreviewVisible()
+            } else {
+              root.snapshotSection = "snapshots"
+              root.ensureSnapshotVisible()
+            }
           }
+        } else if (root.snapshotSection === "preview") {
+          root.snapshotSection = "snapshots"
+          root.ensureSnapshotVisible()
         } else {
           root.snapshotSection = "actions"
           root.actionButtonIndex = 1
@@ -257,8 +294,14 @@ Rectangle {
               root.selectedIndex++
               root.ensureSnapshotVisible()
             } else {
-              root.snapshotSection = "actions"
-              root.actionButtonIndex = 0
+              if (root.previewTasks && root.previewTasks.length > 0) {
+                root.snapshotSection = "preview"
+                root.previewIndex = 0
+                root.ensurePreviewVisible()
+              } else {
+                root.snapshotSection = "actions"
+                root.actionButtonIndex = 0
+              }
             }
           }
           return
@@ -314,6 +357,88 @@ Rectangle {
           }
           return
         }
+      } else if (root.snapshotSection === "preview") {
+        if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
+          event.accepted = true
+          if (root.previewTasks && root.previewTasks.length > 0) {
+            if (root.previewIndex < root.previewTasks.length - 1) {
+              root.previewIndex++
+              root.ensurePreviewVisible()
+            } else {
+              root.snapshotSection = "actions"
+              root.actionButtonIndex = 0
+            }
+          }
+          return
+        }
+        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          if (root.previewIndex > 0) {
+            root.previewIndex--
+            root.ensurePreviewVisible()
+          } else {
+            root.snapshotSection = "snapshots"
+            root.ensureSnapshotVisible()
+          }
+          return
+        }
+        if (event.key === Qt.Key_G && (event.modifiers & Qt.ShiftModifier || event.text === "G")) {
+          event.accepted = true
+          if (root.previewTasks && root.previewTasks.length > 0) {
+            root.previewIndex = root.previewTasks.length - 1
+            root.ensurePreviewVisible()
+          }
+          return
+        }
+        if (event.key === Qt.Key_G || event.text === "g") {
+          event.accepted = true
+          if (root.previewTasks && root.previewTasks.length > 0) {
+            root.previewIndex = 0
+            root.ensurePreviewVisible()
+          }
+          return
+        }
+        if ((event.key === Qt.Key_L || event.text === "l") && !root.searchActive) {
+          event.accepted = true
+          root.activeTab = 1
+          return
+        }
+        if (event.key === Qt.Key_H || event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.snapshotSection = "snapshots"
+          root.ensureSnapshotVisible()
+          return
+        }
+        if (event.key === Qt.Key_Y || event.text === "y") {
+          event.accepted = true
+          if (root.selectedPreviewTask && root.selectedPreviewTask.title) {
+            root.copyTaskTitle(root.selectedPreviewTask.title)
+          }
+          return
+        }
+        if (event.key === Qt.Key_C || event.text === "c") {
+          event.accepted = true
+          if (root.selectedPreviewTask && (root.selectedPreviewTask.isMissing || root.selectedPreviewTask.diffStatus === "removed") && root.barWidget && typeof root.barWidget.recoverSingleTask === "function") {
+            root.barWidget.recoverSingleTask(root.selectedPreviewTask)
+          } else if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.recoverFromCommit === "function") {
+            root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)
+          }
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          if (root.selectedPreviewTask && (root.selectedPreviewTask.isMissing || root.selectedPreviewTask.diffStatus === "removed") && root.barWidget && typeof root.barWidget.recoverSingleTask === "function") {
+            root.barWidget.recoverSingleTask(root.selectedPreviewTask)
+          }
+          return
+        }
+        if (event.key === Qt.Key_R || event.text === "r") {
+          event.accepted = true
+          if (root.selectedSnapshot && root.barWidget && typeof root.barWidget.rollbackToCommit === "function") {
+            root.barWidget.rollbackToCommit(root.selectedSnapshot.hash)
+          }
+          return
+        }
       } else { // snapshotSection === "actions"
         if (event.key === Qt.Key_H || event.key === Qt.Key_Left || event.text === "h") {
           event.accepted = true
@@ -327,7 +452,14 @@ Rectangle {
         }
         if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
           event.accepted = true
-          root.snapshotSection = "snapshots"
+          if (root.previewTasks && root.previewTasks.length > 0) {
+            root.snapshotSection = "preview"
+            root.previewIndex = root.previewTasks.length - 1
+            root.ensurePreviewVisible()
+          } else {
+            root.snapshotSection = "snapshots"
+            root.ensureSnapshotVisible()
+          }
           return
         }
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
@@ -902,16 +1034,16 @@ Rectangle {
           }
         }
 
-        // Local Snapshot Task Preview Box
+        // Local Snapshot Task Preview Box & Diff Visualisation
         Rectangle {
           id: previewBox
           visible: root.isOpen && Boolean(root.selectedSnapshot)
           width: parent.width
-          height: visible ? Style.space(96) : 0
+          height: visible ? Style.space(120) : 0
           radius: Style.cornerRadius
           color: Util.alpha(Color.menu.background, 0.95)
-          border.color: Util.alpha(root.secondaryText, 0.4)
-          border.width: 1
+          border.color: (root.snapshotSection === "preview") ? Color.accent : Util.alpha(root.secondaryText, 0.4)
+          border.width: (root.snapshotSection === "preview") ? 1.5 : 1
           clip: true
 
           Column {
@@ -935,11 +1067,92 @@ Rectangle {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Snapshot Tasks (" + (root.inspectedTasks ? root.inspectedTasks.length : 0) + ")"
+                text: "Snapshot Tasks (" + (root.previewTasks ? root.previewTasks.length : 0) + ")"
                 color: root.barForeground
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption * 0.95
                 font.bold: true
+              }
+
+              // Diff Summary Pills
+              Row {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Boolean(root.previewDiff && root.previewDiff.hasChanges)
+                spacing: Style.space(4)
+
+                Rectangle {
+                  visible: Boolean(root.previewDiff && root.previewDiff.summary && root.previewDiff.summary.added > 0)
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: addDiffText.implicitWidth + Style.space(6)
+                  implicitHeight: addDiffText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(Color.accent, 0.2)
+
+                  Text {
+                    id: addDiffText
+                    anchors.centerIn: parent
+                    text: "+" + (root.previewDiff && root.previewDiff.summary ? root.previewDiff.summary.added : 0) + " added"
+                    color: Color.accent
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                    font.bold: true
+                  }
+                }
+
+                Rectangle {
+                  visible: Boolean(root.previewDiff && root.previewDiff.summary && root.previewDiff.summary.removed > 0)
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: remDiffText.implicitWidth + Style.space(6)
+                  implicitHeight: remDiffText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(Color.urgent, 0.2)
+
+                  Text {
+                    id: remDiffText
+                    anchors.centerIn: parent
+                    text: "-" + (root.previewDiff && root.previewDiff.summary ? root.previewDiff.summary.removed : 0) + " deleted"
+                    color: Color.urgent
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                    font.bold: true
+                  }
+                }
+
+                Rectangle {
+                  visible: Boolean(root.previewDiff && root.previewDiff.summary && root.previewDiff.summary.completed > 0)
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: compDiffText.implicitWidth + Style.space(6)
+                  implicitHeight: compDiffText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(root.secondaryText, 0.2)
+
+                  Text {
+                    id: compDiffText
+                    anchors.centerIn: parent
+                    text: (root.previewDiff && root.previewDiff.summary ? root.previewDiff.summary.completed : 0) + " done"
+                    color: root.secondaryText
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                  }
+                }
+
+                Rectangle {
+                  visible: Boolean(root.previewDiff && root.previewDiff.summary && root.previewDiff.summary.modified > 0)
+                  anchors.verticalCenter: parent.verticalCenter
+                  implicitWidth: modDiffText.implicitWidth + Style.space(6)
+                  implicitHeight: modDiffText.implicitHeight + Style.space(2)
+                  radius: Style.cornerRadius * 0.3
+                  color: Util.alpha(Color.accent, 0.15)
+
+                  Text {
+                    id: modDiffText
+                    anchors.centerIn: parent
+                    text: (root.previewDiff && root.previewDiff.summary ? root.previewDiff.summary.modified : 0) + " changed"
+                    color: Color.accent
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.75
+                  }
+                }
               }
 
               Text {
@@ -950,6 +1163,16 @@ Rectangle {
                 font.family: "monospace"
                 font.pixelSize: Style.font.caption * 0.8
               }
+
+              // Navigation hint
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: (root.snapshotSection === "preview")
+                text: "• j/k nav  c recover  y copy"
+                color: Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.75
+              }
             }
 
             // Task List
@@ -959,76 +1182,171 @@ Rectangle {
               height: parent.height - previewHeader.implicitHeight - Style.space(4)
               clip: true
               boundsBehavior: Flickable.StopAtBounds
-              spacing: Style.space(3)
+              spacing: Style.space(2)
               model: root.inspectedTasks
+              currentIndex: root.previewIndex
 
               ScrollBar.vertical: ScrollBar {
                 policy: inspectedTaskList.contentHeight > inspectedTaskList.height ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
               }
 
-              delegate: Row {
-                id: taskRow
+              delegate: Rectangle {
+                id: taskItemDelegate
                 required property var modelData
+                required property int index
+
+                readonly property bool isCurrent: (root.snapshotSection === "preview") && (root.previewIndex === index)
+                readonly property bool isMissingFromStore: Boolean(modelData.isMissing)
+                readonly property string status: modelData.diffStatus || "unchanged"
+
                 width: inspectedTaskList.width
-                spacing: Style.space(6)
+                implicitHeight: taskRow.implicitHeight + Style.space(4)
+                radius: Style.cornerRadius * 0.4
+                color: isCurrent
+                  ? Util.alpha(Color.accent, 0.16)
+                  : (taskDelegateHover.containsMouse ? Util.alpha(Color.menu.selectedBackground, 0.7) : "transparent")
+                border.color: isCurrent ? Color.accent : "transparent"
+                border.width: 1
 
-                readonly property bool isMissing: Boolean(root.barWidget && root.barWidget.store && !TodoStore.getTaskById(root.barWidget.store, modelData.id))
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: modelData.done ? "󰄲" : "󰄱"
-                  color: modelData.done ? root.secondaryText : (taskRow.isMissing ? Color.accent : root.barForeground)
-                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.caption * 0.85
-                }
-
-                // Profile tag badge
-                Rectangle {
-                  id: profBadge
-                  anchors.verticalCenter: parent.verticalCenter
-                  visible: Boolean(modelData.profile && modelData.profile !== "personal")
-                  implicitWidth: profText.implicitWidth + Style.space(6)
-                  implicitHeight: profText.implicitHeight + Style.space(2)
-                  radius: Style.cornerRadius * 0.3
-                  color: Util.alpha(root.secondaryText, 0.18)
-
-                  Text {
-                    id: profText
-                    anchors.centerIn: parent
-                    text: modelData.profile || ""
-                    color: root.secondaryText
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.caption * 0.75
+                MouseArea {
+                  id: taskDelegateHover
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  onClicked: {
+                    root.snapshotSection = "preview"
+                    root.previewIndex = taskItemDelegate.index
+                    root.forceActiveFocus()
                   }
                 }
 
-                Text {
+                Row {
+                  id: taskRow
                   anchors.verticalCenter: parent.verticalCenter
-                  width: Math.max(Style.space(40), parent.width - (profBadge.visible ? profBadge.implicitWidth + Style.space(6) : 0) - (recoverBadge.visible ? recoverBadge.implicitWidth + Style.space(6) : 0) - Style.space(24))
-                  text: modelData.title || ""
-                  color: modelData.done ? root.secondaryText : root.barForeground
-                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.caption * 0.85
-                  elide: Text.ElideRight
-                }
+                  anchors.left: parent.left
+                  anchors.right: parent.right
+                  anchors.leftMargin: Style.space(4)
+                  anchors.rightMargin: Style.space(4)
+                  spacing: Style.space(6)
 
-                Rectangle {
-                  id: recoverBadge
-                  anchors.verticalCenter: parent.verticalCenter
-                  visible: taskRow.isMissing
-                  implicitWidth: recText.implicitWidth + Style.space(6)
-                  implicitHeight: recText.implicitHeight + Style.space(2)
-                  radius: Style.cornerRadius * 0.3
-                  color: Util.alpha(Color.accent, 0.2)
-
+                  // Status Icon
                   Text {
-                    id: recText
-                    anchors.centerIn: parent
-                    text: "+ Recoverable"
-                    color: Color.accent
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: taskItemDelegate.status === "removed"
+                      ? "󰍴"
+                      : (taskItemDelegate.status === "added"
+                          ? "󰐕"
+                          : (taskItemDelegate.modelData.done ? "󰄲" : "󰄱"))
+                    color: taskItemDelegate.status === "removed"
+                      ? Color.urgent
+                      : (taskItemDelegate.status === "added"
+                          ? Color.accent
+                          : (taskItemDelegate.modelData.done
+                              ? root.secondaryText
+                              : (taskItemDelegate.isMissingFromStore ? Color.accent : root.barForeground)))
                     font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.caption * 0.75
-                    font.bold: true
+                    font.pixelSize: Style.font.caption * 0.85
+                    font.bold: taskItemDelegate.status === "removed" || taskItemDelegate.status === "added"
+                  }
+
+                  // Diff Status Badge
+                  Rectangle {
+                    id: diffBadge
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: taskItemDelegate.status !== "unchanged"
+                    implicitWidth: diffBadgeText.implicitWidth + Style.space(6)
+                    implicitHeight: diffBadgeText.implicitHeight + Style.space(2)
+                    radius: Style.cornerRadius * 0.3
+                    color: taskItemDelegate.status === "removed"
+                      ? Util.alpha(Color.urgent, 0.22)
+                      : (taskItemDelegate.status === "added"
+                          ? Util.alpha(Color.accent, 0.22)
+                          : Util.alpha(root.secondaryText, 0.18))
+
+                    Text {
+                      id: diffBadgeText
+                      anchors.centerIn: parent
+                      text: taskItemDelegate.status === "removed"
+                        ? "- Deleted"
+                        : (taskItemDelegate.status === "added"
+                            ? "+ Added"
+                            : (taskItemDelegate.status === "completed"
+                                ? "Done"
+                                : (taskItemDelegate.status === "reopened"
+                                    ? "Reopened"
+                                    : "Modified")))
+                      color: taskItemDelegate.status === "removed"
+                        ? Color.urgent
+                        : (taskItemDelegate.status === "added" ? Color.accent : root.secondaryText)
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption * 0.72
+                      font.bold: taskItemDelegate.status === "removed" || taskItemDelegate.status === "added"
+                    }
+                  }
+
+                  // Profile tag badge
+                  Rectangle {
+                    id: profBadge
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: Boolean(taskItemDelegate.modelData.profile && taskItemDelegate.modelData.profile !== "personal")
+                    implicitWidth: profText.implicitWidth + Style.space(6)
+                    implicitHeight: profText.implicitHeight + Style.space(2)
+                    radius: Style.cornerRadius * 0.3
+                    color: Util.alpha(root.secondaryText, 0.18)
+
+                    Text {
+                      id: profText
+                      anchors.centerIn: parent
+                      text: taskItemDelegate.modelData.profile || ""
+                      color: root.secondaryText
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption * 0.72
+                    }
+                  }
+
+                  // Task Title
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.max(Style.space(40), parent.width - (diffBadge.visible ? diffBadge.implicitWidth + Style.space(6) : 0) - (profBadge.visible ? profBadge.implicitWidth + Style.space(6) : 0) - (recoverBadge.visible ? recoverBadge.implicitWidth + Style.space(6) : 0) - Style.space(24))
+                    text: taskItemDelegate.modelData.title || ""
+                    color: taskItemDelegate.status === "removed"
+                      ? Color.urgent
+                      : (taskItemDelegate.modelData.done ? root.secondaryText : root.barForeground)
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.caption * 0.85
+                    font.strikeout: taskItemDelegate.status === "removed"
+                    elide: Text.ElideRight
+                  }
+
+                  // Recoverable Badge
+                  Rectangle {
+                    id: recoverBadge
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: taskItemDelegate.isMissingFromStore || taskItemDelegate.status === "removed"
+                    implicitWidth: recText.implicitWidth + Style.space(6)
+                    implicitHeight: recText.implicitHeight + Style.space(2)
+                    radius: Style.cornerRadius * 0.3
+                    color: Util.alpha(Color.accent, 0.2)
+
+                    Text {
+                      id: recText
+                      anchors.centerIn: parent
+                      text: "+ Recoverable"
+                      color: Color.accent
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption * 0.72
+                      font.bold: true
+                    }
+
+                    MouseArea {
+                      anchors.fill: parent
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        if (root.barWidget && typeof root.barWidget.recoverSingleTask === "function") {
+                          root.barWidget.recoverSingleTask(taskItemDelegate.modelData)
+                          root.forceActiveFocus()
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -1036,7 +1354,7 @@ Rectangle {
 
             // Empty state for snapshot with 0 tasks
             Item {
-              visible: root.inspectedTasks.length === 0
+              visible: root.previewTasks.length === 0
               width: parent.width
               height: parent.height - previewHeader.implicitHeight - Style.space(4)
 
@@ -1323,6 +1641,7 @@ Rectangle {
   }
 
   property string pendingCopyHash: ""
+  property string pendingCopyTitle: ""
 
   Process {
     id: copyHashProc
@@ -1348,6 +1667,32 @@ Rectangle {
     }
     copyHashProc.stdinEnabled = true
     copyHashProc.running = true
+  }
+
+  Process {
+    id: copyTitleProc
+    command: ["wl-copy"]
+    stdinEnabled: true
+    onStarted: {
+      copyTitleProc.write(root.pendingCopyTitle)
+      copyTitleProc.stdinEnabled = false
+    }
+    onExited: function(code) {
+      if (code === 0 && root.pendingCopyTitle) {
+        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Task title copied", root.pendingCopyTitle.substring(0, 40)])
+      }
+    }
+  }
+
+  function copyTaskTitle(title) {
+    if (!title) return
+    Quickshell.clipboardText = String(title)
+    root.pendingCopyTitle = String(title)
+    if (copyTitleProc.running) {
+      copyTitleProc.running = false
+    }
+    copyTitleProc.stdinEnabled = true
+    copyTitleProc.running = true
   }
 
   GitContextMenu {
