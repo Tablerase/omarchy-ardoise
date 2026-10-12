@@ -734,6 +734,11 @@ All task data and archives are kept strictly local to the user session at
 `~/.config/omarchy/tablerase.ardoise/`. The directory is created with mode `0700`
 (accessible only by the user), and task stores (`todos.json`, `todos-archive.json`)
 are initialized with mode `0600` to prevent cross-user visibility on multi-user systems.
+On first launch, `BarWidget.qml` provisions `todos.json` (seeded with onboarding quests),
+`todos-archive.json`, `bindings.lua` (from default template), and `.gitignore`. It initializes
+a local Git repository on the `main` branch (`git init -b main`) and creates the root commit
+snapshot (`[<device>] Initial task repository`), ensuring instant recovery and history tracking
+from moment zero.
 
 ### 7.2 Task Location & Data Minimization
 

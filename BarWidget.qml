@@ -398,7 +398,7 @@ BarWidget {
     command: [
       "bash", "-c",
       'mkdir -p "$1" && chmod 700 "$1" 2>/dev/null || true; ' +
-      "[ -f \"$2\" ] || cat << 'EOF' > \"$2\"\n" + root.initialStoreJson + "\nEOF\n; " +
+      "if [ ! -f \"$2\" ]; then cat << 'EOF' > \"$2\"\n" + root.initialStoreJson + "\nEOF\nfi\n" +
       'chmod 600 "$2" 2>/dev/null || true; ' +
       '[ -f "$3" ] || echo \'{"version":1,"archived":[]}\' > "$3"; ' +
       'chmod 600 "$3" 2>/dev/null || true; ' +

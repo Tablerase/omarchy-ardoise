@@ -1335,8 +1335,9 @@ test("Onboarding Tutorial Quests & Release Highlights: contracts and UI indicato
   assert.ok(
     barWidget.includes("TodoStore.createInitialStore()") &&
       barWidget.includes("initialStoreJson") &&
-      barWidget.includes("cat << 'EOF' >"),
-    "BarWidget must seed the initial store using createInitialStore via heredoc on fresh install"
+      barWidget.includes("cat << 'EOF' >") &&
+      !barWidget.includes("EOF\\n;"),
+    "BarWidget must seed the initial store using createInitialStore via heredoc on fresh install without bash syntax errors"
   );
 
   // 2. BarWidget IPC contracts
@@ -1556,5 +1557,99 @@ test("Task notes edit & Escape navigation invariants: preserves task position an
     "PanelContent onFilteredTodosChanged must keep cursorIndex synchronized with expandedTaskId"
   );
 });
+
+test("Fresh install git snapshot initialization: BarWidget provisions data directory, files, and initial commit", async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-fresh-install-"));
+  const todoPath = path.join(tmpDir, "todos.json");
+  const archivePath = path.join(tmpDir, "todos-archive.json");
+  const bindingsPath = path.join(tmpDir, "bindings.lua");
+  const defaultTemplatePath = path.resolve(repoDir, "tools", "default-bindings.lua");
+  const deviceName = "test-device";
+  const userName = "test-user";
+
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const match = barWidget.match(/id:\s*initFileProc[\s\S]*?command:\s*\[([\s\S]*?)\]\s*onExited:/);
+  assert.ok(match, "BarWidget must define initFileProc with command array");
+
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  const TodoStore = req("../TodoStore.js");
+  const GitSync = req("../GitSync.js");
+
+  // Dynamically evaluate command construction using TodoStore.createInitialStore()
+  const initialStoreJson = JSON.stringify(TodoStore.createInitialStore(), null, 2);
+  const evalCommandCode = `
+    const Quickshell = { env: (k) => process.env[k] || "" };
+    const root = {
+      initialStoreJson: ${JSON.stringify(initialStoreJson)},
+      dataDirPath: ${JSON.stringify(tmpDir)},
+      todoFilePath: ${JSON.stringify(todoPath)},
+      archiveFilePath: ${JSON.stringify(archivePath)},
+      bindingsFilePath: ${JSON.stringify(bindingsPath)},
+      defaultBindingsTemplatePath: ${JSON.stringify(defaultTemplatePath)},
+      deviceName: ${JSON.stringify(deviceName)}
+    };
+    [${match[1]}];
+  `;
+  const evaluatedArgs: string[] = eval(evalCommandCode);
+  assert.strictEqual(evaluatedArgs[0], "bash");
+  assert.strictEqual(evaluatedArgs[1], "-c");
+
+  const bashScript = evaluatedArgs[2];
+  const procRes = execFileSync(
+    "bash",
+    [
+      "-c",
+      bashScript,
+      "_",
+      tmpDir,
+      todoPath,
+      archivePath,
+      bindingsPath,
+      defaultTemplatePath,
+      deviceName,
+      userName
+    ],
+    { encoding: "utf8" }
+  );
+
+  try {
+    // 1. todos.json exists, is valid JSON, contains tutorial tasks
+    assert.ok(fs.existsSync(todoPath), "todos.json must be created");
+    const todosData = JSON.parse(fs.readFileSync(todoPath, "utf8"));
+    assert.strictEqual(todosData.version, 1);
+    assert.ok(Array.isArray(todosData.todos) && todosData.todos.length > 0, "todos.json must have initial seeded tasks");
+
+    // 2. todos-archive.json and bindings.lua and .gitignore exist
+    assert.ok(fs.existsSync(archivePath), "todos-archive.json must be created");
+    assert.ok(fs.existsSync(bindingsPath), "bindings.lua must be initialized from template");
+    assert.ok(fs.existsSync(path.join(tmpDir, ".gitignore")), ".gitignore must be created");
+
+    // 3. Restrictive permissions (0700 dir, 0600 files)
+    const dirStat = fs.statSync(tmpDir);
+    assert.strictEqual((dirStat.mode & 0o777).toString(8), "700", "Data directory permissions must be 0700");
+    const todoStat = fs.statSync(todoPath);
+    assert.strictEqual((todoStat.mode & 0o777).toString(8), "600", "todos.json permissions must be 0600");
+    const archiveStat = fs.statSync(archivePath);
+    assert.strictEqual((archiveStat.mode & 0o777).toString(8), "600", "todos-archive.json permissions must be 0600");
+
+    // 4. Git repository is initialized with initial commit snapshot
+    const gitLogOut = execFileSync(
+      "git",
+      ["-C", tmpDir, "log", "-n", "5", "--pretty=format:%H|%an|%ae|%at|%s"],
+      { encoding: "utf8" }
+    );
+    assert.ok(gitLogOut.includes(`[${deviceName}] Initial task repository`), "Git log must contain device-tagged initial commit");
+
+    // 5. GitSync.parseGitLog parses snapshot correctly
+    const snapshots = GitSync.parseGitLog(gitLogOut);
+    assert.strictEqual(snapshots.length, 1);
+    assert.strictEqual(snapshots[0].deviceName, deviceName);
+    assert.strictEqual(snapshots[0].cleanMessage, "Initial task repository");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 
 
