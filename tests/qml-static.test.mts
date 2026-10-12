@@ -313,10 +313,18 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
     panelContent.includes("id: profSearchChip") &&
       panelContent.includes("id: profDivider") &&
       panelContent.includes("id: tagSearchChip") &&
-      panelContent.includes("id: tagDivider") &&
+      panelContent.includes("id: tagDividerWrapper") &&
       panelContent.includes("TagProfileSearchBox") &&
-      panelContent.includes("openTaskSearch"),
-    "PanelContent must feature separate search chips (󰍉) and TagProfileSearchBox autocompletion for profile and tags"
+      panelContent.includes("openTaskSearch") &&
+      panelContent.includes("root.returnFocusRequested()"),
+    "PanelContent must feature separate search chips (󰍉), unanchored tag divider wrapper, TagProfileSearchBox autocompletion, and returnFocusRequested on close"
+  );
+  const tagSearchBoxContent = fs.readFileSync(path.join(repoDir, "ui", "TagProfileSearchBox.qml"), "utf8");
+  assert.ok(
+    tagSearchBoxContent.includes("onVisibleChanged:") &&
+      tagSearchBoxContent.includes("function reset()") &&
+      tagSearchBoxContent.includes("searchInput.forceActiveFocus()"),
+    "TagProfileSearchBox must acquire focus on visible changed to prevent shortcut freezes"
   );
 
   // 4b. Task Completion Satisfaction & Dedicated Completed Fold
@@ -650,10 +658,12 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
   const chipContent = fs.readFileSync(chipPath, "utf8");
   assert.ok(
     chipContent.includes('property string variant: "default"') &&
+      chipContent.includes("width: implicitWidth") &&
+      chipContent.includes("height: implicitHeight") &&
       chipContent.includes("effectiveRadius") &&
       chipContent.includes("isMonospace: variant === \"location\"") &&
       chipContent.includes('variant === "time"'),
-    "Ui.Chip must support 'time' and 'location' variants with distinct radius and monospace properties"
+    "Ui.Chip must support width bound to implicitWidth, 'time' and 'location' variants with distinct radius and monospace properties"
   );
   assert.ok(
     panelContent.includes('variant: "time"') &&

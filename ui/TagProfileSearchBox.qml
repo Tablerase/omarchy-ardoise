@@ -65,12 +65,29 @@ Rectangle {
     root.closed()
   }
 
+  onVisibleChanged: {
+    if (visible) {
+      reset()
+    } else {
+      searchQuery = ""
+      if (searchInput) {
+        searchInput.text = ""
+        searchInput.focus = false
+      }
+    }
+  }
+
   function reset() {
     searchQuery = ""
     selectedIndex = 0
     if (searchInput) {
       searchInput.text = ""
       searchInput.forceActiveFocus()
+      Qt.callLater(function() {
+        if (root.visible && searchInput) {
+          searchInput.forceActiveFocus()
+        }
+      })
     }
   }
 
@@ -170,6 +187,15 @@ Rectangle {
             }
           }
 
+          Keys.onEnterPressed: function(event) {
+            event.accepted = true
+            if (root.totalCount > 0) {
+              root.applySelection(root.selectedIndex)
+            } else if (root.cleanQuery) {
+              root.applySelection(0)
+            }
+          }
+
           Keys.onEscapePressed: function(event) {
             event.accepted = true
             if (searchInput.text.length > 0) {
@@ -177,6 +203,19 @@ Rectangle {
               root.searchQuery = ""
             } else {
               root.closed()
+            }
+          }
+
+          Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+              event.accepted = true
+              if (searchInput.text.length > 0) {
+                searchInput.text = ""
+                root.searchQuery = ""
+              } else {
+                root.closed()
+              }
+              return
             }
           }
         }
@@ -402,6 +441,8 @@ Rectangle {
   }
 
   Component.onCompleted: {
-    searchInput.forceActiveFocus()
+    if (visible) {
+      reset()
+    }
   }
 }

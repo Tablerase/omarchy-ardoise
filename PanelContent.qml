@@ -187,6 +187,7 @@ Item {
   function closeTaskSearch() {
     root.activeSearchTaskId = null
     root.activeSearchMode = ""
+    root.returnFocusRequested()
   }
 
   function addTagToTask(taskId, tag) {
@@ -3053,10 +3054,12 @@ Item {
                     anchors.left: profLabelRow.right
                     anchors.leftMargin: Style.space(4)
                     anchors.top: parent.top
-                    anchors.topMargin: (Style.space(22) - implicitHeight) / 2
+                    anchors.topMargin: (Style.space(22) - height) / 2
+                    width: Style.space(22)
+                    height: Style.space(20)
                     implicitWidth: Style.space(22)
                     implicitHeight: Style.space(20)
-                    radius: implicitHeight / 2
+                    radius: height / 2
                     readonly property bool isSearchNavFocused: (root.expandedSubSection === "profiles") && (root.expandedProfileIndex === -1)
                     readonly property bool isSearchActive: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "profile")
                     color: isSearchActive
@@ -3257,9 +3260,11 @@ Item {
                     // Tag Search Chip (Loop 󰍉) as first chip, separated from the list of tags
                     Rectangle {
                       id: tagSearchChip
+                      width: Style.space(22)
+                      height: Style.space(20)
                       implicitWidth: Style.space(22)
                       implicitHeight: Style.space(20)
-                      radius: implicitHeight / 2
+                      radius: height / 2
                       readonly property bool isSearchNavFocused: (root.expandedSubSection === "tags") && (root.expandedTagIndex === -1)
                       readonly property bool isSearchActive: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "tag")
                       color: isSearchActive
@@ -3304,12 +3309,18 @@ Item {
                     }
 
                     // Subtle divider separating search chip from tag list
-                    Rectangle {
-                      id: tagDivider
-                      width: 1
-                      height: Style.space(12)
-                      anchors.verticalCenter: parent.verticalCenter
-                      color: Util.alpha(root.barForeground || Color.foreground, 0.15)
+                    Item {
+                      id: tagDividerWrapper
+                      width: Style.space(5)
+                      height: Style.space(20)
+
+                      Rectangle {
+                        id: tagDivider
+                        width: 1
+                        height: Style.space(12)
+                        anchors.centerIn: parent
+                        color: Util.alpha(root.barForeground || Color.foreground, 0.15)
+                      }
                     }
 
                     Repeater {

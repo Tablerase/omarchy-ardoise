@@ -1173,3 +1173,24 @@ test("Tag and Profile Search Chips: navigation, activation, autocompletion trigg
   handleTextKey(mockRoot, "/", TodoStore);
   assert.equal(openedSearchMode, "tag");
 });
+
+test("closeTaskSearch: resets search state and requests focus return to keycatcher", () => {
+  let focusReturned = false;
+  const mockRoot: any = {
+    activeSearchTaskId: 101,
+    activeSearchMode: "tag",
+    returnFocusRequested: () => {
+      focusReturned = true;
+    },
+    closeTaskSearch: function () {
+      this.activeSearchTaskId = null;
+      this.activeSearchMode = "";
+      this.returnFocusRequested();
+    }
+  };
+
+  mockRoot.closeTaskSearch();
+  assert.equal(mockRoot.activeSearchTaskId, null);
+  assert.equal(mockRoot.activeSearchMode, "");
+  assert.equal(focusReturned, true, "returnFocusRequested must be called on search close");
+});

@@ -84,6 +84,7 @@ Rectangle {
 
   implicitHeight: Style.space(18)
   implicitWidth: Math.min(maximumWidth, (iconLabel.visible ? (iconLabel.implicitWidth + Style.space(4)) : 0) + textLabel.implicitWidth + Style.space(14) + (removable ? Style.space(16) : 0))
+  width: implicitWidth
   height: implicitHeight
   radius: effectiveRadius
 
