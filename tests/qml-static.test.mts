@@ -770,6 +770,16 @@ test("UI Tooltip Badges & Shortcut Parity: KeyBadge and ShortcutToolTip componen
     !rowClick.includes("root.toggleTodo"),
     "rowMouseArea.onClicked must not call root.toggleTodo (that is the checkbox's job)"
   );
+
+  // QuickAdd hint text truncation tooltip
+  const quickAddContent = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
+  assert.ok(
+    quickAddContent.includes("id: hintText") &&
+      quickAddContent.includes("id: hintHover") &&
+      quickAddContent.includes("PanelToolTip {") &&
+      quickAddContent.includes("visible: hintHover.hovered && hintText.truncated"),
+    "QuickAdd hintText must display PanelToolTip on hover when text is truncated"
+  );
 });
 
 test("IPC Contract: documented commands match the IpcHandler in DESIGN.md and README", () => {

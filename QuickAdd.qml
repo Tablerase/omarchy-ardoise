@@ -1541,7 +1541,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: {
               if (root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)) return "⚠ Title required before sending  •  Esc Cancel"
-              if (root.focusSection === "tags") return "󰆴 x / Del Remove Tag  •  / Search Tags  •  Tab/Vim Nav  •  Esc Cancel"
+              if (root.focusSection === "tags") return "󰆴 x/Del Tag  •  / Search  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.isEditMode) return "󰌑 Enter Save Changes  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.hasDraft) return "󰌑 Enter  •  Tab/Vim Nav  •  Esc Dismiss  •  Ctrl+⌫ Discard"
@@ -1551,6 +1551,16 @@ Item {
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             elide: Text.ElideRight
+
+            HoverHandler {
+              id: hintHover
+            }
+
+            PanelToolTip {
+              visible: hintHover.hovered && hintText.truncated
+              text: hintText.text
+              fontFamily: Style.font.family
+            }
           }
 
           Row {

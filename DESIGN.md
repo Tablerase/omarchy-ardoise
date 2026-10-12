@@ -162,7 +162,7 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
     - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after tags/profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
 13. **Separator**: Bottom dividing line (`PanelSeparator`).
 14. **Footer Actions Item**:
-    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision. When in edit mode, displays `"󰌑 Enter Save Changes • Tab/Vim Nav • Esc Cancel"`. When tags are focused, displays `"󰆴 x / Del Remove Tag • / Search Tags • Tab/Vim Nav • Esc Cancel"`.
+    - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision and a `PanelToolTip` revealed on hover when truncated (`hintHover.hovered && hintText.truncated`). When in edit mode, displays `"󰌑 Enter Save Changes • Tab/Vim Nav • Esc Cancel"`. When tags are focused, displays `"󰆴 x/Del Tag • / Search • Tab/Vim Nav • Esc Cancel"`.
     - Right: Action buttons [Cancel] and [Add] / [Save]:
       - When in **Task Edit Mode** (`mode: "edit"`, `taskId`), header title adapts to **"Edit Task"** and the primary action button adapts to **"Save"** (`iconText: "󰆓"`), saving updates through `TodoStore.updateTodo(...)` without overwriting uncommitted new-task drafts.
       - Both buttons use `bordered: true`, 2px `Color.accent` focus border on navigation, and dynamically bind `hasCursor` and `selected` strictly to `(root.focusSection === "actions") && (root.actionIndex === ...)`.
