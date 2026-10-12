@@ -170,10 +170,45 @@ Item {
     }
   }
 
-  property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase"
+  property string expandedSubSection: "header" // "header" | "notes" | "reminders" | "profiles" | "codebase" | "tags"
   property int expandedReminderIndex: 0
   property int expandedProfileIndex: 0
+  property int expandedTagIndex: -1
+  property var activeSearchTaskId: null
+  property string activeSearchMode: "" // "profile" | "tag" | ""
   property var editingTaskId: -1
+
+  function openTaskSearch(taskId, mode) {
+    root.activeSearchTaskId = taskId
+    root.activeSearchMode = mode
+    root.ensureTaskVisible(root.cursorIndex, true)
+  }
+
+  function closeTaskSearch() {
+    root.activeSearchTaskId = null
+    root.activeSearchMode = ""
+  }
+
+  function addTagToTask(taskId, tag) {
+    if (!tag) return
+    var cleanTag = TodoStore.cleanProfileName(tag)
+    if (!cleanTag) return
+    var task = TodoStore.getTaskById(root.store, taskId)
+    if (!task) return
+    var tags = Array.isArray(task.tags) ? task.tags.slice() : []
+    if (tags.indexOf(cleanTag) === -1) {
+      tags.push(cleanTag)
+      root.updateTodo(taskId, { tags: tags })
+    }
+  }
+
+  function removeTagFromTask(taskId, tag) {
+    var task = TodoStore.getTaskById(root.store, taskId)
+    if (!task) return
+    var tags = Array.isArray(task.tags) ? task.tags.slice() : []
+    var newTags = tags.filter(function(t) { return t !== tag })
+    root.updateTodo(taskId, { tags: newTags })
+  }
 
   function activateSearch() {
     root.searchActive = true
@@ -305,6 +340,8 @@ Item {
       expandedSubSection = "header"
       expandedReminderIndex = 0
       expandedProfileIndex = 0
+      expandedTagIndex = -1
+      closeTaskSearch()
     } else {
       mouseMovementDetected = false
       expandedViaKeyboard = false
@@ -355,6 +392,8 @@ Item {
     expandedSubSection = "header"
     expandedReminderIndex = 0
     expandedProfileIndex = 0
+    expandedTagIndex = -1
+    closeTaskSearch()
     if (expandedTaskId !== -1) {
       root.refreshReminderPresets()
       Qt.callLater(function() {
@@ -636,6 +675,7 @@ Item {
     root.showArchiveModal ||
     root.showReminderPickerModal ||
     (root.editingTaskId !== undefined && root.editingTaskId !== null && root.editingTaskId !== -1) ||
+    (root.activeSearchTaskId !== undefined && root.activeSearchTaskId !== null && root.activeSearchTaskId !== -1) ||
     (typeof helpModal !== "undefined" && helpModal && (helpModal.isOpen || helpModal.searchFieldActiveFocus)) ||
     (typeof gitModal !== "undefined" && gitModal && gitModal.isOpen) ||
     (typeof archiveModal !== "undefined" && archiveModal && archiveModal.isOpen) ||
@@ -2163,7 +2203,8 @@ Item {
 
               function ensureReassignProfileVisible(idx) {
                 if (profReassignFlickable) {
-                  profReassignFlickable.ensureVisible(idx)
+                  if (idx < 0) profReassignFlickable.resetScroll()
+                  else profReassignFlickable.ensureVisible(idx)
                 }
               }
 
@@ -3006,9 +3047,73 @@ Item {
                     }
                   }
 
+                  // Profile Search Chip (Loop 󰍉) as first chip, separated from the list of profiles
+                  Rectangle {
+                    id: profSearchChip
+                    anchors.left: profLabelRow.right
+                    anchors.leftMargin: Style.space(4)
+                    anchors.top: parent.top
+                    anchors.topMargin: (Style.space(22) - implicitHeight) / 2
+                    implicitWidth: Style.space(22)
+                    implicitHeight: Style.space(20)
+                    radius: implicitHeight / 2
+                    readonly property bool isSearchNavFocused: (root.expandedSubSection === "profiles") && (root.expandedProfileIndex === -1)
+                    readonly property bool isSearchActive: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "profile")
+                    color: isSearchActive
+                      ? Color.accent
+                      : (isSearchNavFocused ? Util.alpha(Color.accent, 0.25) : (profSearchHover.hovered ? Util.alpha(Color.accent, 0.12) : Color.menu.background))
+                    border.color: (isSearchNavFocused || isSearchActive) ? Color.accent : Color.menu.border
+                    border.width: (isSearchNavFocused || isSearchActive) ? 1.5 : 1
+                    scale: isSearchNavFocused ? 1.05 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 80 } }
+
+                    Text {
+                      anchors.centerIn: parent
+                      text: "󰍉"
+                      color: profSearchChip.isSearchActive ? "white" : (profSearchChip.isSearchNavFocused ? Color.accent : root.secondaryText)
+                      font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    HoverHandler {
+                      id: profSearchHover
+                    }
+
+                    PanelToolTip {
+                      visible: profSearchHover.hovered
+                      text: "Search or add profile (/)"
+                      fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                    }
+
+                    MouseArea {
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        if (profSearchChip.isSearchActive) {
+                          root.closeTaskSearch()
+                        } else {
+                          root.expandedProfileIndex = -1
+                          root.openTaskSearch(itemRow.modelData.id, "profile")
+                        }
+                      }
+                    }
+                  }
+
+                  // Subtle divider separating search chip from profile list
+                  Rectangle {
+                    id: profDivider
+                    anchors.left: profSearchChip.right
+                    anchors.leftMargin: Style.space(4)
+                    anchors.verticalCenter: profSearchChip.verticalCenter
+                    width: 1
+                    height: Style.space(12)
+                    color: Util.alpha(root.barForeground || Color.foreground, 0.15)
+                  }
+
                   Ui.ProfileSelector {
                     id: profReassignFlickable
-                    anchors.left: profLabelRow.right
+                    anchors.left: profDivider.right
                     anchors.leftMargin: Style.space(4)
                     anchors.right: parent.right
                     anchors.top: parent.top
@@ -3017,13 +3122,34 @@ Item {
                     profiles: TodoStore.getSortedProfiles(root.store, false, "")
                     selectedProfile: itemRow.modelData.profile || ""
                     focusedIndex: root.expandedProfileIndex
-                    isNavFocused: root.expandedSubSection === "profiles"
+                    isNavFocused: (root.expandedSubSection === "profiles") && (root.expandedProfileIndex >= 0)
                     bar: root.bar
                     barForeground: root.barForeground
                     onProfileSelected: function(prof, idx) {
                       root.expandedProfileIndex = idx
                       itemRow.ensureReassignProfileVisible(idx)
                       root.updateTodo(itemRow.modelData.id, { profile: prof })
+                    }
+                  }
+                }
+
+                // Autocomplete Search Box for Profiles
+                Ui.TagProfileSearchBox {
+                  id: profSearchBox
+                  visible: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "profile")
+                  width: parent.width
+                  mode: "profile"
+                  store: root.store
+                  bar: root.bar
+                  currentProfile: itemRow.modelData.profile || ""
+                  onProfileSelected: function(prof) {
+                    root.closeTaskSearch()
+                    root.updateTodo(itemRow.modelData.id, { profile: prof })
+                  }
+                  onClosed: {
+                    root.closeTaskSearch()
+                    if (root.expandedSubSection === "profiles") {
+                      root.expandedProfileIndex = -1
                     }
                   }
                 }
@@ -3102,11 +3228,11 @@ Item {
                   }
                 }
 
-                // Tags Context Row (if task has tags)
+                // Tags Context Row (Always visible in expanded drawer to allow adding and managing tags)
                 Item {
+                  id: tagsContainer
                   width: parent.width
-                  implicitHeight: tagsFlow.implicitHeight
-                  visible: Boolean(itemRow.modelData.tags && itemRow.modelData.tags.length > 0)
+                  implicitHeight: Math.max(Style.space(22), tagsFlow.implicitHeight)
 
                   Flow {
                     id: tagsFlow
@@ -3115,16 +3241,75 @@ Item {
 
                     Item {
                       width: tagLabel.implicitWidth
-                      height: Style.space(18)
+                      height: Style.space(20)
 
                       Text {
                         id: tagLabel
                         anchors.verticalCenter: parent.verticalCenter
                         text: "󰓹 Tags:"
-                        color: root.secondaryText
+                        color: (root.expandedSubSection === "tags") ? Color.accent : Color.muted
                         font.family: root.bar ? root.bar.fontFamily : Style.font.family
                         font.pixelSize: Style.space(9.5)
+                        font.bold: root.expandedSubSection === "tags"
                       }
+                    }
+
+                    // Tag Search Chip (Loop 󰍉) as first chip, separated from the list of tags
+                    Rectangle {
+                      id: tagSearchChip
+                      implicitWidth: Style.space(22)
+                      implicitHeight: Style.space(20)
+                      radius: implicitHeight / 2
+                      readonly property bool isSearchNavFocused: (root.expandedSubSection === "tags") && (root.expandedTagIndex === -1)
+                      readonly property bool isSearchActive: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "tag")
+                      color: isSearchActive
+                        ? Color.accent
+                        : (isSearchNavFocused ? Util.alpha(Color.accent, 0.25) : (tagSearchHover.hovered ? Util.alpha(Color.accent, 0.12) : Color.menu.background))
+                      border.color: (isSearchNavFocused || isSearchActive) ? Color.accent : Color.menu.border
+                      border.width: (isSearchNavFocused || isSearchActive) ? 1.5 : 1
+                      scale: isSearchNavFocused ? 1.05 : 1.0
+                      Behavior on scale { NumberAnimation { duration: 80 } }
+
+                      Text {
+                        anchors.centerIn: parent
+                        text: "󰍉"
+                        color: tagSearchChip.isSearchActive ? "white" : (tagSearchChip.isSearchNavFocused ? Color.accent : root.secondaryText)
+                        font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
+
+                      HoverHandler {
+                        id: tagSearchHover
+                      }
+
+                      PanelToolTip {
+                        visible: tagSearchHover.hovered
+                        text: "Search or add tag (/)"
+                        fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                      }
+
+                      MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                          if (tagSearchChip.isSearchActive) {
+                            root.closeTaskSearch()
+                          } else {
+                            root.expandedTagIndex = -1
+                            root.openTaskSearch(itemRow.modelData.id, "tag")
+                          }
+                        }
+                      }
+                    }
+
+                    // Subtle divider separating search chip from tag list
+                    Rectangle {
+                      id: tagDivider
+                      width: 1
+                      height: Style.space(12)
+                      anchors.verticalCenter: parent.verticalCenter
+                      color: Util.alpha(root.barForeground || Color.foreground, 0.15)
                     }
 
                     Repeater {
@@ -3132,11 +3317,40 @@ Item {
 
                       Ui.Chip {
                         required property string modelData
+                        required property int index
+                        readonly property bool isChipNavFocused: (root.expandedSubSection === "tags") && (root.expandedTagIndex === index)
                         text: "#" + modelData
-                        chipColor: root.secondaryText
-                        maximumWidth: Style.space(90)
+                        variant: "tag"
+                        removable: true
+                        chipColor: isChipNavFocused ? Color.accent : root.secondaryText
+                        textColor: isChipNavFocused ? Color.accent : root.secondaryText
+                        maximumWidth: Style.space(100)
                         fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                        onRemoved: {
+                          root.removeTagFromTask(itemRow.modelData.id, modelData)
+                        }
                       }
+                    }
+                  }
+                }
+
+                // Autocomplete Search Box for Tags
+                Ui.TagProfileSearchBox {
+                  id: tagSearchBox
+                  visible: (root.activeSearchTaskId === itemRow.modelData.id) && (root.activeSearchMode === "tag")
+                  width: parent.width
+                  mode: "tag"
+                  store: root.store
+                  bar: root.bar
+                  currentTags: itemRow.modelData.tags || []
+                  onTagSelected: function(tag) {
+                    root.closeTaskSearch()
+                    root.addTagToTask(itemRow.modelData.id, tag)
+                  }
+                  onClosed: {
+                    root.closeTaskSearch()
+                    if (root.expandedSubSection === "tags") {
+                      root.expandedTagIndex = -1
                     }
                   }
                 }
