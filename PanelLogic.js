@@ -90,7 +90,7 @@ var TASK_MENU_ITEMS = [
   { id: "copy_llm", icon: "󰆏", label: "Copy for LLM", shortcut: "y", desc: "Compact markdown for an AI agent" },
   { id: "copy_title", icon: "󰆏", label: "Copy title", shortcut: "t", desc: "" },
   { id: "copy_notes", icon: "󰆏", label: "Copy notes", shortcut: "n", desc: "" },
-  { id: "open_codebase", icon: "󰏫", label: "Open codebase", shortcut: "o", desc: "Open the task's local path in the editor" },
+  { id: "open_codebase", icon: "󰅩", label: "Open codebase", shortcut: "o", desc: "Open the task's local path in the editor" },
   { id: "edit_task", icon: "󰏫", label: "Edit task", shortcut: "e", desc: "Modify in modal" },
   { id: "edit_title", icon: "󰏫", label: "Edit title", shortcut: "r", desc: "" },
   { id: "delete_task", icon: "󰅙", label: "Delete task", shortcut: "hold x", desc: "Hold to confirm", hold: true }
