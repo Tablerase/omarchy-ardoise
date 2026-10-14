@@ -79,7 +79,7 @@ To preserve long-term maintainability and visual consistency across the main pan
 - **`ui/ArchiveModal.qml`**: Archive browser (opened with <kbd>d</kbd> or the footer Archive button) that restores completed tasks back into the active store. Built for large archives (>2,000 items): the archive is parsed **once on open** (`TodoStore.getArchivedTasks`, within the store's existing 100ms/5,000-item budget) and rendered through a **virtualized `ListView`** so only visible delegates instantiate; filtering (`TodoStore.filterArchivedTasks`, multi-token AND over title/notes/profile/repo/tags/id) runs over the in-memory array on query change, never per frame. Restoring calls `barWidget.unarchiveTask(id)`, which preserves the original id/createdAt/notes/profile/repo/tags/location, clears completion, removes the entry from the archive (never duplicated), and commits both files together; the modal then splices the item out of its in-memory list instead of re-parsing. Keys: <kbd>j</kbd>/<kbd>k</kbd>/<kbd>g</kbd>/<kbd>G</kbd>, <kbd>Enter</kbd>/<kbd>r</kbd> restore, <kbd>K</kbd> or right-click opens the shared `ui/ContextActionMenu.qml`, <kbd>x</kbd> (hold) permanently deletes, <kbd>y</kbd> copy for LLM, <kbd>e</kbd> open the raw JSON, <kbd>/</kbd> filter (also the header magnifier button for mouse users), two-stage <kbd>Escape</kbd>. Mounted inside `PanelContent` and counted in `activeFocusBlocked`; `Panel.qml` inflates to at least `Style.space(380)` while it is open.
   - **Data-loss safeguards (airtight restore/purge).** `BarWidget.unarchiveTask` / `purgeArchivedTask` read **both files fresh from disk** via a `cat` `Process` (never the possibly-stale `lastArchiveText`), then write in a loss-proof order: the **active store is written and confirmed** (`FileView.saved`/`saveFailed`, then a read-back asserting the id is present) **before** the archive entry is removed. The archive write is verified by reading it back and retried up to three times. Any failure leaves the archive untouched, so a task can never vanish; the worst case is a duplicate. On load, `TodoStore.reconcileArchive(store, archive)` self-heals such duplicates (an archived id that is also active is dropped from the archive), and the archive is committed immediately after a successful restore/purge. Permanent delete is hold-to-confirm via the shared `ui/HoldActionButton.qml` (menu item press-and-hold, or hold <kbd>x</kbd> on the selected row), and is irreversible except through git history (`gitRecover` / rollback in `GitModal`).
 - **`ui/TaskCheck.qml`**: Circular checkbox button serving as the primary per-row status and severity indicator. Late tasks tint and border in the theme's **warning** amber (supplied by the host via `warningColor`; it has no `urgentColor` any more, so red cannot creep back into task severity), due-today stays accent, completed keeps the accent checkmark, and normal pending is a muted border.
-- **`ui/ArdoiseIcon.qml`**: The shared task-slate brand mark, rendered as a Nerd Font MD glyph (Private Use Area) rather than a vector. Optically centered with `TextMetrics.tightBoundingRect` horizontal correction — the same technique omarchy's own `Ui/OpticalGlyph.qml` uses — so it sits on the same optical centre as the icons beside it in the bar. The glyph is a **stateful ladder rung** resolved by `TodoStore.getArdoiseIconState()`, and the component is used at all three brand surfaces (status bar widget, panel brand header, QuickAdd header) so the plugin reports load identically everywhere. See §5 *Task-Slate Icon Ladder* for the rung table.
+- **`ui/ArdoiseIcon.qml`**: The shared task-slate brand mark, rendered as a Nerd Font MD glyph (Private Use Area) rather than a vector. Optically centered with `TextMetrics.tightBoundingRect` horizontal correction (the same technique omarchy's own `Ui/OpticalGlyph.qml` uses) so it sits on the same optical centre as the icons beside it in the bar. The glyph is a **stateful ladder rung** resolved by `TodoStore.getArdoiseIconState()`, and the component is used at all three brand surfaces (status bar widget, panel brand header, QuickAdd header) so the plugin reports load identically everywhere. See §5 *Task-Slate Icon Ladder* for the rung table.
   - Properties: `store` (drives the ladder), `bar` (optional shell root, supplies `foreground` / `urgent` / `fontFamily`), `iconSize` (defaults to `Style.bar.iconFont` = 13 px), `forcedKey` (pin a rung, used by `tools/preview.qml`), `colorOverride` (flat color override, used for the panel brand-row hover), `foregroundOverride` / `accentOverride` / `warningOverride` (replace only the base color of the `foreground` / `accent` / `warning` roles so a host surface can supply its own text color while escalation still reads). The `*Override` properties are typed `var`, not `color`, on purpose: a typed `color` coerces the `undefined` sentinel to a transparent QColor on every assignment and logs a warning.
   - Also owns the **theme warning lookup** (`warningColor`) described in §5 *Warning color sourcing*. It is the single reader of the theme's `colors.toml`; `PanelContent` reads it back off this component and passes it to `TaskCheck`, so no second file watch is created.
   - **Replaces** the previous `ui/InboxIcon.qml` (Canvas 2D inbox tray). It was drawn at 16 px as a 1.75/24 stroke while every other Omarchy bar widget paints a 13 px solid font glyph, so it read lighter, wider, and less optically centred than its neighbours.
@@ -109,15 +109,15 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 1. **Header Row**: Ardoise Task-Slate Mark (`ui/ArdoiseIcon.qml`, ladder rung at `Style.font.subtitle`, `foregroundOverride: Color.menu.text`) + "Quick Add Task" Title (`Style.font.subtitle`, bold).
 2. **Separator**: Top dividing line (`PanelSeparator`).
 3. **Title Input Field (`taskInput`)**:
-   - In **insert mode** (`activeFocus === true`): 2px solid `Color.accent` border + soft accent tint fill (`Util.alpha(Color.accent, 0.08)`) — clear "I am typing" indicator.
-   - In **nav/normal mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid `Color.accent` border, no fill tint — field is selected in keyboard nav but not being edited.
+   - In **insert mode** (`activeFocus === true`): 2px solid `Color.accent` border + soft accent tint fill (`Util.alpha(Color.accent, 0.08)`): clear "I am typing" indicator.
+   - In **nav/normal mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid `Color.accent` border, no fill tint: field is selected in keyboard nav but not being edited.
    - **Clean & Empty by Default**: Field opens completely empty with placeholder `"What needs to be done? (e.g. #work Fix navbar #ui)"`. Tasks can be typed directly (e.g. `test` or `Fix navbar`) without any mandatory `#` prefix, and will be assigned to `selectedProfile`.
    - **Intelligent 3-Tier Default Profile Resolution (`TodoStore.resolveDefaultProfile`)**:
      - **Tier 1 (Location Recency & Repo Matching)**: If a codebase context is detected (`context.repo || context.localPath`), scans `store.todos` for the most recent task matching `location.repo` or `location.localPath`, applying its profile. If no prior tasks exist for that location, checks if repo or folder name matches a known profile.
      - **Tier 2 (Unrecognized Workspace Recency)**: If an active workspace was detected but no prior tasks or profiles match that repo, uses the profile of the most recently created or updated task across the entire store.
      - **Tier 3 (Non-Workspace & Global Default)**: When outside of any coding workspace (e.g. web browser, communication tools, media apps where `context` is null) or when no tasks exist, directly falls back to `store.activeProfile` (or `"personal"`). This ensures non-work / everyday tasks created outside the IDE are not erroneously tagged with the last-touched project profile.
      - The resolved default is pre-selected and visibly highlighted in `quickAddProfileSelector` at launch, giving instant clarity on destination before typing.
-   - **Hashtag Override & Tag Extraction**: Typing an explicit `#profile` (or `#profile/repo`) sets the task profile (e.g. `#work Fix navbar`). Additional hashtags—either immediately following the profile (e.g. `#work #ui Fix navbar`) or placed after the task title (e.g. `#work Fix navbar #ui`)—are automatically parsed into subsystem `#tags`. Issue numbers (e.g. `#42`) are preserved as title text.
+   - **Hashtag Override & Tag Extraction**: Typing an explicit `#profile` (or `#profile/repo`) sets the task profile (e.g. `#work Fix navbar`). Additional hashtags (either immediately following the profile, like `#work #ui Fix navbar`, or placed after the task title, like `#work Fix navbar #ui`) are automatically parsed into subsystem `#tags`. Issue numbers (e.g. `#42`) are preserved as title text.
    - <kbd>Escape</kbd>: dismisses if empty; enters normal (motion) mode on `"title"` if text is present without closing or losing draft. Pressing <kbd>j</kbd>/<kbd>Down</kbd> moves to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> re-enters edit mode.
    - **Title Validation & Error State**: When input contains only hashtags/profile/repo (e.g. `#ardoise/widget`) or when submission is attempted without an actual title, `taskInput` displays a high-contrast `Color.urgent` warning border (`Border.flat(Color.urgent, 2)` when focused, 1px when blurred) and a soft urgent background tint.
 4. **Hashtag Autocomplete Suggestions (`autocompleteBox`)** (Conditional: `autocompleteActive && autocompleteMatches.length > 0`):
@@ -137,13 +137,13 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 6. **Draft Notice Banner** (Conditional: `hasDraft === true`):
    - Glyph `󰁯` + "Draft restored" caption + clickable "Clear" action (<kbd>Ctrl+⌫</kbd>).
 7. **Option Toggles Row**:
-   - Button 0: **Add Note** (`󰏫`) — toggles `showNote`. When active, displays clean accent tint (`Util.alpha(Color.accent, 0.12)`), 1px accent border, and accent text/icon. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring and prominent focus fill. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
-   - Button 1: **Set Reminder** (`󰥔`) — toggles `showReminderOptions`. When active with a chosen reminder, displays accent tint, 1px accent border, and formatted reminder string. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring.
+   - Button 0: **Add Note** (`󰏫`): toggles `showNote`. When active, displays clean accent tint (`Util.alpha(Color.accent, 0.12)`), 1px accent border, and accent text/icon. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring and prominent focus fill. When pressed via <kbd>Enter</kbd>/<kbd>Space</kbd> or clicked, auto-focuses `descNotesArea`.
+   - Button 1: **Set Reminder** (`󰥔`): toggles `showReminderOptions`. When active with a chosen reminder, displays accent tint, 1px accent border, and formatted reminder string. During keyboard navigation (`hasCursor`), scales by 1.05 with a crisp 2px accent focus ring.
    - Both buttons use `bordered: true`, scale popping, and explicit accent focus rings, ensuring navigation focus is always noticeably brighter and higher-contrast than resting active states.
 8. **Notes Editor Area (`descNotesArea`)** (Conditional: `showNote === true`):
    - Multi-line `TaskNotesArea` (min 56px, max 130px, auto-scroll).
-   - **Insert mode** (`activeFocus === true`): 2px solid accent border + accent tint fill — clear editing indicator.
-   - **Nav mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid accent border, no tint — field is selected in keyboard nav but not being edited.
+   - **Insert mode** (`activeFocus === true`): 2px solid accent border + accent tint fill: clear editing indicator.
+   - **Nav mode** (`isNavFocused === true`, `activeFocus === false`): 1px solid accent border, no tint: field is selected in keyboard nav but not being edited.
    - <kbd>Escape</kbd>: blurs textarea and enters normal (motion) mode on `"notes"`, keeping draft text safe. Pressing <kbd>j</kbd>/<kbd>Down</kbd> continues navigation down to `reminders`/`profiles`; pressing <kbd>k</kbd>/<kbd>Up</kbd> navigates up to `options`; pressing <kbd>i</kbd>/<kbd>a</kbd>/<kbd>Enter</kbd> (or typing any printable character) re-enters edit mode on notes.
 9. **Reminder Presets Row** (Conditional: `showReminderOptions === true`):
    - Presets: `+30m`, `+1h`, `Tomorrow 9am`, `Tomorrow 6pm`, `󰃭 Custom...`, plus "Clear" (when a reminder is set). Presets and selected timestamps are dynamically recomputed at open and click/selection time relative to current local execution time rather than startup time. Bordered focus styling via `Ui.ReminderPills`. Activating `󰃭 Custom...` opens the interactive `Ui.ReminderPicker` modal for natural-language time typing, steppers, and visual calendar date selection.
@@ -229,7 +229,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 6. **Task List View (`taskListView`)**:
    - Vertically flickable column of tasks (`itemRow`).
    - Auto-scroll viewport alignment (`ensureTaskVisible`): normal cursor motion keeps the focused task within bounds; expanding a task drawer automatically aligns the expanded task to the top of the list viewport (`alignTop: true`) so the entire drawer (notes, reminders, and profile pills) remains fully visible.
-     - **Too-tall focused item**: an expanded drawer can be taller than the list viewport. Motion onto such an item (`j`/`k` and the other `ensureTaskVisible(..., false)` call sites) keeps its **top** in view instead of the generic bottom-align, because bottom-aligning a too-tall row pushes its top — and the wrapped title's first line — above the viewport where the Flickable's `clip` cuts it off. The drawer is allowed to overflow the bottom edge; the title always stays readable. Regression-guarded by the local-only "Quickshell Drawer Fit" test in `tests/qml-windowed.test.mts` (expand → move up → move back down).
+     - **Too-tall focused item**: an expanded drawer can be taller than the list viewport. Motion onto such an item (`j`/`k` and the other `ensureTaskVisible(..., false)` call sites) keeps its **top** in view instead of the generic bottom-align, because bottom-aligning a too-tall row pushes its top (and the wrapped title's first line) above the viewport where the Flickable's `clip` cuts it off. The drawer is allowed to overflow the bottom edge; the title always stays readable. Regression-guarded by the local-only "Quickshell Drawer Fit" test in `tests/qml-windowed.test.mts` (expand → move up → move back down).
    - Individual task row:
      - **OmaTasks-Inspired Item Layout**:
        - Sizing is deterministic, content-driven, and dynamically compact:
@@ -339,16 +339,16 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
 ### C. Bar Widget (`BarWidget.qml`)
 
 Quickshell taskbar widget placed in the status bar.
-- **Icon, Color & Badge (one signal)**: The whole readout — glyph, color, and count — is a single `TodoStore.getArdoiseIconState()` resolution. The mark renders at `Style.bar.iconFont` and the badge count takes the *same* rung subset and the *same* color role as the glyph, so the number always answers "how many tasks are in the state this icon depicts". The badge is hidden when the rung count is 0 and on vertical bars. See §5 *Task-Slate Icon Ladder* for the rung table and the invariants.
+- **Icon, Color & Badge (one signal)**: The whole readout (glyph, color, and count) is a single `TodoStore.getArdoiseIconState()` resolution. The mark renders at `Style.bar.iconFont` and the badge count takes the *same* rung subset and the *same* color role as the glyph, so the number always answers "how many tasks are in the state this icon depicts". The badge is hidden when the rung count is 0 and on vertical bars. See §5 *Task-Slate Icon Ladder* for the rung table and the invariants.
   - Total pending is deliberately **not** what the badge shows; it remains available in the tooltip and via the `count` IPC command.
 - **Interactions**:
   - Left click: Toggles main panel (`tablerase.ardoise toggle`).
-  - Right click: Opens the Quick Add modal. The bar widget closes the panel and then calls `bar.shell.summon(moduleName, "{}")` to mount the plugin's `overlay` entry point. There is **no `quickadd` IPC function** — the scripted route is the shell-level `omarchy-shell shell summon tablerase.ardoise '{}'`, not a plugin command. (An earlier revision of this document advertised a `quickadd` plugin command that resolves to `Function not found.`; the IPC contract test now guards against re-introducing it.)
+  - Right click: Opens the Quick Add modal. The bar widget closes the panel and then calls `bar.shell.summon(moduleName, "{}")` to mount the plugin's `overlay` entry point. There is **no `quickadd` IPC function**: the scripted route is the shell-level `omarchy-shell shell summon tablerase.ardoise '{}'`, not a plugin command. (An earlier revision of this document advertised a `quickadd` plugin command that resolves to `Function not found.`; the IPC contract test now guards against re-introducing it.)
   - Scroll: Cycles active profile filter.
 - **Shell IPC Contract (`IpcHandler: tablerase.ardoise`)**:
   - `omarchy-shell tablerase.ardoise list`: Returns full JSON array of active tasks.
   - `omarchy-shell tablerase.ardoise get "<id>"`: Returns single task JSON matching ID from active tasks or archive, or `not_found`.
-  - `omarchy-shell tablerase.ardoise count`: Returns **total** pending task count string. Deliberately *not* rung-scoped: it is a data/scripting contract, whereas the bar badge is a display signal. Do not "fix" this to match the badge — `list` already exposes the full breakdown if a script needs urgency detail.
+  - `omarchy-shell tablerase.ardoise count`: Returns **total** pending task count string. Deliberately *not* rung-scoped: it is a data/scripting contract, whereas the bar badge is a display signal. Do not "fix" this to match the badge; `list` already exposes the full breakdown if a script needs urgency detail.
   - `omarchy-shell tablerase.ardoise add "<title> [#profile]"`: Adds task with optional `#profile`.
   - `omarchy-shell tablerase.ardoise addDetailed "<title>" "<notes>" "<reminder>"`: Adds task with explicit notes/description and optional reminder (e.g. preset `+30m`, `+1h`, `tomorrow 9am` or ISO string; pass `""` if none).
   - `omarchy-shell tablerase.ardoise toggleTodo "<id>"`: Toggles task completion (`done`).
@@ -405,7 +405,7 @@ Quickshell taskbar widget placed in the status bar.
 | **Panel** | `e` | Edit selected task in Quick Add modal (or open `todos.json` in editor if no task selected) |
 | **Panel** | `u` | Toggle Git Snapshots & Undo modal (`ui/GitModal.qml`) |
 | **Panel** | `Hold c` / `C` | Archive and clear completed tasks in current profile (hold 800ms) |
-| **Panel** | `d` | Open the Archive browser (`ui/ArchiveModal.qml`) — restore completed tasks |
+| **Panel** | `d` | Open the Archive browser (`ui/ArchiveModal.qml`) to restore completed tasks |
 | **Archive Modal** | `j` / `k` / `↓` / `↑` | Move the archived-task selection |
 | **Archive Modal** | `g` / `G` | Jump to first / last archived task |
 | **Archive Modal** | `Enter` / `r` | Restore the selected task to the active list |
@@ -556,7 +556,7 @@ When a task is copied using <kbd>y</kbd> or through the contextual menu, `TodoSt
 
 ### Task-Slate Icon Ladder (the Ardoise brand mark)
 
-The mark is a **stateful** Nerd Font MD glyph (Private Use Area) resolved by `TodoStore.getArdoiseIconState()` from `getTaskUrgencyBreakdown()`. Rungs are driven by **urgency, not raw count** — the same approach omarchy's own battery / wifi / volume widgets take, and the same reason: "5–9 tasks" is not actionable, "nothing is overdue" is.
+The mark is a **stateful** Nerd Font MD glyph (Private Use Area) resolved by `TodoStore.getArdoiseIconState()` from `getTaskUrgencyBreakdown()`. Rungs are driven by **urgency, not raw count**, using the same approach omarchy's own battery, wifi, and volume widgets take: "5-9 tasks" is not actionable, but "nothing is overdue" is.
 
 | Rung | Condition | Glyph | Name | Codepoint | Color role | Badge count |
 |---|---|---|---|---|---|---|
@@ -577,7 +577,7 @@ foreground  →  foreground  →  accent  →  warning
 ```
 
 - A task **due today is on track**, so `due` stays informational (accent) and does *not* escalate past it. Only a genuinely **late** task escalates to warning.
-- **`urgent` (red) is deliberately not a rung colour.** Red is the shell's error channel, and using it for a late task would train the eye to ignore it. Orange means *late*; red means *broken* — so red stays on real failure surfaces (QuickAdd's title-required cue, GitModal errors, invalid input). Guarded by a test asserting no rung uses `urgent`.
+- **`urgent` (red) is deliberately not a rung colour.** Red is the shell's error channel, and using it for a late task would train the eye to ignore it. Orange means *late*; red means *broken*, so red stays on real failure surfaces (QuickAdd's title-required cue, GitModal errors, invalid input). Guarded by a test asserting no rung uses `urgent`.
 - `timer_alert` is used for the late rung rather than a clock glyph (`clock_alert` is U+F0955, adjacent to the plain `󰥔 clock` U+F0954 already reserved for reminders) so a late task cannot be misread as a reminder at 13 px.
 
 #### Warning color sourcing
@@ -587,15 +587,15 @@ Omarchy exposes **no warning role**: `Color.qml` parses only `accent`, `urgent` 
 Resolution order: host `warningOverride` → user theme `bar.warning` (`Color.pick`) → the theme's own `yellow` → hardcoded `#df8e1d` fallback.
 
 - **`yellow`, not `orange`:** several themes' `orange` is a coral/salmon that collides with urgent red (catppuccin `orange #f6b6ab` vs `red #f38ba8`; catppuccin-latte `orange #d84e2b` vs `red #d20f39`), which would collapse the warning/error distinction. Every theme's `yellow` reads as amber.
-- **Why not derive or hardcode it?** Measured across all 22 shipped themes: hue-rotating `urgent` to amber lands close to the theme's own `yellow` on only 15/22 — it breaks on `lumon` (blue → brown), `lupine` (magenta → muddy), and `solitude` (grey → no contrast against foreground at all). A hardcoded amber is right for exactly one theme, since dark themes need a much lighter value (`#f9e2af` / `#e0af68` vs latte's `#df8e1d`). Reading the theme's own key is correct in all 22.
+- **Why not derive or hardcode it?** Measured across all 22 shipped themes: hue-rotating `urgent` to amber lands close to the theme's own `yellow` on only 15 of 22: it breaks on `lumon` (blue → brown), `lupine` (magenta → muddy), and `solitude` (grey → no contrast against foreground at all). A hardcoded amber is right for exactly one theme, since dark themes need a much lighter value (`#f9e2af` / `#e0af68` vs latte's `#df8e1d`). Reading the theme's own key is correct in all 22.
 - **Known degradation:** `solitude` (`yellow #d9dbdc`, near-white) and `hackerman` (`yellow #50f7d4`, cyan) ship no usable amber, so the warning is low-salience there. That reflects the theme author's palette; do not special-case it.
-- **Theme-switch freshness:** `omarchy-theme-set` swaps themes with `rm -rf current/theme` + `mv next-theme current/theme`, which destroys the watched `colors.toml` inode — a `FileView` with `watchChanges: true` on it goes deaf. The component therefore watches `current/theme.name` instead: a regular file *outside* the swapped directory, rewritten in place **last** (after the swap), so it emits a reliable inotify `MODIFY`. On change it calls `reload()` on the `colors.toml` reader, which parses in `onLoaded` — mirroring `Color.qml`'s own `onFileChanged → reload() → onLoaded` pattern, since `text()` is stale inside the change signal. `onLoadFailed` keeps the last good value rather than flashing the fallback.
+- **Theme-switch freshness:** `omarchy-theme-set` swaps themes with `rm -rf current/theme` + `mv next-theme current/theme`, which destroys the watched `colors.toml` inode, causing a `FileView` with `watchChanges: true` to go deaf. The component therefore watches `current/theme.name` instead: a regular file *outside* the swapped directory, rewritten in place **last** (after the swap), so it emits a reliable inotify `MODIFY`. On change it calls `reload()` on the `colors.toml` reader, which parses in `onLoaded`, mirroring `Color.qml`'s own `onFileChanged → reload() → onLoaded` pattern, since `text()` is stale inside the change signal. `onLoadFailed` keeps the last good value rather than flashing the fallback.
 
 #### Other design constraints (guarded by tests in `tests/TodoStore.test.mts`)
-- **Glyph, color, and badge number are one resolution.** All three come from a single `getArdoiseIconState()` call, so the mark and its count cannot describe different states. Never derive the badge from a separate count call — that is exactly the drift the rung-scoped `count` field exists to prevent.
+- **Glyph, color, and badge number are one resolution.** All three come from a single `getArdoiseIconState()` call, so the mark and its count cannot describe different states. Never derive the badge from a separate count call: that is exactly the drift the rung-scoped `count` field exists to prevent.
 - The badge count is always the **rung's own subset**, never the total pending. A reader glancing at the bar sees "3 overdue", not "12 tasks with 3 overdue"; total pending is one hover away in the tooltip. Because the `due` rung is only reachable when `overdue === 0`, and `overdue` outranks `due`, the count is never ambiguous at any rung.
 - `count <= total` always, and `count > 0` on every non-`clear` rung.
-- Every rung carries a **distinct glyph** — a stateful mark must not silently repeat an icon, or the widget appears to flicker between two meanings.
+- Every rung carries a **distinct glyph**: a stateful mark must not silently repeat an icon, or the widget appears to flicker between two meanings.
 - ~~The two extremes deliberately **share a filled-circle silhouette** (`check_circle` ↔ `alert_circle`) so the mark keeps a stable identity while only the interior glyph and color change. The middle rungs are lists.~~ **Void as of the warning ramp.** The late rung became `timer_alert`, which shares no silhouette with `check_circle`, so this invariant no longer holds and was replaced by the colour-ramp rule above: the ramp carries severity, and the glyphs carry *what* the state is. Do not reintroduce red as a rung colour to recover a shared silhouette.
 - `check_all` (`\U000f012d`) is **rejected** as the `clear` rung: it is a bare diagonal tick with no enclosure and rasterizes to a near-invisible speck at 13 px.
 - Ladder rungs must **not** be built from near-identical gray list glyphs (e.g. `format_list_bulleted` → `playlist_check` → `view_list`). At 13 px those are indistinguishable; escalation has to change shape.
@@ -604,21 +604,21 @@ Resolution order: host `warningOverride` → user theme `bar.warning` (`Color.pi
 
 **Scope boundary:** the ladder governs the *brand mark and the bar badge*. The panel's "All" filter-pill count and its `"N pending"` header label stay total/filter-scoped, because they describe the active filter rather than the urgency state. The panel brand mark may escalate to warning while its header reads "12 pending"; that is acceptable because the panel body renders per-task urgency markers.
 
-**Task rows follow the same ramp** via `ui/TaskCheck.qml`: a late task's checkbox tints and borders in the same `warningColor`, a due-today row stays `accent`, and a completed row stays accent. `PanelContent.qml` sources `root.warningColor` from the header `ArdoiseIcon` (`brandIcon.warningColor`) and passes it down, so panel rows, brand mark and bar all render one amber from a single theme lookup. `TaskCheck` intentionally has **no** `urgentColor` property any more — do not reintroduce red for late rows. `ProfileSelector.qml` and `ui/ReminderPills.qml` use `accent` for **selection and focus**, not urgency, and must stay accent.
+**Task rows follow the same ramp** via `ui/TaskCheck.qml`: a late task's checkbox tints and borders in the same `warningColor`, a due-today row stays `accent`, and a completed row stays accent. `PanelContent.qml` sources `root.warningColor` from the header `ArdoiseIcon` (`brandIcon.warningColor`) and passes it down, so panel rows, brand mark and bar all render one amber from a single theme lookup. `TaskCheck` intentionally has **no** `urgentColor` property any more; do not reintroduce red for late rows. `ProfileSelector.qml` and `ui/ReminderPills.qml` use `accent` for **selection and focus**, not urgency, and must stay accent.
 
 ### Other Icon Glyphs (Nerd Font MD)
-- **Clock / Reminder**: `󰥔` (`\U000f0954`) — *Never use avatar `󰀉` for reminders!*
+- **Clock / Reminder**: `󰥔` (`\U000f0954`). *Never use avatar `󰀉` for reminders!*
 - **Pen / Notes**: `󰏫` (`\U000f03eb`)
-- **Personal Profile**: `󰀉` (`\U000f0009`) — *Reserved exclusively for user profile identity.*
+- **Personal Profile**: `󰀉` (`\U000f0009`). *Reserved exclusively for user profile identity.*
 - **Tag / Profile Category**: `󰓹` (`\U000f04f9`)
 - **Draft Restored**: `󰁯` (`\U000f006f`)
 - **Keyboard / Enter**: `󰌑` (`\U000f0311`)
 - **Add / Plus**: `󰐕` (`\U000f0415`)
 - **Remove / Trash**: `󰆴` (`\U000f01b4`)
-- **Check Complete**: `󰄬` (`\U000f012c`) — *Task-row completion indicator only. Not the brand mark; the brand mark is the ladder above.*
+- **Check Complete**: `󰄬` (`\U000f012c`). *Task-row completion indicator only. Not the brand mark; the brand mark is the ladder above.*
 - **Check Empty**: `󰄱` (`\U000f0131`)
 - **Git Branch / Snapshots**: `󰊢` (`\U000f02a2`)
-- **Codebase / Editor Launch**: `󰅩` (`\U000f0169`) — *Distinct from Pen / Notes `󰏫` (`\U000f03eb`). Used in task context menu and expanded drawer codebase button.*
+- **Codebase / Editor Launch**: `󰅩` (`\U000f0169`). *Distinct from Pen / Notes `󰏫` (`\U000f03eb`). Used in task context menu and expanded drawer codebase button.*
 
 ### Spacing & Metrics
 - Standard padding: `Style.space(8)`, `Style.space(12)`, `Style.space(16)`.
@@ -720,7 +720,7 @@ directory with the `ARDOISE_DATA_DIR` environment variable).
 | `todos[].profile` | `string` | Profile or project name. |
 | `todos[].repo` | `string?` | Repository or component within the project. |
 | `todos[].tags` | `string[]?` | Subsystem tags / labels. |
-| `todos[].location` | `object\|null` | Where the work lives — see 7.2. |
+| `todos[].location` | `object\|null` | Where the work lives (see 7.2). |
 | `todos[].done` | `boolean` | Completion state. |
 | `todos[].createdAt` | `number` | Creation epoch ms. |
 | `todos[].updatedAt` | `number?` | Last-updated epoch ms. Drives skew resolution in `mergeStores`. |
@@ -813,7 +813,7 @@ Completed tasks are moved here by `clear` / the footer's `Clear` action
 ### 7.4 Reactive Storage
 
 Both files are watched with `FileView` (`watchChanges: true`), so external
-writers — Nextcloud, Syncthing, git hooks, AI agents, shell scripts — are
+writers (Nextcloud, Syncthing, git hooks, AI agents, shell scripts) are
 reflected in the bar and panel without a restart. Writes are atomic
 (temp file + rename) to avoid a partially-read file.
 
@@ -863,7 +863,7 @@ reflected in the bar and panel without a restart. Writes are atomic
 │   ├── omarchy-ref        # Pinned Omarchy commit for CI
 │   ├── preview.qml        # Offscreen render definition for banner & feature screenshots
 │   └── render-preview.sh  # Headless capture pipeline for preview & feature screenshots
-├── tests/                 # Tiered suite — see AGENTS.md "Test Tiers"
+├── tests/                 # Tiered suite (see AGENTS.md "Test Tiers")
 │   ├── helpers/qml-test-utils.mts
 │   ├── TodoStore.test.mts
 │   ├── PanelLogic.test.mts

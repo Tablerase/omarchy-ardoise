@@ -1,4 +1,4 @@
-# Ardoise — Minimalist Task Slate for Omarchy
+# Ardoise: Task slate for Omarchy
 
 <p align="center">
   <img src="./preview.png" alt="Ardoise Preview for Omarchy" width="960">
@@ -43,12 +43,12 @@ The essentials, then the rest. Everything under a heading is a bonus you can
 ignore until you want it.
 
 <details open>
-<summary><img src="https://api.iconify.design/mdi:format-list-checks.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Core — the task slate</b></summary>
+<summary><img src="https://api.iconify.design/mdi:format-list-checks.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Core task slate</b></summary>
 
-- <img src="https://api.iconify.design/mdi:timer-alert-outline.svg?color=%23df8e1d" width="13" height="13" alt="" /> **Severity-aware bar widget.** The mark escalates as work slips: neutral when
+- <img src="https://api.iconify.design/mdi:timer-alert-outline.svg?color=%23df8e1d" width="13" height="13" alt="" /> **Bar widget with urgency cues.** The mark escalates as work slips: neutral when
   you're on track, blue when something is due today, amber when something is
   **late**. The badge always counts the state the icon depicts, so a red-free
-  "2" means *2 overdue*, not *2 of 12*. Late work never turns red — red is
+  "2" means *2 overdue*, not *2 of 12*. Late work never turns red; red is
   reserved for actual errors.
 - <img src="https://api.iconify.design/mdi:tooltip-text-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Badge + tooltip.** Pending count on the bar; hover for a per-profile
   breakdown, completion progress, and overdue / due-today detail.
@@ -59,15 +59,15 @@ ignore until you want it.
   <img src="./screenshots/panel.png" alt="Ardoise Panel with Expanded Task Drawer" width="440" />
 </p>
 
-- <img src="https://api.iconify.design/mdi:shield-alert-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hold-to-confirm laser safeguards.** Destructive actions (task deletion with <kbd>x</kbd>,
-  clearing completed tasks with <kbd>c</kbd>, and purging archives) charge an 800ms glowing laser bar with card micro-shake
-  and surface tint. Releasing early drains safely, eliminating confirmation modal fatigue while preventing accidental loss.
+- <img src="https://api.iconify.design/mdi:shield-alert-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hold to confirm.** Destructive actions (task deletion with <kbd>x</kbd>,
+  clearing completed tasks with <kbd>c</kbd>, and purging archives) charge an 800ms glowing progress bar with a subtle card shake.
+  Releasing early cancels safely, avoiding accidental deletion without annoying modal popups.
 
 <p align="center">
-  <img src="./screenshots/hold-to-confirm.png" alt="Ardoise Hold-to-Confirm Laser Progress Bar" width="440" />
+  <img src="./screenshots/hold-to-confirm.png" alt="Ardoise Hold-to-Confirm Progress Bar" width="440" />
 </p>
 
-- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add** — a fullscreen capture bar. Type, <kbd>Enter</kbd>, gone.
+- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add**: a fullscreen capture bar. Type, <kbd>Enter</kbd>, and you're done.
 
 <p align="center">
   <img src="./screenshots/quick-add.png" alt="Ardoise Quick Add Capture Modal" width="440">
@@ -87,10 +87,10 @@ ignore until you want it.
 
 - <img src="https://api.iconify.design/mdi:keyboard.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Fully keyboard-driven.** <kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>,
   <kbd>g</kbd>/<kbd>G</kbd>, <kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Space</kbd>,
-  <kbd>Esc</kbd> — no mouse required for any workflow.
-- <img src="https://api.iconify.design/mdi:keyboard-esc.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Two-stage <kbd>Esc</kbd>.** An empty field dismisses; a field with a draft
-  returns to motion mode without losing your text.
-- <img src="https://api.iconify.design/mdi:magnify.svg?color=%2358a6ff" width="13" height="13" alt="" /> **In-panel search** — <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> filters
+  <kbd>Esc</kbd>. No mouse required for any workflow.
+- <img src="https://api.iconify.design/mdi:keyboard-esc.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Two-stage <kbd>Esc</kbd>.** An empty field closes the panel. A field with a draft
+  returns to navigation mode without clearing your text.
+- <img src="https://api.iconify.design/mdi:magnify.svg?color=%2358a6ff" width="13" height="13" alt="" /> **In-panel search**: <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> filters
   tasks and notes as you type.
 - <img src="https://api.iconify.design/mdi:help-circle-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Shortcut directory** (<kbd>?</kbd>) listing every binding, searchable.
 
@@ -108,10 +108,10 @@ ignore until you want it.
 - <img src="https://api.iconify.design/mdi:calendar-clock.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Interactive Custom Reminder Picker.** Natural-language input
   (`45m`, `2h`, `14:30`, `tomorrow 9am`, `Oct 15 10am`) with a live relative countdown preview badge,
   quick step adjustments (`±15m`, `±1h`, `+1d`), hour/minute steppers, and an interactive mini-calendar month grid.
-  Strict Two-Stage Escape compliant — never loses draft text on <kbd>Esc</kbd>.
-- <img src="https://api.iconify.design/mdi:bell-ring-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Desktop notifications** — a headless service watches your file and raises native desktop
+  Draft-safe: pressing <kbd>Esc</kbd> never loses your text.
+- <img src="https://api.iconify.design/mdi:bell-ring-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Desktop notifications**: a headless service watches your file and raises native desktop
   notifications; clicking one opens the panel.
-- <img src="https://api.iconify.design/mdi:bell-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Loop prevention** — tasks never notify twice.
+- <img src="https://api.iconify.design/mdi:bell-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **No duplicate alerts**: tasks only notify once per reminder.
 
 </details>
 
@@ -125,20 +125,20 @@ ignore until you want it.
 Your data directory is a git repository, so every change is a snapshot.
 
 > [!NOTE]
-> **Offline-first & remote-agnostic**: GitHub (and git remotes in general) are strictly optional. Ardoise is 100% offline-first — local snapshots, task recovery, and point-in-time rollbacks work completely on your machine without an account or internet connection. If you wish to sync across machines, Ardoise works with any Git host (GitHub, GitLab, Codeberg, Forgejo, or a self-hosted SSH server). A 1-click private GitHub helper is provided in the UI as an optional convenience, not a requirement.
+> **Offline-first & remote-agnostic**: GitHub (and git remotes in general) are strictly optional. Ardoise is 100% offline-first: local snapshots, task recovery, and point-in-time rollbacks work completely on your machine without an account or internet connection. If you wish to sync across machines, Ardoise works with any Git host (GitHub, GitLab, Codeberg, Forgejo, or a self-hosted SSH server). A 1-click private GitHub helper is provided in the UI as an optional convenience, not a requirement.
 
 - <img src="https://api.iconify.design/mdi:history.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Point-in-time rollback** of tasks and archives from a commit.
 - <img src="https://api.iconify.design/mdi:backup-restore.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Recover deleted tasks** from any snapshot.
-- <img src="https://api.iconify.design/mdi:sync.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Remote sync** with a conflict-free three-way merge — safe when two
+- <img src="https://api.iconify.design/mdi:sync.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Remote sync** with a conflict-free three-way merge, safe when two
   machines edited the same list offline.
-- <img src="https://api.iconify.design/mdi:magnify.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Snapshot search & inspection** — search commits by message, device tag, or hash (<kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> in Git modal, or <kbd>u</kbd>).
+- <img src="https://api.iconify.design/mdi:magnify.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Snapshot search & inspection**: search commits by message, device tag, or hash (<kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> in Git modal, or <kbd>u</kbd>).
 
 </details>
 
 <details>
 <summary><img src="https://api.iconify.design/mdi:folder-open-outline.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Context awareness</b></summary>
 
-- <img src="https://api.iconify.design/mdi:code-braces.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hyprland workspace detection** — Quick Add reads the focused window and can prefill the repository and path
+- <img src="https://api.iconify.design/mdi:code-braces.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hyprland workspace detection**: Quick Add reads the focused window and can prefill the repository and path
   the command detected, so coding tasks are captured with their context
   already attached.
 
@@ -147,15 +147,15 @@ Your data directory is a git repository, so every change is a snapshot.
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
 
-- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` — see
-  [Scripting](#scripting-automation).
+- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` (see
+  [Scripting](#scripting-automation)).
 - <img src="https://api.iconify.design/mdi:file-eye-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **React to writes.** The data file is watched, so external tools, git hooks,
   and AI agents can write to it and the UI updates immediately.
 - <img src="https://api.iconify.design/mdi:shield-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Forward-compatible schema.** A file written by a newer Ardoise is never
   downgraded, so a rollback won't truncate your list.
 - <img src="https://api.iconify.design/mdi:content-copy.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Copy a task for an AI agent.** Press <kbd>K</kbd> on a task for a context
   menu, then <kbd>y</kbd> to copy a compact markdown block (title, profile, repo,
-  tags, due, notes) to the clipboard — token-frugal and LLM-ready.
+  tags, due, notes) to the clipboard, formatted as compact markdown ready for LLMs or notes.
 
 <p align="center">
   <img src="./screenshots/context-menu.png" alt="Ardoise Task Context Action Menu for AI and Quick Actions" width="440">
@@ -177,9 +177,9 @@ Your data directory is a git repository, so every change is a snapshot.
 
 ### Requirements & External Dependencies
 
-- **Omarchy Quattro (Omarchy 4.x)** — desktop environment with Hyprland and Quickshell (Qt 6).
-- **`git`** — required for local task versioning, history, and snapshot rollbacks. Remote synchronization is entirely optional (compatible with any Git server: GitHub, GitLab, Codeberg, Forgejo, or self-hosted SSH; no GitHub account required).
-- **`lua`** *(optional)* — required only if customizing in-panel keyboard shortcuts via `bindings.lua`.
+- **Omarchy Quattro (Omarchy 4.x)**: desktop environment with Hyprland and Quickshell (Qt 6).
+- **`git`**: required for local task versioning, history, and snapshot rollbacks. Remote synchronization is entirely optional (compatible with any Git server: GitHub, GitLab, Codeberg, Forgejo, or self-hosted SSH; no GitHub account required).
+- **`lua`** *(optional)*: required only if customizing in-panel keyboard shortcuts via `bindings.lua`.
 
 ### Via Omarchy Plugin Marketplace (Recommended)
 
@@ -262,22 +262,22 @@ Then set up the two keybindings below so you never need the mouse again.
 
 ## Keybindings
 
-Ardoise ships **no default keybinding** — you choose the combination. The panel
+Ardoise ships with **no default keybinding**: you choose the combination that fits your setup. The panel
 header has a keyboard button (`󰌌`) that copies both snippets to your clipboard
 and opens the file for you. The indicator tells you where you stand:
 
-> `✓` **Green** — both shortcuts detected in Hyprland.
-> `!` **Orange** — one of two active, or the bindings are commented out.
-> `✕` **Red** — not configured.
+> `✓` **Green**: both shortcuts detected in Hyprland.
+> `!` **Orange**: one of two active, or the bindings are commented out.
+> `✕` **Red**: not configured.
 
-**Omarchy Quattro (Lua)** — add to `~/.config/hypr/bindings.lua`:
+**Omarchy Quattro (Lua)**: add to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + ALT + T", "Ardoise Panel", "omarchy-shell tablerase.ardoise toggle")
 o.bind("SUPER + SHIFT + T", "Ardoise Quick Add", "omarchy-shell shell toggle tablerase.ardoise '{}'")
 ```
 
-**Classic Omarchy (Conf)** — add to `~/.config/hypr/bindings.conf`:
+**Classic Omarchy (Conf)**: add to `~/.config/hypr/bindings.conf`:
 
 ```ini
 bindd = SUPER ALT, T, Ardoise Panel, exec, omarchy-shell tablerase.ardoise toggle
@@ -390,7 +390,7 @@ Notes:
 
 - `count` returns **total pending**, not the number of late tasks. Use `list`
   and filter if you need urgency.
-- Quick Add has no plugin command — open it with
+- Quick Add has no direct plugin command; open it with
   `omarchy-shell shell toggle tablerase.ardoise '{}'`.
 - The full contract, including multi-monitor behaviour, lives in
   [`DESIGN.md`](DESIGN.md).
@@ -445,7 +445,7 @@ omarchy-restart-shell
 
 **My keybindings show orange or red.**
 The panel detects the bindings in your Hyprland config. Red means neither was
-found — check the file name for your setup (`bindings.lua` on Quattro,
+found. Check the file name for your setup (`bindings.lua` on Quattro,
 `bindings.conf` on classic) and reload with `hyprctl reload`.
 
 **Reminders aren't firing.**
@@ -473,7 +473,7 @@ tasks and their history, then re-enable.
 ```bash
 npm install          # no dependencies; this just primes the scripts
 npm run check        # typecheck, lint, validate manifest, full test suite
-npm run test:fast    # unit tiers only — sub-second
+npm run test:fast    # unit tiers only (< 0.8s)
 npm run test:docker  # reproduce CI exactly in a container
 ```
 
@@ -487,10 +487,10 @@ data schemas.
 ## Acknowledgments
 
 - **[OmaTasks for Todoist](https://github.com/crmne/omatasks)** by
-  **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT) — the
+  **Carmine Paolino** ([@crmne](https://github.com/crmne)) (MIT), author of the
   multi-kind overlay pattern behind the Quick Add modal, and the headless
   preview pipeline.
-- **[Omarchy](https://github.com/omacom/omarchy)** — the bar widget
+- **[Omarchy](https://github.com/omacom/omarchy)**: the bar widget
   architecture, theme tokens, and the desktop this lives on.
 
 ---

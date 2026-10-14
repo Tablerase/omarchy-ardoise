@@ -54,7 +54,7 @@ Item {
   // assigned to a typed `color` property without a coercion warning.
   readonly property color warningColor: brandIcon ? brandIcon.warningColor : "#df8e1d"
   readonly property color cardBackground: Color.popups.background
-  // Opaque composite of selectedBackground tint over the solid card base — used as
+  // Opaque composite of selectedBackground tint over the solid card base, used as
   // fadeColor for pill rows inside expanded task drawers so the gradient has real contrast.
   readonly property color expandedCardColor: Qt.rgba(
     Color.popups.background.r * (1 - Color.menu.selectedBackground.a) + Color.menu.selectedBackground.r * Color.menu.selectedBackground.a,

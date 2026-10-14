@@ -1083,7 +1083,7 @@ test("getArdoiseIconState: every rung has a distinct Nerd Font glyph and a color
   assert.equal(ardoiseIconStateForKey("nope"), null);
 });
 
-test("getArdoiseIconState: no rung uses the urgent role — red is reserved for errors", () => {
+test("getArdoiseIconState: no rung uses the urgent role (red is reserved for errors)", () => {
   // Red is the shell's error channel. Using it for a late task would train the
   // eye to ignore it, so the task ladder must stay on the softer warning ramp
   // and leave urgent to genuine failure surfaces (QuickAdd title-required,

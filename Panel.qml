@@ -144,7 +144,7 @@ Panel {
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(400))
     // When a modal is open, enforce a minimum panel height so the modal
-    // always has enough room to render — independent of task-list content count.
+    // always has enough room to render, independent of task-list content count.
     contentHeight: panel.fittedContentHeight(
       (panelContent.showKeyHelp || panelContent.showGitModal || panelContent.showArchiveModal || panelContent.showTaskMenu || panelContent.showReminderPickerModal)
         ? Math.max(panelContent.implicitHeight, Style.space(380))

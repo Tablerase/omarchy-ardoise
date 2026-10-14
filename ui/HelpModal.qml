@@ -227,7 +227,7 @@ Rectangle {
     }
   }
 
-  // Unconditional mouse event blocker — prevents hover/click bleed-through to items below
+  // Unconditional mouse event blocker to prevent hover/click bleed-through to items below
   MouseArea {
     anchors.fill: parent
     acceptedButtons: Qt.AllButtons

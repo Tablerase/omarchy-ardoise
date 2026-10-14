@@ -493,7 +493,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
                   if (root.manualText.length > 0 && !root.parsedResult) {
-                    return "Unrecognized format — try '2h', '17:30', or 'tomorrow 9am'"
+                    return "Unrecognized format. Try '2h', '17:30', or 'tomorrow 9am'"
                   }
                   if (root.parsedResult && root.parsedResult.label) {
                     return root.parsedResult.label

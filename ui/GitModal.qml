@@ -183,7 +183,7 @@ Rectangle {
     }
   }
 
-  // Unconditional mouse event blocker — prevents hover/click bleed-through to items below
+  // Unconditional mouse event blocker to prevent hover/click bleed-through to items below
   MouseArea {
     anchors.fill: parent
     acceptedButtons: Qt.AllButtons
@@ -620,7 +620,7 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(4)
 
-        // Search Button — Tab 0 only
+        // Search Button (Tab 0 only)
         PanelActionButton {
           id: searchBtn
           visible: root.activeTab === 0
@@ -671,7 +671,7 @@ Rectangle {
       }
     }
 
-    // Tabs Header — matching HelpModal separator style
+    // Tabs Header matching HelpModal separator style
     Row {
       width: parent.width
       spacing: Style.space(6)
