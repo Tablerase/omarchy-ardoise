@@ -45,6 +45,10 @@ ignore until you want it.
 <details open>
 <summary><img src="https://api.iconify.design/mdi:format-list-checks.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Core — the task slate</b></summary>
 
+<p align="center">
+  <img src="./screenshots/panel.png" alt="Ardoise Panel with Expanded Task Drawer" width="440">
+</p>
+
 - <img src="https://api.iconify.design/mdi:timer-alert-outline.svg?color=%23df8e1d" width="13" height="13" alt="" /> **Severity-aware bar widget.** The mark escalates as work slips: neutral when
   you're on track, blue when something is due today, amber when something is
   **late**. The badge always counts the state the icon depicts, so a red-free
@@ -61,10 +65,18 @@ ignore until you want it.
 - <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
   `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
 
+<p align="center">
+  <img src="./screenshots/quick-add.png" alt="Ardoise Quick Add Capture Modal" width="560">
+</p>
+
 </details>
 
 <details>
 <summary><img src="https://api.iconify.design/mdi:keyboard-outline.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Keyboard & search</b></summary>
+
+<p align="center">
+  <img src="./screenshots/help-shortcuts.png" alt="Ardoise Searchable Shortcut Directory and Release Highlights" width="440">
+</p>
 
 - <img src="https://api.iconify.design/mdi:keyboard.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Fully keyboard-driven.** <kbd>j</kbd>/<kbd>k</kbd>, <kbd>h</kbd>/<kbd>l</kbd>,
   <kbd>g</kbd>/<kbd>G</kbd>, <kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Space</kbd>,
@@ -80,6 +92,10 @@ ignore until you want it.
 <details>
 <summary><img src="https://api.iconify.design/mdi:clock-outline.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Reminders & notifications</b></summary>
 
+<p align="center">
+  <img src="./screenshots/reminder-picker.png" alt="Ardoise Interactive Custom Reminder Picker" width="360">
+</p>
+
 - <img src="https://api.iconify.design/mdi:clock-fast.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Scheduled reminders** with quick presets (`+30m`, `+1h`, `Tomorrow 9am`,
   `Tomorrow 6pm`), dynamically recomputed relative to current execution time.
 - <img src="https://api.iconify.design/mdi:calendar-clock.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Interactive Custom Reminder Picker.** Natural-language input
@@ -94,6 +110,10 @@ ignore until you want it.
 
 <details>
 <summary><img src="https://api.iconify.design/mdi:source-branch.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Git-backed history & sync</b></summary>
+
+<p align="center">
+  <img src="./screenshots/git-snapshots.png" alt="Ardoise Git Snapshots and Task Diff Inspector" width="460">
+</p>
 
 Your data directory is a git repository, so every change is a snapshot.
 
@@ -116,6 +136,12 @@ Your data directory is a git repository, so every change is a snapshot.
 
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
+
+<p align="center">
+  <img src="./screenshots/context-menu.png" alt="Ardoise Task Context Action Menu for AI and Quick Actions" width="440">
+  &nbsp;&nbsp;
+  <img src="./screenshots/archive.png" alt="Ardoise Task Archive Browser and Recovery" width="440">
+</p>
 
 - <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` — see
   [Scripting](#scripting--automation).

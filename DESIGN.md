@@ -861,8 +861,8 @@ reflected in the bar and panel without a restart. Writes are atomic
 │   ├── detect-context.sh  # Hyprland focused-window CWD/editor detection
 │   ├── load-bindings.lua  # Sandboxed Lua keybindings runner
 │   ├── omarchy-ref        # Pinned Omarchy commit for CI
-│   ├── preview.qml        # Offscreen render definition
-│   └── render-preview.sh  # Headless capture pipeline
+│   ├── preview.qml        # Offscreen render definition for banner & feature screenshots
+│   └── render-preview.sh  # Headless capture pipeline for preview & feature screenshots
 ├── tests/                 # Tiered suite — see AGENTS.md "Test Tiers"
 │   ├── helpers/qml-test-utils.mts
 │   ├── TodoStore.test.mts

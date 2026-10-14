@@ -38,14 +38,23 @@ render_single_theme() {
     echo "Rendering Ardoise preview offscreen with Quickshell (current system theme)..."
   fi
 
-  "${env_cmd[@]}" timeout 10s quickshell -p "$preview_dir" --no-color >/dev/null 2>&1 || true
+  "${env_cmd[@]}" timeout 15s quickshell -p "$preview_dir" --no-color >/dev/null 2>&1 || true
 
-  if [[ -f "$target_out/preview.png" ]]; then
-    echo "✓ Generated: $target_out/preview.png ($(du -h "$target_out/preview.png" | cut -f1))"
-  fi
-  if [[ -f "$target_out/screenshots/panel.png" ]]; then
-    echo "✓ Generated: $target_out/screenshots/panel.png ($(du -h "$target_out/screenshots/panel.png" | cut -f1))"
-  fi
+  local files=(
+    "preview.png"
+    "screenshots/panel.png"
+    "screenshots/quick-add.png"
+    "screenshots/reminder-picker.png"
+    "screenshots/git-snapshots.png"
+    "screenshots/archive.png"
+    "screenshots/help-shortcuts.png"
+    "screenshots/context-menu.png"
+  )
+  for f in "${files[@]}"; do
+    if [[ -f "$target_out/$f" ]]; then
+      echo "✓ Generated: $target_out/$f ($(du -h "$target_out/$f" | cut -f1))"
+    fi
+  done
 }
 
 if [[ "$theme" == "--all" || "$theme" == "all" ]]; then
