@@ -10,15 +10,15 @@
 </p>
 
 Everything stays in plain JSON on your machine. No account, no sync service, no
-lock-in — point any tool you like at the file and it reacts instantly.
+lock-in, point any tool you like at the file and it reacts instantly.
 
-<div align="center">
-
-[![Release](https://img.shields.io/badge/version-1.0.0--initial-blue.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/releases)
-[![Status](https://img.shields.io/badge/status-early%20public%20release-amber.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/issues)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](./LICENSE)
-
-</div>
+<!-- <div align="center"> -->
+<!---->
+<!-- [![Release](https://img.shields.io/badge/version-1.0.0--initial-blue.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/releases) -->
+<!-- [![Status](https://img.shields.io/badge/status-early%20public%20release-amber.svg?style=for-the-badge)](https://github.com/Tablerase/omarchy-ardoise/issues) -->
+<!-- [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](./LICENSE) -->
+<!---->
+<!-- </div> -->
 
 > [!NOTE]
 > **Initial Public Release (`v1.0.0`)**: Ardoise is fully
@@ -124,6 +124,9 @@ ignore until you want it.
 
 Your data directory is a git repository, so every change is a snapshot.
 
+> [!NOTE]
+> **Offline-first & remote-agnostic**: GitHub (and git remotes in general) are strictly optional. Ardoise is 100% offline-first — local snapshots, task recovery, and point-in-time rollbacks work completely on your machine without an account or internet connection. If you wish to sync across machines, Ardoise works with any Git host (GitHub, GitLab, Codeberg, Forgejo, or a self-hosted SSH server). A 1-click private GitHub helper is provided in the UI as an optional convenience, not a requirement.
+
 - <img src="https://api.iconify.design/mdi:history.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Point-in-time rollback** of tasks and archives from a commit.
 - <img src="https://api.iconify.design/mdi:backup-restore.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Recover deleted tasks** from any snapshot.
 - <img src="https://api.iconify.design/mdi:sync.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Remote sync** with a conflict-free three-way merge — safe when two
@@ -175,7 +178,7 @@ Your data directory is a git repository, so every change is a snapshot.
 ### Requirements & External Dependencies
 
 - **Omarchy Quattro (Omarchy 4.x)** — desktop environment with Hyprland and Quickshell (Qt 6).
-- **`git`** — required for local task versioning, snapshot rollbacks, and multi-device sync.
+- **`git`** — required for local task versioning, history, and snapshot rollbacks. Remote synchronization is entirely optional (compatible with any Git server: GitHub, GitLab, Codeberg, Forgejo, or self-hosted SSH; no GitHub account required).
 - **`lua`** *(optional)* — required only if customizing in-panel keyboard shortcuts via `bindings.lua`.
 
 ### Via Omarchy Plugin Marketplace (Recommended)

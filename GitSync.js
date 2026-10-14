@@ -227,7 +227,7 @@ function diagnoseGitSyncError(rawOutput, exitCode) {
     return "SSH key locked. Run 'ssh-add' in terminal to load key."
   }
   if (/permission denied \(publickey\)/i.test(text)) {
-    return "SSH auth failed (Permission denied). Run 'ssh-add' or check GitHub keys."
+    return "SSH auth failed (Permission denied). Run 'ssh-add' or check remote keys."
   }
   if (/could not resolve host/i.test(text) || /failed to connect/i.test(text) || /network is unreachable/i.test(text)) {
     return "Network offline: Could not connect to remote host."
@@ -236,7 +236,7 @@ function diagnoseGitSyncError(rawOutput, exitCode) {
     return "Remote branch not found (empty remote repository)."
   }
   if (/repository not found/i.test(text)) {
-    return "Remote repository not found on GitHub."
+    return "Remote repository not found on remote."
   }
   if (/authentication failed/i.test(text) || /invalid username or password/i.test(text)) {
     return "HTTP authentication failed. Check credentials."

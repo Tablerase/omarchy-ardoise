@@ -1435,7 +1435,7 @@ Rectangle {
         spacing: Style.space(10)
 
         Text {
-          text: "Remote Repository (GitHub / GitLab)"
+          text: "Remote Repository (GitHub, GitLab, or any Git remote)"
           color: root.barForeground
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
@@ -1445,7 +1445,7 @@ Rectangle {
         TextField {
           id: remoteField
           width: parent.width
-          placeholderText: "git@github.com:username/ardoise-data.git"
+          placeholderText: "git@github.com:... or git@gitlab.com:... or custom Git URL"
           placeholderTextColor: Color.muted
           text: root.barWidget ? String(root.barWidget.remoteUrl || "") : ""
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -1548,7 +1548,7 @@ Rectangle {
             HoverHandler { id: autoCreateHover }
             ShortcutToolTip {
               visible: autoCreateHover.hovered
-              description: "Create private repository on GitHub and push"
+              description: "Optional 1-click private repo setup via gh CLI; or enter any Git URL above"
               shortcut: "Enter"
               fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
             }

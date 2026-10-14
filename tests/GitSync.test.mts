@@ -254,7 +254,7 @@ test("diagnoseGitSyncError: handles Permission denied (publickey)", () => {
   const output = "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.";
   assert.equal(
     diagnoseGitSyncError(output, 1),
-    "SSH auth failed (Permission denied). Run 'ssh-add' or check GitHub keys."
+    "SSH auth failed (Permission denied). Run 'ssh-add' or check remote keys."
   );
 });
 
@@ -278,7 +278,7 @@ test("diagnoseGitSyncError: handles repository not found", () => {
   const output = "ERROR: Repository not found.\nfatal: Could not read from remote repository.";
   assert.equal(
     diagnoseGitSyncError(output, 1),
-    "Remote repository not found on GitHub."
+    "Remote repository not found on remote."
   );
 });
 
