@@ -45,10 +45,6 @@ ignore until you want it.
 <details open>
 <summary><img src="https://api.iconify.design/mdi:format-list-checks.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Core — the task slate</b></summary>
 
-<p align="center">
-  <img src="./screenshots/panel.png" alt="Ardoise Panel with Expanded Task Drawer" width="440">
-</p>
-
 - <img src="https://api.iconify.design/mdi:timer-alert-outline.svg?color=%23df8e1d" width="13" height="13" alt="" /> **Severity-aware bar widget.** The mark escalates as work slips: neutral when
   you're on track, blue when something is due today, amber when something is
   **late**. The badge always counts the state the icon depicts, so a red-free
@@ -58,16 +54,27 @@ ignore until you want it.
   breakdown, completion progress, and overdue / due-today detail.
 - <img src="https://api.iconify.design/mdi:card-text-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Flyout panel** with profile filters, an auto-hiding filter for empty
   profiles, and expandable drawers (<kbd>Enter</kbd>) for notes, dynamic reminder presets, and profile reassignment.
+
+<p align="center">
+  <img src="./screenshots/panel.png" alt="Ardoise Panel with Expanded Task Drawer" width="440" />
+</p>
+
 - <img src="https://api.iconify.design/mdi:shield-alert-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Hold-to-confirm laser safeguards.** Destructive actions (task deletion with <kbd>x</kbd>,
   clearing completed tasks with <kbd>c</kbd>, and purging archives) charge an 800ms glowing laser bar with card micro-shake
   and surface tint. Releasing early drains safely, eliminating confirmation modal fatigue while preventing accidental loss.
-- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add** — a fullscreen capture bar. Type, <kbd>Enter</kbd>, gone.
-- <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
-  `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
 
 <p align="center">
-  <img src="./screenshots/quick-add.png" alt="Ardoise Quick Add Capture Modal" width="560">
+  <img src="./screenshots/hold-to-confirm.png" alt="Ardoise Hold-to-Confirm Laser Progress Bar" width="440" />
 </p>
+
+- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add** — a fullscreen capture bar. Type, <kbd>Enter</kbd>, gone.
+
+<p align="center">
+  <img src="./screenshots/quick-add.png" alt="Ardoise Quick Add Capture Modal" width="440">
+</p>
+
+- <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
+  `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
 
 </details>
 
@@ -137,14 +144,8 @@ Your data directory is a git repository, so every change is a snapshot.
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
 
-<p align="center">
-  <img src="./screenshots/context-menu.png" alt="Ardoise Task Context Action Menu for AI and Quick Actions" width="440">
-  &nbsp;&nbsp;
-  <img src="./screenshots/archive.png" alt="Ardoise Task Archive Browser and Recovery" width="440">
-</p>
-
 - <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` — see
-  [Scripting](#scripting--automation).
+  [Scripting](#scripting-automation).
 - <img src="https://api.iconify.design/mdi:file-eye-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **React to writes.** The data file is watched, so external tools, git hooks,
   and AI agents can write to it and the UI updates immediately.
 - <img src="https://api.iconify.design/mdi:shield-check-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Forward-compatible schema.** A file written by a newer Ardoise is never
@@ -152,11 +153,20 @@ Your data directory is a git repository, so every change is a snapshot.
 - <img src="https://api.iconify.design/mdi:content-copy.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Copy a task for an AI agent.** Press <kbd>K</kbd> on a task for a context
   menu, then <kbd>y</kbd> to copy a compact markdown block (title, profile, repo,
   tags, due, notes) to the clipboard — token-frugal and LLM-ready.
+
+<p align="center">
+  <img src="./screenshots/context-menu.png" alt="Ardoise Task Context Action Menu for AI and Quick Actions" width="440">
+</p>
+
 - <img src="https://api.iconify.design/mdi:archive-arrow-up-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Restore from the archive.** Press <kbd>d</kbd> to browse cleared tasks
   (virtualized for large archives) and restore one back to the active list with
   its original id, notes, and profile intact. Restores are write-confirmed so a
   task is never lost, and permanent delete (<kbd>x</kbd>, hold) is protected by
   the same hold-to-confirm charge as the task list.
+
+<p align="center">
+  <img src="./screenshots/archive.png" alt="Ardoise Task Archive Browser and Recovery" width="440">
+</p>
 
 </details>
 
@@ -199,14 +209,18 @@ omarchy-restart-shell
 To remove Ardoise safely from your system:
 
 ### 1. Disable from the Bar (Temporary)
+
 To take the widget off your bar without removing plugin files or task data:
+
 ```bash
 omarchy plugin disable tablerase.ardoise
 omarchy-restart-shell
 ```
 
 ### 2. Complete Plugin Removal
+
 To completely uninstall the plugin:
+
 ```bash
 # Disable and remove the plugin directory
 omarchy plugin disable tablerase.ardoise
@@ -216,11 +230,15 @@ omarchy-restart-shell
 ```
 
 ### 3. Optional: Purge Task Data & Keybindings
+
 Ardoise stores your tasks and local Git snapshots in `~/.config/omarchy/tablerase.ardoise/`. To permanently remove all task history and configuration:
+
 ```bash
 rm -rf ~/.config/omarchy/tablerase.ardoise
 ```
+
 If you configured Hyprland shortcuts, remove the two Ardoise lines from `~/.config/hypr/bindings.lua` (or `bindings.conf`) and reload Hyprland:
+
 ```bash
 hyprctl reload
 ```

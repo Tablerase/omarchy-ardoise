@@ -49,6 +49,7 @@ render_single_theme() {
     "screenshots/archive.png"
     "screenshots/help-shortcuts.png"
     "screenshots/context-menu.png"
+    "screenshots/hold-to-confirm.png"
   )
   for f in "${files[@]}"; do
     if [[ -f "$target_out/$f" ]]; then

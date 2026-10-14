@@ -758,12 +758,74 @@ ShellRoot {
         }
     }
 
+    // Window 8: Hold-to-Confirm Laser Progress Bar (screenshots/hold-to-confirm.png)
+    FloatingWindow {
+        id: winLaser
+        visible: true
+        implicitWidth: 600
+        implicitHeight: 700
+        color: Color.background
+
+        Rectangle {
+            id: laserCard
+            anchors.centerIn: parent
+            width: Style.space(420)
+            implicitHeight: laserContent.implicitHeight + Style.space(24)
+            color: Color.popups.background
+            border.color: Color.popups.border
+            border.width: 2
+            radius: Style.cornerRadius
+
+            Plugin.PanelContent {
+                id: laserContent
+                anchors.fill: parent
+                anchors.margins: Style.space(12)
+                shortcutState: "active"
+                shortcutRegistered: true
+                panelShortcutRegistered: true
+                quickAddShortcutRegistered: true
+                detectedPanelShortcut: "SUPER + ALT + T"
+                detectedQuickAddShortcut: "SUPER + SHIFT + T"
+                focusSection: "tasks"
+                cursorIndex: 0
+                cursorActive: true
+                store: root.sampleStore
+            }
+        }
+    }
+
     Timer {
-        interval: 1000
+        id: triggerLaserTimer
+        interval: 350
+        running: true
+        onTriggered: {
+            function findButtons(item) {
+                var res = [];
+                for (var i = 0; i < item.children.length; i++) {
+                    var c = item.children[i];
+                    if (!c) continue;
+                    if (c.startCharging && typeof c.startCharging === "function") {
+                        res.push(c);
+                    }
+                    if (c.children) {
+                        res = res.concat(findButtons(c));
+                    }
+                }
+                return res;
+            }
+            var btns = findButtons(laserContent);
+            if (btns.length > 0) {
+                btns[0].startCharging();
+            }
+        }
+    }
+
+    Timer {
+        interval: 920
         running: true
         onTriggered: {
             var outDir = Quickshell.env("ARDOISE_PREVIEW_OUT") || ".";
-            var remaining = 8;
+            var remaining = 9;
             function checkDone() {
                 remaining--;
                 if (remaining <= 0) {
@@ -811,6 +873,12 @@ ShellRoot {
                 result.saveToFile(outDir + "/screenshots/context-menu.png");
                 checkDone();
             });
+
+            laserCard.grabToImage(function(result) {
+                result.saveToFile(outDir + "/screenshots/hold-to-confirm.png");
+                checkDone();
+            });
         }
     }
 }
+
