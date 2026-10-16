@@ -1590,6 +1590,23 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "GitModal must compute dynamic contrast-safe secondaryText and only fill snapshot item background on hover or selection"
   );
 
+  // 4. Git snapshot error handling & non-intrusive warning banner
+  assert.ok(
+    barWidget.includes("property string gitSnapshotWarning") &&
+      barWidget.includes("GitSync.diagnoseSnapshotError") &&
+      barWidget.includes("function disableLocalSigning()") &&
+      barWidget.includes("function gitSnapshotWarning(): string"),
+    "BarWidget must capture commit errors, diagnose signing failures, and provide remediation methods"
+  );
+  assert.ok(
+    gitModal.includes("id: snapshotWarningBanner") &&
+      gitModal.includes("root.barWidget.gitSnapshotWarning") &&
+      gitModal.includes("id: signingFixBtn") &&
+      gitModal.includes("Disable Signing") &&
+      gitModal.includes("id: retryBtn"),
+    "GitModal must render a non-intrusive warning banner with retry and signing fix actions when snapshot fails"
+  );
+
   // 4. Service.qml must NOT pass private titles or reminder descriptions in argv, but must clearly identify profile and its icon
   assert.ok(
     !service.includes('headline = "Todo: " + t.title') &&

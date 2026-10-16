@@ -48,6 +48,8 @@ BarWidget {
   property string gitSyncStatus: "idle" // "idle" | "syncing" | "success" | "error"
   property string gitSyncMessage: ""
   property string lastSyncOutput: ""
+  property string gitSnapshotWarning: ""
+  property string lastCommitError: ""
   property string recoveringHash: ""
   property string inspectingHash: ""
   property var inspectedSnapshotTasks: []
@@ -459,7 +461,37 @@ BarWidget {
       root.dataDirPath,
       GitSync.buildCommitMessage(root.deviceName, root.lastCommitAction, root.pendingCount)
     ]
-    onExited: root.refreshGitHistory()
+    stderr: StdioCollector {
+      id: commitStderr
+      waitForEnd: true
+    }
+    onExited: function(code) {
+      if (code !== 0) {
+        var err = commitStderr ? commitStderr.text.trim() : ""
+        root.lastCommitError = err
+        root.gitSnapshotWarning = GitSync.diagnoseSnapshotError(err, code)
+        console.warn("[Ardoise] Commit failed with code", code, err)
+      } else {
+        root.lastCommitError = ""
+        root.gitSnapshotWarning = ""
+      }
+      root.refreshGitHistory()
+    }
+  }
+
+  function disableLocalSigning() {
+    disableSigningProc.running = true
+  }
+
+  Process {
+    id: disableSigningProc
+    command: ["git", "-C", root.dataDirPath, "config", "commit.gpgsign", "false"]
+    onExited: function(code) {
+      if (code === 0) {
+        root.gitSnapshotWarning = ""
+        root.triggerAutoCommit("Retry after disabling signing")
+      }
+    }
   }
 
   property int gitLogLimit: 30
@@ -1097,6 +1129,9 @@ BarWidget {
     function gitSearch(queryStr: string): string {
       return JSON.stringify(GitSync.filterSnapshots(root.gitSnapshots, queryStr || ""))
     }
+    function gitSnapshotWarning(): string { return root.gitSnapshotWarning || "" }
+    function gitDisableSigning(): string { root.disableLocalSigning(); return "ok" }
+    function gitRefresh(): string { root.refreshGitHistory(); return "ok" }
     function autoSetupGitRemote(repoName: string): string { return root.autoSetupGitRemote(repoName) }
     function gitAutoSetup(repoName: string): string { return root.autoSetupGitRemote(repoName) }
     function seedTutorial(): string { return root.seedTutorial() }

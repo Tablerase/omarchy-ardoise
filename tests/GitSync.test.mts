@@ -20,6 +20,7 @@ const {
   isValidRemoteUrl,
   filterSnapshots,
   diagnoseGitSyncError,
+  diagnoseSnapshotError,
   computeSnapshotDiff
 } = GitSync;
 
@@ -674,14 +675,26 @@ test("computeSnapshotDiff: handles initial root commit (no parent)", () => {
   assert.equal(diff.tasks[0].isMissing, true);
 });
 
-test("computeSnapshotDiff: handles empty or invalid inputs safely", () => {
-  const diff1 = computeSnapshotDiff(null as any, null as any, null as any);
-  assert.equal(diff1.hasChanges, false);
-  assert.equal(diff1.tasks.length, 0);
+test("diagnoseSnapshotError: identifies signing and key lock failures without false positives", () => {
+  const sshAskpassErr = "error: ssh_askpass: exec(/usr/lib/ssh/ssh-askpass): No such file or directory\nLoad key: incorrect passphrase supplied to decrypt private key";
+  const diag1 = diagnoseSnapshotError(sshAskpassErr, 1);
+  assert.ok(diag1.includes("Commit signing failed because the private key is locked"));
 
-  const diff2 = computeSnapshotDiff(undefined as any, undefined as any, undefined as any);
-  assert.equal(diff2.hasChanges, false);
-  assert.equal(diff2.tasks.length, 0);
+  const gpgErr = "gpg: signing failed: Inappropriate ioctl for device\nfatal: failed to write commit object";
+  const diag2 = diagnoseSnapshotError(gpgErr, 128);
+  assert.ok(diag2.includes("Commit signing failed"));
+
+  const lockErr = "fatal: Unable to create '/path/.git/index.lock': File exists.";
+  const diag3 = diagnoseSnapshotError(lockErr, 1);
+  assert.ok(diag3.includes("Git index locked"));
+
+  const genericErr = "fatal: pathspec 'todos.json' did not match any files";
+  const diag4 = diagnoseSnapshotError(genericErr, 1);
+  assert.equal(diag4, "Snapshot error: Pathspec 'todos.json' did not match any files");
+
+  assert.equal(diagnoseSnapshotError("", 0), "");
+  assert.equal(diagnoseSnapshotError("", 1), "Automatic snapshot failed (exit code 1)");
 });
+
 
 

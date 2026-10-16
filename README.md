@@ -385,7 +385,7 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived`, `whatsNew`, `markReleaseSeen`, `getProfileIcons` |
 | **Profiles** | `setProfile`, `setProfileIcon`, `getProfileIcons` |
 | **Panel** | `open`, `close`, `toggle`, `seedTutorial`, `help`, `resetReleaseHighlights` |
-| **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |
+| **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup`, `gitSnapshotWarning`, `gitDisableSigning`, `gitRefresh` |
 
 Notes:
 

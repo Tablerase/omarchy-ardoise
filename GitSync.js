@@ -257,6 +257,36 @@ function diagnoseGitSyncError(rawOutput, exitCode) {
 }
 
 /**
+ * Diagnoses automated local snapshot commit errors and returns an actionable message.
+ * Specifically detects commit signing failures without disrupting working configurations.
+ * @param {string} rawOutput - stderr or combined output from git commit
+ * @param {number} [exitCode] - Process exit code
+ * @returns {string}
+ */
+function diagnoseSnapshotError(rawOutput, exitCode) {
+  var text = (rawOutput || "").trim()
+  if (!text) {
+    return exitCode ? "Automatic snapshot failed (exit code " + exitCode + ")" : ""
+  }
+  if (/gpgsign|signing|passphrase|ssh_askpass/i.test(text)) {
+    return "Snapshots paused: Commit signing failed because the private key is locked. Load key with 'ssh-add' or disable signing for Ardoise."
+  }
+  if (/index\.lock|another git process/i.test(text)) {
+    return "Git index locked by another process. Snapshot will retry automatically."
+  }
+  var fatalMatch = text.match(/fatal:\s*([^\n\r]+)/i)
+  if (fatalMatch && fatalMatch[1]) {
+    var msg = fatalMatch[1].trim()
+    return "Snapshot error: " + msg.charAt(0).toUpperCase() + msg.slice(1)
+  }
+  var errMatch = text.match(/error:\s*([^\n\r]+)/i)
+  if (errMatch && errMatch[1]) {
+    return "Snapshot error: " + errMatch[1].trim()
+  }
+  return "Snapshot failed: " + text.split("\n")[0].substring(0, 80)
+}
+
+/**
  * Computes a structured diff between snapshot tasks and parent tasks (and active store).
  *
  * @param {any[]} snapshotTasks - Tasks recorded in snapshot (hash:todos.json)
@@ -409,6 +439,7 @@ if (typeof module !== "undefined" && module.exports) {
     isValidRemoteUrl,
     filterSnapshots,
     diagnoseGitSyncError,
+    diagnoseSnapshotError,
     computeSnapshotDiff
   }
 }

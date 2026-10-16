@@ -743,6 +743,71 @@ Rectangle {
         anchors.fill: parent
         spacing: Style.space(6)
 
+        // Snapshot Failure Warning Banner (conditional: only visible when background snapshot fails)
+        Rectangle {
+          id: snapshotWarningBanner
+          visible: Boolean(root.barWidget && root.barWidget.gitSnapshotWarning)
+          width: parent.width
+          implicitHeight: warningLayout.implicitHeight + Style.space(12)
+          radius: Style.cornerRadius * 0.6
+          color: Util.alpha(Color.warning, 0.12)
+          border.width: 1
+          border.color: Util.alpha(Color.warning, 0.45)
+
+          Row {
+            id: warningLayout
+            anchors.fill: parent
+            anchors.margins: Style.space(8)
+            spacing: Style.space(8)
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "󰀦"
+              color: Color.warning
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption * 1.2
+            }
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - Style.space(24) - (signingFixBtn.visible ? signingFixBtn.implicitWidth + Style.space(8) : 0) - retryBtn.implicitWidth - Style.space(16)
+              text: (root.barWidget && root.barWidget.gitSnapshotWarning) ? root.barWidget.gitSnapshotWarning : ""
+              color: root.barForeground
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption * 0.9
+              wrapMode: Text.WordWrap
+            }
+
+            Button {
+              id: signingFixBtn
+              visible: Boolean(root.barWidget && root.barWidget.gitSnapshotWarning && root.barWidget.gitSnapshotWarning.indexOf("signing") !== -1)
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Disable Signing"
+              fontSize: Style.font.caption * 0.85
+              bordered: true
+              onClicked: {
+                if (root.barWidget && typeof root.barWidget.disableLocalSigning === "function") {
+                  root.barWidget.disableLocalSigning()
+                }
+              }
+            }
+
+            PanelActionButton {
+              id: retryBtn
+              anchors.verticalCenter: parent.verticalCenter
+              size: Style.space(24)
+              iconText: "󰑐"
+              fontSize: Style.font.caption
+              tooltipText: "Retry snapshot"
+              onClicked: {
+                if (root.barWidget && typeof root.barWidget.triggerAutoCommit === "function") {
+                  root.barWidget.triggerAutoCommit("Manual retry snapshot")
+                }
+              }
+            }
+          }
+        }
+
         // Snapshot Search Row (expandable via / or Ctrl+F or searchBtn)
         Row {
           id: snapshotSearchRow
@@ -847,7 +912,7 @@ Rectangle {
         Item {
           id: listContainer
           width: parent.width
-          height: parent.height - actionRow.implicitHeight - (snapshotSearchRow.visible ? snapshotSearchRow.implicitHeight + Style.space(6) : 0) - (previewBox.visible ? previewBox.height + Style.space(6) : 0) - Style.space(10)
+          height: parent.height - actionRow.implicitHeight - (snapshotSearchRow.visible ? snapshotSearchRow.implicitHeight + Style.space(6) : 0) - (previewBox.visible ? previewBox.height + Style.space(6) : 0) - (snapshotWarningBanner.visible ? snapshotWarningBanner.implicitHeight + Style.space(6) : 0) - Style.space(10)
 
           ListView {
             id: snapshotList
