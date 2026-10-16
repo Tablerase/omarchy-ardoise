@@ -326,7 +326,7 @@ Rectangle {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.mode === "profile" ? TodoStore.getProfileGlyph(matchRow.modelData) : "󰓹"
+                text: root.mode === "profile" ? TodoStore.getProfileGlyph(matchRow.modelData, root.store) : "󰓹"
                 color: matchRow.isSelected ? Color.accent : root.secondaryText
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption

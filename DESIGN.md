@@ -150,8 +150,23 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
 10. **Profile Selector Container (`quickAddProfileContainer`)**:
     - Displays `Profile:` followed by a search icon chip (`quickAddProfileSearchChip` `󰍉`) at index `-1` separated by a subtle vertical divider, followed by single-line horizontally scrollable profile pills (`Ui.ProfileSelector`, `wrap: false`) anchored across the remaining width, matching the panel drawer layout. Left/right edge alpha fade gradients (`Color.menu.background`) provide seamless overflow affordance while keeping the row on a single compact line (`implicitHeight: Style.space(26)`).
     - **Unified Search Experience**: Activating index `-1` (<kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>/</kbd>) opens `Ui.TagProfileSearchBox` in profile mode for searching existing profiles or creating new profiles on the fly with live `(N tasks)` indicators, matching the panel drawer experience.
+    - **Profile Icon Customizer (`Ui.ProfileIconPicker`)**:
+      - **Trigger**: Selecting any profile chip and pressing <kbd>e</kbd> or <kbd>Shift+I</kbd>, or right-clicking any profile pill.
+      - **Initial Focus & Preselection**: Opens directly focused on the icon grid, with the target profile's current icon preselected and scrolled into view.
+      - **Three Categories (Recent vs Presets vs All Glyphs)**:
+        - **Recent**: Most recently applied profile icons (MRU order, capped at 18 items / 3 rows of 6), seeded automatically from active profile custom icons so existing profile glyphs are immediately accessible on launch.
+        - **Presets**: 42 curated, labelled profile icons (Web `󰖟`, Browser `󰇩`, Layout `󰘐`, Test `󰙨`, Lab `󰛄`, Docker `󰡨`, Helm `󰠳`, Receipt `󰑉`, Calculator ``, Wallet `󰕘`, Rocket `󰐿`, etc.) with 6-column labeled layout.
+        - **All Glyphs**: Expansive library of 240+ verified standard Nerd Font glyphs with 7-column compact layout, verified 1:1 against font table names and descriptive tooltips (eliminating codepoint/description skew across AWS, LinkedIn, bolt, beer, sitemap, desktop, etc.).
+        - **Category Tab Bar with `KeyBadge` Cues**: Flanked by panel-matching `KeyBadge` components (`[` and `]`) visually communicating tab cycling shortcuts.
+        - **Category Switching & Search Scope**: Seamlessly toggle between categories via pill clicks or keyboard shortcuts (<kbd>[</kbd> for previous tab, <kbd>]</kbd> for next tab in grid mode). When a search query is typed while in the `Recent` tab, search queries the full library (`ALL_GLYPHS_CATALOG`) while boosting matching recent icons to the top of the results, so users can find any icon without having to manually switch tabs; clearing the search immediately returns to the 18-item Recent tab grid.
+      - **Optical Centering & Visual Refinements**: Symmetrically centered cell distribution with equal margins, optical glyph centering via `qs.Ui.OpticalGlyph` (mathematical horizontal correction via `TextMetrics.tightBoundingRect` eliminating asymmetric font bearing offsets across all Nerd Font icons in both All Glyphs and Presets/Recent modes), rigid upper/lower balanced containers (`4px` top, `24px` icon box, `2px` gap, `14px` label box, `4px` bottom), exact 3-row viewport height with row-snapped keyboard tracking and wheel scrolling (no sliced rows), fixed placeholder alignment inside the search field, and unclipped 2px focus outlines with ample padding.
+      - **Keyboard Navigation & Modal Trapping**:
+        - **Grid Mode**: Full vim motions (<kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd>, <kbd>g</kbd>/<kbd>G</kbd>, arrows) navigate the grid; <kbd>[</kbd>/<kbd>]</kbd> switches categories; <kbd>/</kbd> activates search; <kbd>Enter</kbd> / <kbd>Space</kbd> applies the selected icon; <kbd>r</kbd>/<kbd>d</kbd> resets to default.
+        - **Modal Focus Trapping**: <kbd>Tab</kbd> and <kbd>Shift+Tab</kbd> cycle strictly within the modal (`grid` ⇄ `actions` ⇄ `search`) with `event.accepted = true` preventing any keystroke leakage to Quick Add below.
+        - **Two-Stage Escape**: <kbd>Esc</kbd> in search blurs to grid (or clears search query); <kbd>Esc</kbd> in grid or actions closes the icon picker.
+      - **Auto-Scroll & Tracking**: Smooth row-snapped `ensureVisible()` keyboard tracking, step wheel scrolling, and vertical scrollbar indicator.
     - Features profile glyphs, active pop, automatic viewport centering (`ensureProfileVisible`), and full keyboard/mouse profile selection.
-    - Lateral navigation (<kbd>h</kbd> / <kbd>l</kbd> / arrows) navigates between the search chip (index `-1`) and profile presets (`0..N-1`). Pressing <kbd>/</kbd> while in the profiles section opens profile search.
+    - Lateral navigation (<kbd>h</kbd> / <kbd>l</kbd> / arrows) navigates between the search chip (index `-1`) and profile presets (`0..N-1`). Pressing <kbd>/</kbd> while in the profiles section opens profile search; pressing <kbd>e</kbd> opens the icon picker.
 11. **Tags Selector & Chips Row (`quickAddTagsContainer`)** (Conditional: `isEditMode || editTags.length > 0 || showTagSearchBox`):
     - Displays `󰓹 Tags:` followed by an add/search icon chip (`quickAddTagSearchChip` `󰍉`) at index `-1` separated by a subtle vertical divider, followed by assigned tag chips rendered with `Ui.Chip` (`variant: "tag"`, `removable: true`).
     - **Unified Search Experience**: Activating index `-1` (<kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>/</kbd>) opens `Ui.TagProfileSearchBox` in tag mode for searching existing tags or creating new tags on the fly with live `(N used)` indicators, matching the panel drawer experience.
@@ -358,6 +373,8 @@ Quickshell taskbar widget placed in the status bar.
   - `omarchy-shell tablerase.ardoise profiles`: Returns array of available profiles.
   - `omarchy-shell tablerase.ardoise searchProfiles "<query>"`: Returns structured JSON array of profile names matching substring query.
   - `omarchy-shell tablerase.ardoise setProfile "<profile>"`: Sets active profile filter.
+  - `omarchy-shell tablerase.ardoise setProfileIcon "<profile>" "<glyph>"`: Configures a custom Nerd Font icon glyph for a profile (or removes custom override if glyph is empty).
+  - `omarchy-shell tablerase.ardoise getProfileIcons`: Returns JSON object mapping profile names to custom glyphs.
   - `omarchy-shell tablerase.ardoise open` / `close` / `toggle`: Controls main panel visibility. In multi-monitor environments, `open` and `toggle` dynamically discover the `BarWidget` on the compositor-focused output via `root.bar.moduleWidgets()` and `Hyprland.focusedMonitor` to summon the panel on the active monitor, while `close` and `toggle` (when already open) target the currently open instance.
   - `omarchy-shell tablerase.ardoise archived`: Returns archived tasks JSON.
   - `omarchy-shell tablerase.ardoise archiveCount`: Returns count of archived tasks.
@@ -714,6 +731,7 @@ directory with the `ARDOISE_DATA_DIR` environment variable).
 | `version` | `number` | Schema version. `CURRENT_SCHEMA_VERSION` is `1` in `TodoStore.js`. |
 | `activeProfile` | `string` | Currently active default profile. |
 | `profiles` | `string[]` | Registered profiles. |
+| `profileIcons` | `Record<string, string>?` | Custom icon glyph mapping per profile name. |
 | `todos[].id` | `number\|string` | Unique identifier (timestamp, or string when assigned by a client). |
 | `todos[].title` | `string` | Task title. |
 | `todos[].description` | `string` | Notes / details. |
@@ -823,7 +841,7 @@ reflected in the bar and panel without a restart. Writes are atomic
 
 - **Lifecycle**: loaded by `shell.qml` at startup; runs headless 24/7.
 - **Monitoring**: polls `todos.json` on a 15 s `Timer` for tasks where `reminder <= now` and `notified == false`.
-- **Notification & Privacy**: calls `$OMARCHY_PATH/bin/omarchy-notification-send` with glyph `󰥔` (reminder clock), clear profile-badged headline (`[<profile>] Task Reminder`, e.g. `[personal] Task Reminder` or `[work] Task Reminder`) and body (`Scheduled reminder is due in #<profile>`), strictly keeping private task titles and complete reminder notes out of system process arguments (`argv`). Click action: `omarchy-shell shell toggle tablerase.ardoise '{}'` to view details securely within the panel.
+- **Notification & Privacy**: calls `$OMARCHY_PATH/bin/omarchy-notification-send` with the profile's icon glyph (`TodoStore.getProfileGlyph(prof, root.store)`, respecting custom profile icons or default fallback), clear profile-badged headline (`[<profile>] Task Reminder`, e.g. `[personal] Task Reminder` or `[work] Task Reminder`) and body (`Scheduled reminder is due in #<profile>`), strictly keeping private task titles and complete reminder notes out of system process arguments (`argv`). Click action: `omarchy-shell shell toggle tablerase.ardoise '{}'` to view details securely within the panel.
 - **Deduplication**: sets `notified: true` and writes back, so a task never alerts twice. An in-memory guard also covers the window where a write is still in flight.
 
 ### 7.6 Project Structure

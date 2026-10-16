@@ -72,13 +72,14 @@ Item {
     for (var j = 0; j < toNotify.length; j++) {
       var t = toNotify[j]
       var prof = TodoStore.cleanProfileName(t.profile)
+      var glyph = TodoStore.getProfileGlyph(prof, root.store)
       var headline = "[" + prof + "] Task Reminder"
       var desc = "Scheduled reminder is due in #" + prof
 
       Quickshell.execDetached([
         bin,
         "--app-name", "Ardoise",
-        "-g", "󰥔",
+        "-g", glyph,
         "-u", "normal",
         headline,
         desc,

@@ -1561,7 +1561,7 @@ Item {
 
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
-                  text: TodoStore.getProfileGlyph(profPill.modelData)
+                  text: TodoStore.getProfileGlyph(profPill.modelData, root.store)
                   color: root.currentFilter === profPill.modelData ? "white" : root.secondaryText
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
@@ -3138,6 +3138,7 @@ Item {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     fadeColor: root.expandedCardColor
+                    store: root.store
                     profiles: TodoStore.getSortedProfiles(root.store, false, "")
                     selectedProfile: itemRow.modelData.profile || ""
                     focusedIndex: root.expandedProfileIndex

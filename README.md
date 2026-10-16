@@ -75,6 +75,7 @@ ignore until you want it.
 
 - <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
   `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
+  Each profile supports custom Nerd Font icon customization with live search directly in Quick Add (<kbd>e</kbd>) or via CLI.
 
 </details>
 
@@ -381,8 +382,8 @@ omarchy-shell tablerase.ardoise searchProfiles "wor"   # -> ["work"]
 | Group | Commands |
 | :--- | :--- |
 | **Tasks** | `add`, `addDetailed`, `toggleTodo`, `update`, `remove`, `clear` |
-| **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived`, `whatsNew`, `markReleaseSeen` |
-| **Profiles** | `setProfile` |
+| **Queries** | `list`, `get`, `count`, `profiles`, `searchProfiles`, `archived`, `archiveCount`, `unarchive`, `purgeArchived`, `whatsNew`, `markReleaseSeen`, `getProfileIcons` |
+| **Profiles** | `setProfile`, `setProfileIcon`, `getProfileIcons` |
 | **Panel** | `open`, `close`, `toggle`, `seedTutorial`, `help`, `resetReleaseHighlights` |
 | **Git** | `gitHistory`, `gitRollback`, `gitRecover`, `gitSync`, `gitSetRemote`, `gitGetRemote`, `gitSearch`, `autoSetupGitRemote`, `gitAutoSetup` |
 

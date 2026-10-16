@@ -53,6 +53,8 @@
  * @property {string} activeProfile - Currently active profile
  * @property {string[]} profiles - List of configured profile names
  * @property {Task[]} todos - Active tasks list
+ * @property {Record<string, string>} [profileIcons] - Custom icon glyph mapping per profile name
+ * @property {string[]} [recentIcons] - Most recently applied icon glyphs (capped to 18)
  * @property {boolean} [tutorialSeeded] - Whether onboarding tasks were seeded
  * @property {string} [lastSeenVersion] - Last viewed release version
  */
@@ -390,6 +392,8 @@ function getIpcHelp() {
     "  profiles                         Return array of configured profile names",
     "  searchProfiles <query>           Search profiles matching substring",
     "  setProfile <profile>             Switch active profile filter",
+    "  setProfileIcon <p> <glyph>       Set custom Nerd Font icon for profile",
+    "  getProfileIcons                  Return JSON map of custom profile icons",
     "",
     "ARCHIVE BROWSER:",
     "  archived                         Return raw archive JSON string",
@@ -610,12 +614,40 @@ function normalize(raw) {
     profiles.push(activeProfile)
   }
 
+  /** @type {Record<string, string>} */
+  var profileIcons = {}
+  if (data.profileIcons && typeof data.profileIcons === "object" && !Array.isArray(data.profileIcons)) {
+    for (var iconKey in data.profileIcons) {
+      if (Object.prototype.hasOwnProperty.call(data.profileIcons, iconKey)) {
+        var cleanKey = cleanProfileName(iconKey).toLowerCase()
+        var val = data.profileIcons[iconKey]
+        if (cleanKey && typeof val === "string" && val.trim()) {
+          profileIcons[cleanKey] = val.trim()
+        }
+      }
+    }
+  }
+
+  /** @type {string[]} */
+  var recentIcons = []
+  if (Array.isArray(data.recentIcons)) {
+    for (var ri = 0; ri < data.recentIcons.length; ri++) {
+      var rGlyph = data.recentIcons[ri]
+      if (typeof rGlyph === "string" && rGlyph.trim() && recentIcons.indexOf(rGlyph.trim()) === -1) {
+        recentIcons.push(rGlyph.trim())
+        if (recentIcons.length >= 18) break
+      }
+    }
+  }
+
   /** @type {TodoStoreData & Record<string, any>} */
   var store = {
     version: resolvedVersion,
     activeProfile: activeProfile,
     profiles: profiles,
-    todos: todos
+    todos: todos,
+    profileIcons: profileIcons,
+    recentIcons: recentIcons
   }
 
   // Forward compatibility: preserve root properties introduced by future schemas
@@ -1079,6 +1111,52 @@ function removeProfile(store, name) {
     s.activeProfile = "personal"
   }
   return s
+}
+
+/**
+ * Sets or removes a custom icon glyph for a profile.
+ * If glyph is empty, null, or undefined, the custom icon override is removed.
+ * @param {TodoStoreData} store
+ * @param {string} profile
+ * @param {string|null|undefined} glyph
+ * @returns {TodoStoreData}
+ */
+function setProfileIcon(store, profile, glyph) {
+  var s = cloneStore(store)
+  var p = cleanProfileName(profile).toLowerCase()
+  if (!p || p === "all") return s
+
+  if (!s.profileIcons || typeof s.profileIcons !== "object") {
+    s.profileIcons = {}
+  } else {
+    s.profileIcons = Object.assign({}, s.profileIcons)
+  }
+
+  var iconStr = (typeof glyph === "string") ? glyph.trim() : ""
+  if (iconStr) {
+    s.profileIcons[p] = iconStr
+
+    var rList = Array.isArray(s.recentIcons) ? s.recentIcons.slice() : []
+    rList = rList.filter(function(g) { return g !== iconStr })
+    rList.unshift(iconStr)
+    s.recentIcons = rList.slice(0, 18)
+  } else {
+    delete s.profileIcons[p]
+  }
+
+  return s
+}
+
+/**
+ * Returns a copy of the custom profile icon mapping.
+ * @param {TodoStoreData|null|undefined} store
+ * @returns {Record<string, string>}
+ */
+function getProfileIcons(store) {
+  if (!store || !store.profileIcons || typeof store.profileIcons !== "object") {
+    return {}
+  }
+  return Object.assign({}, store.profileIcons)
 }
 
 /**
@@ -1747,11 +1825,20 @@ function formatReminder(reminderStr) {
 
 /**
  * Returns the Nerd Font icon glyph for a profile.
+ * Supports optional store parameter to look up custom profile icons.
  * @param {string} profile
+ * @param {TodoStoreData|null|undefined} [store]
  * @returns {string}
  */
-function getProfileGlyph(profile) {
-  switch (String(profile).toLowerCase()) {
+function getProfileGlyph(profile, store) {
+  var p = cleanProfileName(profile).toLowerCase()
+  if (store && store.profileIcons && typeof store.profileIcons === "object") {
+    var custom = store.profileIcons[p]
+    if (typeof custom === "string" && custom.trim()) {
+      return custom.trim()
+    }
+  }
+  switch (p) {
     case "personal": return "󰀉"
     case "work": return "󰈚"
     case "shopping": return "󰄞"
@@ -1759,6 +1846,415 @@ function getProfileGlyph(profile) {
     default: return "󰲉"
   }
 }
+
+/**
+ * Curated catalog of standard Nerd Font icons with associated keywords for search.
+ * @type {Array<{ glyph: string, name: string, keywords: string[] }>}
+ */
+var PROFILE_ICON_CATALOG = [
+  // Core Profiles
+  { glyph: "󰀉", name: "personal", keywords: ["person", "home", "user", "personal", "me", "profile"] },
+  { glyph: "󰃖", name: "work", keywords: ["briefcase", "job", "office", "work", "business", "career"] },
+  { glyph: "󰅩", name: "code", keywords: ["code", "dev", "programming", "script", "develop", "source"] },
+  { glyph: "󰊤", name: "git", keywords: ["git", "github", "repo", "commit", "branch", "pr"] },
+  { glyph: "󰆍", name: "terminal", keywords: ["cli", "terminal", "bash", "shell", "console", "cmd"] },
+  { glyph: "󰃤", name: "bug", keywords: ["bug", "issue", "fix", "debug", "error"] },
+  { glyph: "󰆼", name: "database", keywords: ["db", "database", "sql", "storage", "data"] },
+  { glyph: "󱂛", name: "api", keywords: ["api", "rest", "backend", "server", "endpoint", "http"] },
+  { glyph: "󰌠", name: "python", keywords: ["python", "py", "script", "django", "flask", "backend"] },
+
+  // Web & Frontend
+  { glyph: "󰖟", name: "web", keywords: ["web", "globe", "internet", "www", "site", "html", "online"] },
+  { glyph: "󰇩", name: "browser", keywords: ["browser", "chrome", "firefox", "web", "navigate", "edge"] },
+  { glyph: "󰘐", name: "layout", keywords: ["layout", "frontend", "ui", "view", "design", "css", "component"] },
+
+  // DevOps & Cloud
+  { glyph: "󰡨", name: "docker", keywords: ["docker", "whale", "container", "podman", "compose"] },
+  { glyph: "󰠳", name: "helm", keywords: ["k8s", "kubernetes", "helm", "cluster", "orchestration", "deploy"] },
+  { glyph: "󰅟", name: "cloud", keywords: ["cloud", "server", "infra", "deploy", "network", "aws"] },
+  { glyph: "󰘚", name: "chip", keywords: ["hardware", "cpu", "ai", "brain", "system", "tech"] },
+  { glyph: "󰒓", name: "settings", keywords: ["gear", "config", "tool", "settings", "maintenance"] },
+
+  // Testing & QA
+  { glyph: "󰙨", name: "test", keywords: ["test", "flask", "pytest", "jest", "qa", "spec", "testing", "unit"] },
+  { glyph: "󰂓", name: "lab", keywords: ["lab", "flask", "experiment", "research", "science", "chemistry"] },
+  { glyph: "󰓅", name: "benchmark", keywords: ["benchmark", "speed", "perf", "performance", "metrics", "speedometer"] },
+
+  // Finance & Bills
+  { glyph: "󰑉", name: "receipt", keywords: ["receipt", "invoice", "tax", "accounting", "finance", "bills", "expenses", "money"] },
+  { glyph: "", name: "calculator", keywords: ["calculator", "budget", "accounting", "finance", "math", "money", "calc"] },
+  { glyph: "󰕘", name: "wallet", keywords: ["wallet", "personal finance", "pay", "money", "budget", "expenses"] },
+
+  // Productivity & Tasks
+  { glyph: "󰉋", name: "folder", keywords: ["folder", "project", "dir", "directory", "files"] },
+  { glyph: "󰈙", name: "notes", keywords: ["notes", "write", "doc", "article", "blog", "readme", "paper"] },
+  { glyph: "󰥔", name: "clock", keywords: ["time", "clock", "reminder", "schedule", "alarm", "wait", "calendar"] },
+  { glyph: "󰄬", name: "check", keywords: ["done", "check", "task", "todo", "ok", "complete", "success"] },
+  { glyph: "󰓹", name: "tag", keywords: ["tag", "label", "generic", "hash", "category"] },
+  { glyph: "󰓎", name: "star", keywords: ["star", "feature", "important", "priority", "key", "favorite"] },
+  { glyph: "󰑣", name: "rocket", keywords: ["rocket", "launch", "ship", "startup", "release", "deploy"] },
+
+  // Lifestyle & Media
+  { glyph: "󰋑", name: "heart", keywords: ["heart", "health", "life", "favorite", "love", "fitness"] },
+  { glyph: "󰄐", name: "shopping", keywords: ["cart", "shop", "buy", "store", "commerce", "groceries"] },
+  { glyph: "󰑴", name: "study", keywords: ["book", "study", "learn", "read", "school", "docs", "education"] },
+  { glyph: "󰏘", name: "palette", keywords: ["palette", "art", "design", "ui", "theme", "color", "paint"] },
+  { glyph: "󰭹", name: "chat", keywords: ["chat", "message", "communication", "talk", "social", "inbox"] },
+  { glyph: "󰇮", name: "mail", keywords: ["mail", "email", "letter", "newsletter", "inbox"] },
+  { glyph: "󰝚", name: "music", keywords: ["music", "sound", "audio", "song", "media"] },
+  { glyph: "󰕧", name: "video", keywords: ["video", "movie", "recording", "camera", "media"] },
+  { glyph: "󰄜", name: "mobile", keywords: ["mobile", "phone", "app", "android", "ios", "cell"] },
+  { glyph: "󰌾", name: "security", keywords: ["lock", "security", "auth", "key", "password", "vault"] },
+  { glyph: "󰊖", name: "gaming", keywords: ["game", "gaming", "play", "fun", "leisure", "steam"] }
+]
+
+/**
+ * Expansive catalog of standard verified Nerd Font glyphs for broad visual selection.
+ * @type {Array<{ glyph: string, name: string, keywords: string[] }>}
+ */
+var ALL_GLYPHS_CATALOG = PROFILE_ICON_CATALOG.concat([
+  { glyph: "", name: "prompt", keywords: ["prompt", "cli", "terminal", "console", "command"] },
+  { glyph: "", name: "console", keywords: ["console", "terminal", "bash", "shell", "cmd"] },
+  { glyph: "", name: "code-oct", keywords: ["code", "dev", "brackets", "syntax", "source"] },
+  { glyph: "", name: "file-code", keywords: ["file", "code", "source", "script", "document"] },
+  { glyph: "", name: "package", keywords: ["package", "box", "archive", "crate", "module"] },
+  { glyph: "", name: "server", keywords: ["server", "rack", "infra", "backend", "host"] },
+  { glyph: "", name: "apps", keywords: ["apps", "grid", "modules", "dashboard", "launcher"] },
+  { glyph: "", name: "sliders", keywords: ["sliders", "tuning", "controls", "settings", "options"] },
+  { glyph: "", name: "tools", keywords: ["tools", "wrench", "screwdriver", "repair", "fix", "config"] },
+  { glyph: "", name: "dot", keywords: ["dot", "circle", "bullet", "point", "indicator"] },
+  { glyph: "", name: "square", keywords: ["square", "block", "box", "solid", "shape"] },
+  { glyph: "", name: "versions", keywords: ["versions", "git", "diff", "history", "release"] },
+  { glyph: "", name: "key-oct", keywords: ["key", "auth", "token", "access", "secret"] },
+  { glyph: "", name: "sync", keywords: ["sync", "reload", "refresh", "cycle", "loop"] },
+  { glyph: "", name: "shield-oct", keywords: ["shield", "security", "protect", "defense", "safe"] },
+  { glyph: "", name: "arrow-corner", keywords: ["arrow", "corner", "return", "enter", "down-left"] },
+  { glyph: "", name: "checklist", keywords: ["checklist", "tasks", "todo", "items", "plan"] },
+  { glyph: "", name: "telescope", keywords: ["telescope", "mirror", "search", "discover", "inspect"] },
+  { glyph: "", name: "arrow-up-oct", keywords: ["arrow", "up", "increase", "north", "top"] },
+  { glyph: "", name: "graph", keywords: ["graph", "chart", "metrics", "analytics", "stats"] },
+  { glyph: "", name: "camera-oct", keywords: ["camera", "photo", "device", "snapshot"] },
+  { glyph: "", name: "triangle-left", keywords: ["triangle", "left", "arrow", "play", "shape"] },
+  { glyph: "", name: "clock-oct", keywords: ["clock", "time", "watch", "timer", "schedule"] },
+  { glyph: "", name: "flame", keywords: ["flame", "fire", "hot", "streak", "burn"] },
+  { glyph: "", name: "search", keywords: ["search", "find", "magnifier", "lookup", "query"] },
+  { glyph: "", name: "heart-fa", keywords: ["heart", "like", "love", "favorite"] },
+  { glyph: "", name: "star-fa", keywords: ["star", "rating", "favorite", "important"] },
+  { glyph: "", name: "user", keywords: ["user", "account", "profile", "person", "member"] },
+  { glyph: "", name: "film", keywords: ["film", "video", "cinema", "movie", "recording"] },
+  { glyph: "", name: "grid", keywords: ["grid", "cells", "tiles", "cards", "layout"] },
+  { glyph: "", name: "check-fa", keywords: ["check", "done", "ok", "complete", "success"] },
+  { glyph: "", name: "close", keywords: ["close", "cross", "cancel", "x", "remove"] },
+  { glyph: "", name: "power", keywords: ["power", "on", "off", "shutdown", "reboot"] },
+  { glyph: "", name: "signal", keywords: ["signal", "network", "bars", "reception", "wifi"] },
+  { glyph: "", name: "gear", keywords: ["gear", "cog", "settings", "options", "config"] },
+  { glyph: "", name: "trash", keywords: ["trash", "bin", "delete", "remove", "garbage"] },
+  { glyph: "", name: "home", keywords: ["home", "house", "main", "start", "landing"] },
+  { glyph: "", name: "file", keywords: ["file", "document", "sheet", "page", "blank"] },
+  { glyph: "", name: "download", keywords: ["download", "save", "fetch", "get", "inbound"] },
+  { glyph: "", name: "upload", keywords: ["upload", "send", "publish", "push", "outbound"] },
+  { glyph: "", name: "inbox", keywords: ["inbox", "tray", "messages", "incoming", "mail"] },
+  { glyph: "", name: "rotate", keywords: ["rotate", "refresh", "repeat", "redo", "again"] },
+  { glyph: "", name: "lock", keywords: ["lock", "padlock", "secure", "private", "protected"] },
+  { glyph: "", name: "flag", keywords: ["flag", "mark", "milestone", "goal", "target"] },
+  { glyph: "", name: "headphones", keywords: ["headphones", "audio", "listen", "sound", "music"] },
+  { glyph: "", name: "volume-mute", keywords: ["volume", "mute", "sound", "silent", "off"] },
+  { glyph: "", name: "volume-high", keywords: ["volume", "loud", "sound", "speaker", "audio"] },
+  { glyph: "", name: "barcode", keywords: ["barcode", "scan", "code", "product", "sku"] },
+  { glyph: "", name: "tags", keywords: ["tags", "labels", "categories", "price", "hash"] },
+  { glyph: "", name: "book", keywords: ["book", "reading", "docs", "manual", "guide"] },
+  { glyph: "", name: "bookmark", keywords: ["bookmark", "mark", "save", "favorite", "pin"] },
+  { glyph: "", name: "print", keywords: ["print", "paper", "hardcopy", "printer", "output"] },
+  { glyph: "", name: "camera", keywords: ["camera", "photo", "snapshot", "picture", "image"] },
+  { glyph: "", name: "font", keywords: ["font", "type", "text", "typography", "letter"] },
+  { glyph: "", name: "text-height", keywords: ["text", "height", "font", "size", "lines"] },
+  { glyph: "", name: "align-justify", keywords: ["align", "justify", "lines", "paragraph", "text"] },
+  { glyph: "", name: "pencil", keywords: ["pencil", "write", "draft", "author", "edit"] },
+  { glyph: "", name: "map-pin", keywords: ["map", "pin", "location", "marker", "place"] },
+  { glyph: "", name: "tint", keywords: ["tint", "drop", "water", "liquid", "color"] },
+  { glyph: "", name: "edit-square", keywords: ["edit", "write", "modify", "notes", "draft"] },
+  { glyph: "", name: "share", keywords: ["share", "send", "link", "export", "forward"] },
+  { glyph: "", name: "checkbox", keywords: ["checkbox", "check", "task", "done", "todo"] },
+  { glyph: "", name: "play", keywords: ["play", "start", "run", "begin", "execute"] },
+  { glyph: "", name: "pause", keywords: ["pause", "wait", "hold", "stop", "freeze"] },
+  { glyph: "", name: "stop", keywords: ["stop", "halt", "end", "kill", "terminate"] },
+  { glyph: "", name: "plus-circle", keywords: ["plus", "add", "new", "create", "circle"] },
+  { glyph: "", name: "minus-circle", keywords: ["minus", "remove", "subtract", "circle"] },
+  { glyph: "", name: "times-circle", keywords: ["times", "cancel", "error", "close", "fail"] },
+  { glyph: "", name: "check-circle", keywords: ["check", "success", "done", "ok", "sign"] },
+  { glyph: "", name: "question", keywords: ["question", "help", "info", "faq", "ask"] },
+  { glyph: "", name: "info", keywords: ["info", "about", "details", "notice", "hint"] },
+  { glyph: "", name: "crosshairs", keywords: ["crosshairs", "target", "focus", "aim", "sniper"] },
+  { glyph: "", name: "ban", keywords: ["ban", "block", "forbidden", "prohibited", "stop"] },
+  { glyph: "", name: "file-pen", keywords: ["file", "pen", "write", "notes", "edit"] },
+  { glyph: "", name: "arrow-right", keywords: ["arrow", "right", "next", "forward", "east"] },
+  { glyph: "", name: "arrow-up", keywords: ["arrow", "up", "top", "above", "north"] },
+  { glyph: "", name: "arrow-down", keywords: ["arrow", "down", "bottom", "below", "south"] },
+  { glyph: "", name: "plus", keywords: ["plus", "add", "create", "insert", "new"] },
+  { glyph: "", name: "minus", keywords: ["minus", "remove", "delete", "subtract"] },
+  { glyph: "", name: "asterisk", keywords: ["asterisk", "star", "wildcard", "footnote"] },
+  { glyph: "", name: "exclamation", keywords: ["exclamation", "alert", "notice", "warning"] },
+  { glyph: "", name: "gift", keywords: ["gift", "present", "reward", "surprise", "box"] },
+  { glyph: "", name: "leaf", keywords: ["leaf", "nature", "green", "eco", "plant"] },
+  { glyph: "", name: "fire", keywords: ["fire", "hot", "streak", "trending", "burn"] },
+  { glyph: "", name: "eye", keywords: ["eye", "see", "view", "watch", "visible"] },
+  { glyph: "", name: "eye-slash", keywords: ["hidden", "invisible", "private", "secret"] },
+  { glyph: "", name: "warning", keywords: ["warning", "caution", "alert", "danger", "notice"] },
+  { glyph: "", name: "plane", keywords: ["plane", "travel", "flight", "trip", "vacation"] },
+  { glyph: "", name: "calendar", keywords: ["calendar", "date", "event", "schedule", "month"] },
+  { glyph: "", name: "random", keywords: ["random", "shuffle", "order", "mix", "swap"] },
+  { glyph: "", name: "comment", keywords: ["comment", "chat", "bubble", "message", "talk"] },
+  { glyph: "", name: "magnet", keywords: ["magnet", "attract", "pull", "torrent", "magnetic"] },
+  { glyph: "", name: "cart", keywords: ["cart", "shop", "checkout", "buy", "store"] },
+  { glyph: "", name: "folder-fa", keywords: ["folder", "directory", "files", "storage"] },
+  { glyph: "", name: "bar-chart", keywords: ["chart", "metrics", "graph", "analytics", "stats"] },
+  { glyph: "", name: "twitter", keywords: ["twitter", "social", "x", "tweet"] },
+  { glyph: "", name: "facebook", keywords: ["facebook", "social", "fb", "meta"] },
+  { glyph: "", name: "camera-retro", keywords: ["camera", "vintage", "photo", "retro", "lens"] },
+  { glyph: "", name: "key-fa", keywords: ["key", "auth", "token", "password", "access"] },
+  { glyph: "", name: "cogs", keywords: ["cogs", "settings", "options", "config", "gears"] },
+  { glyph: "", name: "comments", keywords: ["comments", "discussion", "forum", "chat", "messages"] },
+  { glyph: "", name: "thumbs-up", keywords: ["like", "approve", "good", "yes", "thumbs"] },
+  { glyph: "", name: "thumbs-down", keywords: ["dislike", "reject", "bad", "no", "down"] },
+  { glyph: "", name: "star-half", keywords: ["star", "half", "rating", "score"] },
+  { glyph: "", name: "heart-o", keywords: ["heart", "outline", "love", "favorite"] },
+  { glyph: "", name: "sign-out", keywords: ["logout", "exit", "leave", "quit"] },
+  { glyph: "", name: "linkedin-square", keywords: ["linkedin", "career", "network", "job"] },
+  { glyph: "", name: "thumb-tack", keywords: ["pin", "tack", "board", "attach", "post"] },
+  { glyph: "", name: "external-link", keywords: ["external", "link", "url", "open", "web"] },
+  { glyph: "", name: "sign-in", keywords: ["login", "enter", "auth", "access"] },
+  { glyph: "", name: "trophy", keywords: ["trophy", "winner", "achievement", "award", "gold"] },
+  { glyph: "", name: "github-square", keywords: ["github", "git", "repo", "hub"] },
+  { glyph: "", name: "upload-fa", keywords: ["upload", "push", "publish", "outbound"] },
+  { glyph: "", name: "lemon", keywords: ["lemon", "food", "citrus", "sour", "fruit"] },
+  { glyph: "", name: "phone", keywords: ["phone", "call", "talk", "contact", "voice"] },
+  { glyph: "", name: "phone-square", keywords: ["phone", "call", "square", "contact"] },
+  { glyph: "", name: "github", keywords: ["github", "repo", "octocat", "git", "hub"] },
+  { glyph: "", name: "unlock", keywords: ["unlock", "open", "free", "access", "clear"] },
+  { glyph: "", name: "credit-card", keywords: ["card", "credit", "pay", "debit", "money"] },
+  { glyph: "", name: "rss", keywords: ["rss", "feed", "news", "syndication", "blog"] },
+  { glyph: "", name: "arrows-v", keywords: ["arrows", "vertical", "up-down", "resize", "scroll"] },
+  { glyph: "", name: "bullhorn", keywords: ["announce", "broadcast", "speaker", "megaphone", "news"] },
+  { glyph: "", name: "bell-outline", keywords: ["bell", "chime", "alarm", "notify", "ring"] },
+  { glyph: "", name: "certificate", keywords: ["badge", "certificate", "seal", "award", "verify"] },
+  { glyph: "", name: "hand-right", keywords: ["hand", "point", "right", "direction"] },
+  { glyph: "", name: "hand-left", keywords: ["hand", "point", "left", "direction"] },
+  { glyph: "", name: "hand-up", keywords: ["hand", "point", "up", "direction"] },
+  { glyph: "", name: "hand-down", keywords: ["hand", "point", "down", "direction"] },
+  { glyph: "", name: "arrow-circle-left", keywords: ["arrow", "circle", "left", "back"] },
+  { glyph: "", name: "arrow-circle-right", keywords: ["arrow", "circle", "right", "next"] },
+  { glyph: "", name: "arrow-circle-up", keywords: ["arrow", "circle", "up", "top"] },
+  { glyph: "", name: "arrow-circle-down", keywords: ["arrow", "circle", "down", "bottom"] },
+  { glyph: "", name: "cloud-fa", keywords: ["cloud", "storage", "sync", "server", "network"] },
+  { glyph: "", name: "flask", keywords: ["flask", "science", "lab", "experiment", "chemistry"] },
+  { glyph: "", name: "scissors", keywords: ["cut", "scissors", "clip", "crop", "trim"] },
+  { glyph: "", name: "files", keywords: ["files", "documents", "copy", "pages", "stack"] },
+  { glyph: "", name: "paperclip", keywords: ["paperclip", "attachment", "attach", "file"] },
+  { glyph: "", name: "floppy", keywords: ["save", "disk", "store", "floppy", "record"] },
+  { glyph: "", name: "square-fa", keywords: ["square", "block", "box", "solid"] },
+  { glyph: "", name: "bars", keywords: ["menu", "hamburger", "bars", "reorder", "list"] },
+  { glyph: "", name: "list-ul", keywords: ["list", "bullets", "todo", "items", "tasks"] },
+  { glyph: "", name: "list-ol", keywords: ["ordered", "numbers", "steps", "sequence"] },
+  { glyph: "", name: "strikethrough", keywords: ["strikethrough", "done", "complete", "cancelled"] },
+  { glyph: "", name: "underline", keywords: ["underline", "text", "format", "style"] },
+  { glyph: "", name: "table", keywords: ["table", "grid", "data", "sheet", "cells"] },
+  { glyph: "", name: "magic", keywords: ["magic", "wand", "wizard", "effects", "spell"] },
+  { glyph: "", name: "truck", keywords: ["truck", "delivery", "shipping", "transport", "freight"] },
+  { glyph: "", name: "pinterest", keywords: ["pinterest", "pin", "board", "social"] },
+  { glyph: "", name: "pinterest-square", keywords: ["pinterest", "square", "pin", "social"] },
+  { glyph: "", name: "google-plus-square", keywords: ["google", "plus", "square", "social"] },
+  { glyph: "", name: "google-plus", keywords: ["google", "plus", "brand", "social"] },
+  { glyph: "", name: "cash", keywords: ["money", "currency", "cash", "bill", "finance", "pay"] },
+  { glyph: "", name: "caret-down", keywords: ["caret", "down", "expand", "dropdown", "arrow"] },
+  { glyph: "", name: "caret-up", keywords: ["caret", "up", "collapse", "dropdown", "arrow"] },
+  { glyph: "", name: "caret-left", keywords: ["caret", "left", "back", "arrow"] },
+  { glyph: "", name: "caret-right", keywords: ["caret", "right", "next", "arrow"] },
+  { glyph: "", name: "columns", keywords: ["columns", "layout", "split", "grid", "panes"] },
+  { glyph: "", name: "sort", keywords: ["sort", "arrows", "order", "unsorted", "shuffle"] },
+  { glyph: "", name: "sort-down", keywords: ["sort", "down", "descending", "filter", "order"] },
+  { glyph: "", name: "sort-up", keywords: ["sort", "up", "ascending", "filter", "order"] },
+  { glyph: "", name: "envelope", keywords: ["envelope", "mail", "letter", "email", "message"] },
+  { glyph: "", name: "linkedin", keywords: ["linkedin", "career", "network", "job", "social"] },
+  { glyph: "", name: "undo", keywords: ["undo", "revert", "back", "history", "restore"] },
+  { glyph: "", name: "gavel", keywords: ["gavel", "legal", "law", "judge", "court", "rules"] },
+  { glyph: "", name: "tachometer", keywords: ["tachometer", "speed", "gauge", "performance", "metrics", "dashboard"] },
+  { glyph: "", name: "comment-outline", keywords: ["comment", "chat", "message", "bubble", "outline"] },
+  { glyph: "", name: "comments-outline", keywords: ["comments", "discussion", "chat", "forum", "outline"] },
+  { glyph: "", name: "bolt", keywords: ["bolt", "flash", "lightning", "power", "electric", "energy"] },
+  { glyph: "", name: "sitemap", keywords: ["sitemap", "tree", "hierarchy", "structure", "diagram", "org"] },
+  { glyph: "", name: "umbrella", keywords: ["umbrella", "weather", "protect", "rain", "insurance"] },
+  { glyph: "", name: "paste", keywords: ["paste", "clipboard", "copy", "insert"] },
+  { glyph: "", name: "lightbulb", keywords: ["lightbulb", "idea", "creative", "tip", "solution"] },
+  { glyph: "", name: "exchange", keywords: ["exchange", "transfer", "swap", "trade", "arrows"] },
+  { glyph: "", name: "cloud-download", keywords: ["cloud", "download", "fetch", "sync", "get"] },
+  { glyph: "", name: "cloud-upload", keywords: ["cloud", "upload", "push", "sync", "publish"] },
+  { glyph: "", name: "aws", keywords: ["aws", "cloud", "amazon", "server", "infra"] },
+  { glyph: "", name: "doctor", keywords: ["doctor", "physician", "medical", "health", "hospital"] },
+  { glyph: "", name: "stethoscope", keywords: ["stethoscope", "medical", "health", "heart", "clinic"] },
+  { glyph: "", name: "suitcase", keywords: ["suitcase", "luggage", "travel", "work", "bag", "vacation"] },
+  { glyph: "", name: "bell", keywords: ["bell", "alarm", "notify", "notification", "chime"] },
+  { glyph: "", name: "coffee", keywords: ["coffee", "cup", "tea", "drink", "cafe", "mug"] },
+  { glyph: "", name: "utensils", keywords: ["utensils", "fork", "knife", "food", "restaurant", "dining"] },
+  { glyph: "", name: "document", keywords: ["document", "file", "text", "paper", "article"] },
+  { glyph: "", name: "building", keywords: ["building", "office", "company", "city", "architecture"] },
+  { glyph: "", name: "hospital", keywords: ["hospital", "clinic", "emergency", "medical", "health"] },
+  { glyph: "", name: "ambulance", keywords: ["ambulance", "emergency", "paramedic", "medical", "hospital"] },
+  { glyph: "", name: "medkit", keywords: ["medkit", "firstaid", "emergency", "medical", "health"] },
+  { glyph: "", name: "fighter-jet", keywords: ["jet", "airplane", "flight", "fast", "aviation"] },
+  { glyph: "", name: "beer", keywords: ["beer", "drink", "pub", "bar", "brew", "mug"] },
+  { glyph: "", name: "hospital-sign", keywords: ["hospital", "helipad", "medical", "square", "h"] },
+  { glyph: "", name: "square-plus", keywords: ["square", "plus", "add", "new", "create"] },
+  { glyph: "", name: "cube-3d", keywords: ["cube", "3d", "bim", "model", "box", "object"] },
+  { glyph: "", name: "desktop", keywords: ["desktop", "monitor", "screen", "computer", "display"] },
+  { glyph: "", name: "laptop", keywords: ["laptop", "computer", "notebook", "portable", "dev"] },
+  { glyph: "", name: "tablet", keywords: ["tablet", "ipad", "device", "pad", "screen"] },
+  { glyph: "", name: "mobile-device", keywords: ["mobile", "cell", "phone", "device", "smartphone"] },
+  { glyph: "", name: "terminal-fa", keywords: ["terminal", "cli", "command", "prompt", "bash", "shell"] },
+  { glyph: "", name: "code-fa", keywords: ["code", "brackets", "tags", "html", "syntax", "source"] },
+  { glyph: "", name: "circle-fa", keywords: ["circle", "dot", "disc", "round", "bullet"] },
+  { glyph: "", name: "wrench-fa", keywords: ["wrench", "tool", "fix", "repair", "maintenance", "settings"] },
+  { glyph: "", name: "rocket-fa", keywords: ["rocket", "ship", "launch", "fast", "space"] }
+])
+
+/**
+ * Returns a list of recently used icon objects, resolved from store.recentIcons or active profile icons.
+ * Capped at 18 items.
+ * @param {TodoStoreData|null|undefined} store
+ * @returns {Array<{ glyph: string, name: string, keywords: string[] }>}
+ */
+function getRecentIcons(store) {
+  var glyphs = []
+  if (store && Array.isArray(store.recentIcons) && store.recentIcons.length > 0) {
+    for (var i = 0; i < store.recentIcons.length; i++) {
+      var g = store.recentIcons[i]
+      if (typeof g === "string" && g.trim() && glyphs.indexOf(g.trim()) === -1) {
+        glyphs.push(g.trim())
+        if (glyphs.length >= 18) break
+      }
+    }
+  }
+
+  // Fallback: If no recent icons yet, extract active custom icons from profileIcons
+  if (glyphs.length === 0 && store && store.profileIcons && typeof store.profileIcons === "object") {
+    for (var p in store.profileIcons) {
+      if (Object.prototype.hasOwnProperty.call(store.profileIcons, p)) {
+        var iconVal = store.profileIcons[p]
+        if (typeof iconVal === "string" && iconVal.trim() && glyphs.indexOf(iconVal.trim()) === -1) {
+          glyphs.push(iconVal.trim())
+          if (glyphs.length >= 18) break
+        }
+      }
+    }
+  }
+
+  var list = []
+  for (var j = 0; j < glyphs.length; j++) {
+    var targetGlyph = glyphs[j]
+    var found = null
+    for (var k = 0; k < ALL_GLYPHS_CATALOG.length; k++) {
+      if (ALL_GLYPHS_CATALOG[k].glyph === targetGlyph) {
+        found = ALL_GLYPHS_CATALOG[k]
+        break
+      }
+    }
+    if (found) {
+      list.push(found)
+    } else {
+      list.push({
+        glyph: targetGlyph,
+        name: "Custom (" + targetGlyph + ")",
+        keywords: ["custom", "recent"]
+      })
+    }
+  }
+  return list
+}
+
+/**
+ * Searches the icon catalog by query string matching name and keywords.
+ * If query is non-ASCII or looks like a glyph/character, it returns a custom item prepended.
+ * @param {string} [query]
+ * @param {string} [category] - "recent", "presets", or "all"
+ * @param {TodoStoreData|null|undefined} [store]
+ * @returns {Array<{ glyph: string, name: string, keywords: string[] }>}
+ */
+function searchIconCatalog(query, category, store) {
+  var q = String(query || "").trim().toLowerCase()
+  var results = []
+
+  // If query is a direct Unicode glyph or character (non-alphanumeric or 1-2 chars of symbol)
+  if (q.length > 0) {
+    var raw = String(query || "").trim()
+    var isPureSymbol = /^[^a-zA-Z0-9_\-\s]+$/.test(raw)
+    if (isPureSymbol || (raw.length <= 2 && raw.codePointAt(0) && (raw.codePointAt(0) || 0) > 127)) {
+      results.push({
+        glyph: raw,
+        name: "Custom: " + raw,
+        keywords: ["custom"]
+      })
+    }
+  }
+
+  // When query is empty, return exact category subset
+  if (!q) {
+    if (category === "recent") {
+      return getRecentIcons(store)
+    } else if (category === "all") {
+      return ALL_GLYPHS_CATALOG.slice()
+    } else {
+      return PROFILE_ICON_CATALOG.slice()
+    }
+  }
+
+  function filterItems(items) {
+    var matches = []
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i]
+      if (item.glyph === q || item.name.toLowerCase().includes(q)) {
+        matches.push(item)
+        continue
+      }
+      var kw = item.keywords || []
+      for (var k = 0; k < kw.length; k++) {
+        if (kw[k].toLowerCase().includes(q)) {
+          matches.push(item)
+          break
+        }
+      }
+    }
+    return matches
+  }
+
+  if (category === "recent") {
+    // When searching from recent tab, search recent first, then search ALL_GLYPHS_CATALOG
+    var recentList = getRecentIcons(store)
+    var recentMatches = filterItems(recentList)
+    var allMatches = filterItems(ALL_GLYPHS_CATALOG)
+
+    var seenGlyphs = {}
+    for (var r = 0; r < results.length; r++) {
+      seenGlyphs[results[r].glyph] = true
+    }
+    for (var rm = 0; rm < recentMatches.length; rm++) {
+      if (!seenGlyphs[recentMatches[rm].glyph]) {
+        seenGlyphs[recentMatches[rm].glyph] = true
+        results.push(recentMatches[rm])
+      }
+    }
+    for (var am = 0; am < allMatches.length; am++) {
+      if (!seenGlyphs[allMatches[am].glyph]) {
+        seenGlyphs[allMatches[am].glyph] = true
+        results.push(allMatches[am])
+      }
+    }
+    return results
+  }
+
+  var source = (category === "all") ? ALL_GLYPHS_CATALOG : PROFILE_ICON_CATALOG
+  var sourceMatches = filterItems(source)
+  return results.concat(sourceMatches)
+}
+
 
 
 /**
@@ -2438,12 +2934,30 @@ function mergeStores(localRaw, remoteRaw) {
   }
   mergedTodos.sort(compareTasks)
 
+  /** @type {Record<string, string>} */
+  var mergedProfileIcons = Object.assign({}, local.profileIcons || {}, remote.profileIcons || {})
+
+  // Merge recentIcons preserving MRU order, deduplicated, capped at 18
+  var mergedRecent = []
+  var rLocal = Array.isArray(local.recentIcons) ? local.recentIcons : []
+  var rRemote = Array.isArray(remote.recentIcons) ? remote.recentIcons : []
+  var combinedRecent = rLocal.concat(rRemote)
+  for (var cri = 0; cri < combinedRecent.length; cri++) {
+    var cGlyph = combinedRecent[cri]
+    if (typeof cGlyph === "string" && cGlyph.trim() && mergedRecent.indexOf(cGlyph.trim()) === -1) {
+      mergedRecent.push(cGlyph.trim())
+      if (mergedRecent.length >= 18) break
+    }
+  }
+
   var maxVersion = Math.max(local.version || 1, remote.version || 1, CURRENT_SCHEMA_VERSION)
   return {
     version: maxVersion,
     activeProfile: activeProfile,
     profiles: mergedProfiles,
-    todos: mergedTodos
+    todos: mergedTodos,
+    profileIcons: mergedProfileIcons,
+    recentIcons: mergedRecent
   }
 }
 
@@ -2677,6 +3191,8 @@ if (typeof module !== "undefined" && module.exports) {
     updateTodo,
     addProfile,
     removeProfile,
+    setProfileIcon,
+    getProfileIcons,
     clearCompleted,
     getPendingCount,
     getFilteredTodos,
@@ -2686,6 +3202,10 @@ if (typeof module !== "undefined" && module.exports) {
     pendingReminders,
     formatReminder,
     getProfileGlyph,
+    PROFILE_ICON_CATALOG,
+    ALL_GLYPHS_CATALOG,
+    getRecentIcons,
+    searchIconCatalog,
     getReminderPresets,
     computePresetReminder,
     formatCustomPreview,

@@ -880,6 +880,10 @@ test("IPC Contract: documented commands match the IpcHandler in DESIGN.md and RE
     "New IPC entry points (addDetailed/searchProfiles) must be available in BarWidget"
   );
   assert.ok(
+    implemented.has("setProfileIcon") && implemented.has("getProfileIcons"),
+    "Profile icon IPC entry points (setProfileIcon/getProfileIcons) must be available in BarWidget"
+  );
+  assert.ok(
     implemented.has("gitSearch"),
     "gitSearch IPC entry point must be available in BarWidget (Phase 2 snapshot search)"
   );
@@ -1541,15 +1545,16 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "GitModal must compute dynamic contrast-safe secondaryText and only fill snapshot item background on hover or selection"
   );
 
-  // 4. Service.qml must NOT pass private titles or reminder descriptions in argv, but must clearly identify profile
+  // 4. Service.qml must NOT pass private titles or reminder descriptions in argv, but must clearly identify profile and its icon
   assert.ok(
     !service.includes('headline = "Todo: " + t.title') &&
       !service.includes('t.description') &&
       !service.includes('t.title') &&
       service.includes('var prof = TodoStore.cleanProfileName(t.profile)') &&
+      service.includes('var glyph = TodoStore.getProfileGlyph(prof, root.store)') &&
       service.includes('var headline = "[" + prof + "] Task Reminder"') &&
       service.includes('var desc = "Scheduled reminder is due in #" + prof'),
-    "Service.qml must not expose private task titles or reminder descriptions in notification process arguments while maintaining profile clarity"
+    "Service.qml must not expose private task titles or reminder descriptions in notification process arguments while maintaining profile clarity and custom glyph resolution"
   );
   // 5. BarWidget must enforce restrictive permissions on data directory and files
   assert.ok(
@@ -1700,7 +1705,7 @@ test("Fresh install git snapshot initialization: BarWidget provisions data direc
       deviceName,
       userName
     ],
-    { encoding: "utf8" }
+    { encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null" } }
   );
 
   try {
@@ -1741,5 +1746,29 @@ test("Fresh install git snapshot initialization: BarWidget provisions data direc
   }
 });
 
+test("ProfileIconPicker: focus trapping, initial grid focus, vim motions, and scroll tracking", () => {
+  const pickerPath = path.join(repoDir, "ui", "ProfileIconPicker.qml");
+  const pickerContent = fs.readFileSync(pickerPath, "utf8");
 
+  assert.ok(pickerContent.includes('property string selectedCategory: "presets"'), "Must define selectedCategory");
+  assert.ok(pickerContent.includes('property string focusSection: "grid"'), "Default focus section must be grid");
+  assert.ok(pickerContent.includes('property int actionIndex: 2'), "Default action button index must be Apply");
+  assert.ok(pickerContent.includes("function ensureVisible("), "ProfileIconPicker must define ensureVisible for auto-scrolling");
+  assert.ok(pickerContent.includes('text === "/"'), "Must support / to jump to search");
+  assert.ok(pickerContent.includes('text === "j"'), "Must support vim j motion");
+  assert.ok(pickerContent.includes('text === "k"'), "Must support vim k motion");
+  assert.ok(pickerContent.includes('text === "h"'), "Must support vim h motion");
+  assert.ok(pickerContent.includes('text === "l"'), "Must support vim l motion");
+  assert.ok(pickerContent.includes('text === "g"'), "Must support vim g motion");
+  assert.ok(pickerContent.includes("anchors.horizontalCenter: parent.horizontalCenter"), "Grid must be centered");
+  assert.ok(pickerContent.includes("KeyBadge"), "Must use KeyBadge for category cycling cues");
+  assert.ok(pickerContent.includes("cycleCategory"), "Must implement cycleCategory for [ and ]");
+  assert.ok(pickerContent.includes("OpticalGlyph"), "Must use OpticalGlyph for optical centering of glyphs");
 
+  const quickAddPath = path.join(repoDir, "QuickAdd.qml");
+  const quickAddContent = fs.readFileSync(quickAddPath, "utf8");
+  assert.ok(
+    quickAddContent.includes("profileIconPicker.isOpen") && quickAddContent.includes("event.accepted = true"),
+    "QuickAdd must trap keys and set event.accepted = true when profileIconPicker is open"
+  );
+});

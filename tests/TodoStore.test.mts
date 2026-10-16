@@ -32,6 +32,12 @@ const {
   pendingReminders,
   formatReminder,
   getProfileGlyph,
+  setProfileIcon,
+  getProfileIcons,
+  PROFILE_ICON_CATALOG,
+  ALL_GLYPHS_CATALOG,
+  getRecentIcons,
+  searchIconCatalog,
   getReminderPresets,
   computePresetReminder,
   formatCustomPreview,
@@ -309,11 +315,186 @@ test("formatReminder: formats relative time descriptions", () => {
   assert.ok(formattedTomorrow.startsWith("Tomorrow") || formattedTomorrow.startsWith("Due"));
 });
 
-test("getProfileGlyph: returns expected icons", () => {
+test("getProfileGlyph: returns expected icons and respects custom profile icons", () => {
   assert.equal(getProfileGlyph("personal"), "󰀉");
   assert.equal(getProfileGlyph("work"), "󰈚");
   assert.equal(getProfileGlyph("shopping"), "󰄞");
   assert.equal(getProfileGlyph("custom_tag"), "󰲉");
+
+  // With store override
+  const storeWithIcons = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal", "work", "ardoise"],
+    profileIcons: {
+      work: "󱓷",
+      ardoise: "󰄬"
+    },
+    todos: []
+  };
+
+  assert.equal(getProfileGlyph("work", storeWithIcons), "󱓷");
+  assert.equal(getProfileGlyph("ardoise", storeWithIcons), "󰄬");
+  assert.equal(getProfileGlyph("personal", storeWithIcons), "󰀉"); // fallback to default
+  assert.equal(getProfileGlyph("unknown", storeWithIcons), "󰲉"); // fallback to generic
+});
+
+test("setProfileIcon & getProfileIcons: manages custom profile icons", () => {
+  const store = createInitialStore();
+  assert.deepEqual(getProfileIcons(store), {});
+
+  // Set icon for work
+  const s1 = setProfileIcon(store, "work", "󱓷");
+  assert.equal(getProfileGlyph("work", s1), "󱓷");
+  assert.deepEqual(getProfileIcons(s1), { work: "󱓷" });
+
+  // Set icon for new profile
+  const s2 = setProfileIcon(s1, "project-x", "󰙨");
+  assert.equal(getProfileGlyph("project-x", s2), "󰙨");
+  assert.deepEqual(getProfileIcons(s2), { work: "󱓷", "project-x": "󰙨" });
+
+  // Clear icon override
+  const s3 = setProfileIcon(s2, "work", "");
+  assert.equal(getProfileGlyph("work", s3), "󰈚"); // reverts to default
+  assert.deepEqual(getProfileIcons(s3), { "project-x": "󰙨" });
+
+  // Invalid profile name or "all" does nothing
+  const s4 = setProfileIcon(s3, "all", "󰥔");
+  assert.deepEqual(getProfileIcons(s4), { "project-x": "󰙨" });
+});
+
+test("searchIconCatalog: searches by keyword and handles custom glyphs", () => {
+  // Empty query returns full catalog
+  const allIcons = searchIconCatalog();
+  assert.equal(allIcons.length, PROFILE_ICON_CATALOG.length);
+  assert.ok(allIcons.some((i: any) => i.name === "code"));
+
+  // Search by name
+  const codeMatches = searchIconCatalog("code");
+  assert.ok(codeMatches.some((i: any) => i.name === "code"));
+
+  // Search by keyword
+  const gitMatches = searchIconCatalog("github");
+  assert.ok(gitMatches.some((i: any) => i.name === "git"));
+
+  const dbMatches = searchIconCatalog("sql");
+  assert.ok(dbMatches.some((i: any) => i.name === "database"));
+
+  // Web & Testing matches
+  const webMatches = searchIconCatalog("web");
+  assert.ok(webMatches.some((i: any) => i.name === "web" && i.glyph === "󰖟"));
+  assert.ok(webMatches.some((i: any) => i.name === "browser"));
+
+  const testMatches = searchIconCatalog("test");
+  assert.ok(testMatches.some((i: any) => i.name === "test" && i.glyph === "󰙨"));
+  assert.ok(searchIconCatalog("pytest").some((i: any) => i.name === "test"));
+
+  // DevOps matches (whale / helm)
+  assert.ok(searchIconCatalog("docker").some((i: any) => i.name === "docker" && i.glyph === "󰡨"));
+  assert.ok(searchIconCatalog("whale").some((i: any) => i.name === "docker"));
+  assert.ok(searchIconCatalog("helm").some((i: any) => i.name === "helm" && i.glyph === "󰠳"));
+
+  // Finance & Bills matches (receipt, calculator, wallet)
+  const financeMatches = searchIconCatalog("finance");
+  assert.ok(financeMatches.some((i: any) => i.name === "receipt" && i.glyph === "󰑉"));
+  assert.ok(financeMatches.some((i: any) => i.name === "calculator" && i.glyph === ""));
+  assert.ok(financeMatches.some((i: any) => i.name === "wallet" && i.glyph === "󰕘"));
+  assert.ok(searchIconCatalog("invoice").some((i: any) => i.name === "receipt"));
+  assert.ok(searchIconCatalog("tax").some((i: any) => i.name === "receipt"));
+
+  // Custom glyph input: surfaces custom item
+  const customMatches = searchIconCatalog("⚡");
+  assert.ok(customMatches.length > 0);
+  assert.equal(customMatches[0].glyph, "⚡");
+  assert.ok(customMatches[0].name.includes("Custom"));
+
+  // Categories: presets vs all
+  assert.ok(ALL_GLYPHS_CATALOG.length > 200, "ALL_GLYPHS_CATALOG must have over 200 icons");
+  const allCategory = searchIconCatalog(undefined, "all");
+  assert.equal(allCategory.length, ALL_GLYPHS_CATALOG.length);
+  const presetsCategory = searchIconCatalog(undefined, "presets");
+  assert.equal(presetsCategory.length, PROFILE_ICON_CATALOG.length);
+
+  // Search within "all" category
+  const promptMatch = searchIconCatalog("prompt", "all");
+  assert.ok(promptMatch.some((i: any) => i.name === "prompt" && i.glyph === ""));
+
+  // Verified Nerd Font glyph associations (no description mismatches)
+  assert.ok(searchIconCatalog("aws", "all").some((i: any) => i.name === "aws" && i.glyph === ""));
+  assert.ok(searchIconCatalog("linkedin", "all").some((i: any) => i.name === "linkedin" && i.glyph === ""));
+  assert.ok(searchIconCatalog("bolt", "all").some((i: any) => i.name === "bolt" && i.glyph === ""));
+  assert.ok(searchIconCatalog("beer", "all").some((i: any) => i.name === "beer" && i.glyph === ""));
+  assert.ok(searchIconCatalog("sitemap", "all").some((i: any) => i.name === "sitemap" && i.glyph === ""));
+  assert.ok(searchIconCatalog("tachometer", "all").some((i: any) => i.name === "tachometer" && i.glyph === ""));
+  assert.ok(searchIconCatalog("coffee", "all").some((i: any) => i.name === "coffee" && i.glyph === ""));
+  assert.ok(searchIconCatalog("rocket", "presets").some((i: any) => i.name === "rocket" && i.glyph === "󰑣"));
+  assert.ok(searchIconCatalog("rocket", "all").some((i: any) => i.name === "rocket-fa" && i.glyph === ""));
+});
+
+test("recentIcons: tracks MRU glyphs, caps at 18, and supports recent category", () => {
+  let s: any = { version: 1, activeProfile: "personal", profiles: ["personal", "work"], todos: [] };
+
+  // Set several icons
+  s = setProfileIcon(s, "work", "󰡨");
+  s = setProfileIcon(s, "personal", "󰠳");
+  assert.deepEqual(s.recentIcons, ["󰠳", "󰡨"]);
+
+  // Deduplication: setting work again brings it to the front
+  s = setProfileIcon(s, "work", "󰡨");
+  assert.deepEqual(s.recentIcons, ["󰡨", "󰠳"]);
+
+  // Cap at 18 items
+  for (let i = 0; i < 25; i++) {
+    s = setProfileIcon(s, `prof-${i}`, `glyph-${i}`);
+  }
+  assert.equal(s.recentIcons.length, 18);
+  assert.equal(s.recentIcons[0], "glyph-24");
+  assert.equal(s.recentIcons[17], "glyph-7");
+
+  // getRecentIcons resolves icon objects
+  const resolved = getRecentIcons(s);
+  assert.equal(resolved.length, 18);
+  assert.equal(resolved[0].glyph, "glyph-24");
+  assert.ok(resolved[0].name.includes("Custom"));
+
+  // Fallback to active profileIcons when recentIcons is empty
+  const storeWithProfiles = {
+    version: 1,
+    activeProfile: "work",
+    profiles: ["work", "dev"],
+    todos: [],
+    profileIcons: { work: "󰡨", dev: "󰅟" },
+    recentIcons: []
+  };
+  const fallbackRecent = getRecentIcons(storeWithProfiles);
+  assert.equal(fallbackRecent.length, 2);
+  assert.ok(fallbackRecent.some((i: any) => i.glyph === "󰡨" && i.name === "docker"));
+  assert.ok(fallbackRecent.some((i: any) => i.glyph === "󰅟" && i.name === "cloud"));
+
+  // searchIconCatalog with "recent" category
+  const recentSearchResults = searchIconCatalog(undefined, "recent", s);
+  assert.equal(recentSearchResults.length, 18);
+
+  const queryMatch = searchIconCatalog("glyph-24", "recent", s);
+  assert.equal(queryMatch.length, 1);
+  assert.equal(queryMatch[0].glyph, "glyph-24");
+
+  // Non-recent icon query in "recent" category searches full ALL_GLYPHS_CATALOG
+  const awsMatch = searchIconCatalog("aws", "recent", s);
+  assert.ok(awsMatch.length > 0, "Searching 'aws' from recent category must search full catalog");
+  assert.ok(awsMatch.some((i: any) => i.name === "aws" && i.glyph === ""));
+
+  // Query matching both a recent icon and others prioritizes the recent item first
+  const dockMatch = searchIconCatalog("dock", "recent", s);
+  assert.ok(dockMatch.length > 0);
+  assert.equal(dockMatch[0].name, "docker");
+  assert.equal(dockMatch[0].glyph, "󰡨");
+
+  // mergeStores preserves recentIcons MRU order, deduplicated and capped at 18
+  const storeA = { version: 1, profiles: ["personal"], todos: [], recentIcons: ["󰡨", "󰠳"] };
+  const storeB = { version: 1, profiles: ["work"], todos: [], recentIcons: ["󰅟", "󰡨"] };
+  const merged = mergeStores(storeA, storeB);
+  assert.deepEqual(merged.recentIcons, ["󰡨", "󰠳", "󰅟"]);
 });
 
 test("getReminderPresets: returns 4 valid presets and dynamically respects baseDate", () => {
@@ -1520,6 +1701,16 @@ test("mergeStores: 3-way conflict-free store merging", () => {
   // Both local-only and remote-only tasks preserved
   assert.ok(merged.todos.some((t: any) => t.id === 102));
   assert.ok(merged.todos.some((t: any) => t.id === 103));
+
+  // ProfileIcons unioned/merged
+  const localWithIcons = { ...localStore, profileIcons: { work: "󱓷", "project-a": "󱓷" } };
+  const remoteWithIcons = { ...remoteStore, profileIcons: { work: "󰈚", "project-b": "󰄞" } };
+  const mergedIcons = mergeStores(localWithIcons, remoteWithIcons);
+  assert.deepEqual(mergedIcons.profileIcons, {
+    work: "󰈚",
+    "project-a": "󱓷",
+    "project-b": "󰄞"
+  });
 });
 
 test("mergeArchives: deduplicates by id and takes latest completedAt", () => {
@@ -1731,6 +1922,11 @@ test("versioning & extensibility: normalize preserves future schema version and 
     version: 2,
     activeProfile: "work",
     profiles: ["personal", "work", "research"],
+    profileIcons: {
+      work: "󱓷",
+      research: "󰄬",
+      empty: "   "
+    },
     todos: [
       { id: 1, title: "v2 task", profile: "work", priority: "critical" }
     ],
@@ -1743,6 +1939,11 @@ test("versioning & extensibility: normalize preserves future schema version and 
   assert.equal(normalized.activeProfile, "work");
   assert.equal(normalized.todos.length, 1);
   assert.equal(normalized.todos[0].priority, "critical");
+  // Custom profile icons normalized
+  assert.deepEqual(normalized.profileIcons, {
+    work: "󱓷",
+    research: "󰄬"
+  });
   // Root level extension properties must be preserved
   assert.deepEqual(normalized.workspaceSettings, { theme: "dark", autoArchiveDays: 30 });
 });

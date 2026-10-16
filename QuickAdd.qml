@@ -400,6 +400,16 @@ Item {
     root.showProfileSearchBox = false
     root.profileChipIndex = 0
     root.showTagSearchBox = false
+    if (profileIconPicker && profileIconPicker.isOpen) {
+      profileIconPicker.close()
+    }
+  }
+
+  function updateProfileIcon(profileName, glyph) {
+    var p = TodoStore.cleanProfileName(profileName)
+    var updated = TodoStore.setProfileIcon(root.store, p, glyph)
+    root.store = updated
+    todoFile.setText(JSON.stringify(updated, null, 2) + "\n")
   }
 
   function dismiss() {
@@ -592,7 +602,8 @@ Item {
       focus: true
 
       Keys.onPressed: function(event) {
-        if (reminderPicker && reminderPicker.isOpen) {
+        if ((reminderPicker && reminderPicker.isOpen) || (profileIconPicker && profileIconPicker.isOpen)) {
+          event.accepted = true
           return
         }
 
@@ -673,6 +684,15 @@ Item {
             event.accepted = true
             root.profileChipIndex = -1
             root.showProfileSearchBox = true
+            return
+          }
+          if (event.text === "e" || event.text === "E" || event.key === Qt.Key_E || event.text === "I") {
+            event.accepted = true
+            if (profileIconPicker && root.profileChipIndex >= 0) {
+              var profs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+              var target = (root.profileChipIndex < profs.length) ? profs[root.profileChipIndex] : root.selectedProfile
+              profileIconPicker.open(target, TodoStore.getProfileGlyph(target, root.store))
+            }
             return
           }
         }
@@ -1074,7 +1094,7 @@ Item {
 
                     Text {
                       anchors.verticalCenter: parent.verticalCenter
-                      text: root.autocompleteMode === "profile" ? TodoStore.getProfileGlyph(modelData) : "󰓹"
+                      text: root.autocompleteMode === "profile" ? TodoStore.getProfileGlyph(modelData, root.store) : "󰓹"
                       color: matchItem.isSelected ? Color.accent : root.secondaryText
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -1436,6 +1456,7 @@ Item {
               anchors.bottom: parent.bottom
               wrap: false
               fadeColor: Color.menu.background
+              store: root.store
               profiles: TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
               selectedProfile: root.selectedProfile
               focusedIndex: (root.focusSection === "profiles" && root.profileChipIndex >= 0)
@@ -1446,6 +1467,13 @@ Item {
                 root.selectedProfile = name
                 root.profileChipIndex = idx
                 root.ensureProfileVisible(name)
+              }
+              onEditIconRequested: function(name, idx) {
+                root.selectedProfile = name
+                root.profileChipIndex = idx
+                if (profileIconPicker) {
+                  profileIconPicker.open(name, TodoStore.getProfileGlyph(name, root.store))
+                }
               }
             }
           }
@@ -1658,7 +1686,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: {
               if (root.showTitleError || (taskInput.text.trim().length > 0 && !root.hasValidTitle)) return "⚠ Title required before sending  •  Esc Cancel"
-              if (root.focusSection === "profiles") return "󰍉 / Search Profile  •  Tab/Vim Nav  •  Esc Cancel"
+              if (root.focusSection === "profiles") return "󰍉 / Search  •  e Edit Icon  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "tags") return "󰆴 x/Del Tag  •  / Search  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.focusSection === "location") return "󰆴 x / Del Remove Location  •  Tab/Vim Nav  •  Esc Cancel"
               if (root.isEditMode) return "󰌑 Enter Save Changes  •  Tab/Vim Nav  •  Esc Cancel"
@@ -1749,6 +1777,24 @@ Item {
         root.selectedReminder = ""
         root.showReminderOptions = false
         root.focusSection = "options"
+        card.forceActiveFocus()
+      }
+      onCloseRequested: {
+        card.forceActiveFocus()
+      }
+    }
+
+    Ui.ProfileIconPicker {
+      id: profileIconPicker
+      anchors.fill: parent
+      bar: root.bar
+      store: root.store
+      onIconSelected: function(prof, glyph) {
+        root.updateProfileIcon(prof, glyph)
+        card.forceActiveFocus()
+      }
+      onIconReset: function(prof) {
+        root.updateProfileIcon(prof, "")
         card.forceActiveFocus()
       }
       onCloseRequested: {

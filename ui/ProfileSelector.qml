@@ -7,6 +7,7 @@ import "../TodoStore.js" as TodoStore
 Item {
   id: root
 
+  property var store: null
   property var profiles: []
   property string selectedProfile: ""
   property int focusedIndex: -1
@@ -19,6 +20,7 @@ Item {
   readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, root.barForeground)
 
   signal profileSelected(string profileName, int index)
+  signal editIconRequested(string profileName, int index)
 
   implicitHeight: root.wrap ? (profileFlow.implicitHeight + Style.space(4)) : Style.space(26)
   implicitWidth: root.wrap ? parent.width : profileRow.implicitWidth
@@ -105,7 +107,7 @@ Item {
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
-          text: TodoStore.getProfileGlyph(profileBtn.modelData)
+          text: TodoStore.getProfileGlyph(profileBtn.modelData, root.store)
           color: profileBtn.isSelected ? "white" : (profileBtn.isBtnNavFocused ? root.accentColor : root.secondaryText)
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
@@ -126,9 +128,14 @@ Item {
 
       MouseArea {
         anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
+        onClicked: function(mouse) {
+          if (mouse.button === Qt.RightButton) {
+            root.editIconRequested(profileBtn.modelData, profileBtn.index)
+            return
+          }
           root.profileSelected(profileBtn.modelData, profileBtn.index)
           if (!root.wrap) {
             root.ensureVisible(profileBtn.index)

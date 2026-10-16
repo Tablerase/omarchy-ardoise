@@ -272,6 +272,12 @@ BarWidget {
     saveStore(TodoStore.removeProfile(root.store, name), "Remove profile: " + name)
   }
 
+  function setProfileIcon(profile, icon) {
+    var p = TodoStore.cleanProfileName(profile)
+    var updated = TodoStore.setProfileIcon(root.store, p, icon)
+    saveStore(updated, (icon ? "Set icon for #" + p : "Reset icon for #" + p))
+  }
+
   function seedTutorial() {
     var updated = TodoStore.seedTutorialTasks(root.store)
     saveStore(updated, "Seed onboarding tutorial tasks")
@@ -341,7 +347,7 @@ BarWidget {
       var p = sortedProfs[j]
       var c = TodoStore.getPendingCount(root.store, p)
       if (c > 0) {
-        var glyph = TodoStore.getProfileGlyph(p)
+        var glyph = TodoStore.getProfileGlyph(p, root.store)
         profItems.push(glyph + " " + c + " " + p)
       }
     }
@@ -1071,6 +1077,13 @@ BarWidget {
       return JSON.stringify(TodoStore.searchProfiles(root.store, queryStr || ""))
     }
     function setProfile(profile: string): string { root.setActiveProfile(profile); return "ok" }
+    function setProfileIcon(profile: string, icon: string): string {
+      root.setProfileIcon(profile, icon)
+      return "ok"
+    }
+    function getProfileIcons(): string {
+      return JSON.stringify(TodoStore.getProfileIcons(root.store))
+    }
     function archived(): string { return root.getArchiveText() }
     function archiveCount(): string { return String(TodoStore.getArchivedCount(root.getArchiveText())) }
     function unarchive(id: string): string { return root.unarchiveTask(id) ? "ok" : "busy" }
