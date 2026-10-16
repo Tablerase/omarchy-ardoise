@@ -70,6 +70,7 @@ var DEFAULT_BINDINGS = {
   delete_task: ["x"],
   copy_task: ["y"],
   edit_title: ["r", "F2"],
+  open_codebase: ["o"],
   task_menu: ["K"],
   open_editor: ["e"],
   git_undo: ["u"],
@@ -325,6 +326,7 @@ function getKeybindingsList(detectedPanelShortcut, detectedQuickAddShortcut, act
     { key: fmt("delete_task", "x"), desc: "Delete selected task (hold 800ms)", category: "Task Actions" },
     { key: fmt("copy_task", "y"), desc: "Copy selected task for LLM", category: "Task Actions" },
     { key: fmt("edit_title", "r / F2"), desc: "Edit title of selected task", category: "Task Actions" },
+    { key: fmt("open_codebase", "o"), desc: "Open codebase in editor (if task has local path)", category: "Task Actions" },
     { key: fmt("task_menu", "K"), desc: "Open task context menu (copy, edit, open, delete)", category: "Task Actions" },
     { key: fmt("open_editor", "e"), desc: "Open todos.json in editor (at task line if selected)", category: "Actions & Storage" },
     { key: fmt("git_undo", "u"), desc: "Open Git Snapshots & Undo modal", category: "Actions & Storage" },
@@ -798,11 +800,12 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
     return;
   }
 
-  var map = (activeBindings && activeBindings.keyToAction)
-    ? activeBindings.keyToAction
-    : (root.activeBindings && root.activeBindings.keyToAction)
-      ? root.activeBindings.keyToAction
-      : null;
+  var active = (activeBindings && activeBindings.keyToAction)
+    ? activeBindings
+    : (root && root.activeBindings && root.activeBindings.keyToAction)
+      ? root.activeBindings
+      : resolveBindings({});
+  var map = active ? active.keyToAction : null;
 
   var action = map ? (map[text] || map[text.toLowerCase()]) : null;
 
@@ -831,31 +834,40 @@ function handleTextKey(root, text, TodoStore, activeBindings) {
       return;
     }
   }
-  if (action === "delete_task") {
+  if ((action === "open_codebase" || (!map && (text === "o" || text === "O"))) && root.focusSection === "tasks") {
+    if (root.filteredTodos && root.filteredTodos.length > root.cursorIndex && root.cursorIndex >= 0) {
+      var curTask = root.filteredTodos[root.cursorIndex];
+      if (curTask && curTask.location && curTask.location.localPath && typeof root.openCodebase === "function") {
+        root.openCodebase(curTask);
+      }
+    }
+    return;
+  }
+  if (action === "delete_task" || (!map && (text === "x" || text === "X"))) {
     handleDelete(root);
     return;
   }
-  if (action === "toggle_done") {
+  if (action === "toggle_done" || (!map && (text === " " || text === "Space"))) {
     handleActivate(root, TodoStore);
     return;
   }
-  if (action === "toggle_expand") {
+  if (action === "toggle_expand" || (!map && (text === "Return" || text === "Enter"))) {
     handleReturn(root, TodoStore);
     return;
   }
-  if (action === "next_task") {
+  if (action === "next_task" || (!map && (text === "j" || text === "Down"))) {
     handleMove(root, 0, 1, TodoStore);
     return;
   }
-  if (action === "prev_task") {
+  if (action === "prev_task" || (!map && (text === "k" || text === "Up"))) {
     handleMove(root, 0, -1, TodoStore);
     return;
   }
-  if (action === "cycle_left" || (!map && text === "[")) {
+  if (action === "cycle_left" || text === "[" || (!map && (text === "h" || text === "Left"))) {
     handleMove(root, -1, 0, TodoStore);
     return;
   }
-  if (action === "cycle_right" || (!map && text === "]")) {
+  if (action === "cycle_right" || text === "]" || (!map && (text === "l" || text === "Right"))) {
     handleMove(root, 1, 0, TodoStore);
     return;
   }

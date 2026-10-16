@@ -680,13 +680,14 @@ function normalize(raw) {
  *
  * @param {string} input
  * @param {string} [defaultProfile]
+ * @param {{ treatEmbeddedAsTags?: boolean }} [options]
  * @returns {ParsedTaskInput}
  */
-function parseTaskInput(input, defaultProfile) {
+function parseTaskInput(input, defaultProfile, options) {
   var raw = String(input || "").trim()
   var defProf = defaultProfile ? cleanProfileName(defaultProfile) : "personal"
   if (!raw) {
-    return { title: "", profile: defProf, repo: null, tags: [] }
+    return { title: "", profile: defProf, repo: null, tags: [], explicitProfile: null }
   }
 
   // Normalize "# name" to "#name" for leading and embedded hashtags
@@ -766,7 +767,8 @@ function parseTaskInput(input, defaultProfile) {
       title: titleTokens.join(" ").trim(),
       profile: profile,
       repo: repo,
-      tags: tags
+      tags: tags,
+      explicitProfile: (hashtagTokens.length > 0 && profile) ? profile : null
     }
   }
 
@@ -783,25 +785,41 @@ function parseTaskInput(input, defaultProfile) {
     }
 
     if (validHashtags.length > 0 && validHashtags[0]) {
-      var embFirst = validHashtags[0].replace(/^#+/, "")
+      var treatEmbeddedAsTags = Boolean(options && options.treatEmbeddedAsTags)
       var embProfile = defProf
       var embRepo = null
-      if (embFirst.indexOf("/") !== -1) {
-        var embParts = embFirst.split("/")
-        embProfile = cleanProfileName(embParts[0])
-        embRepo = cleanProfileName(embParts.slice(1).join("-"))
-      } else {
-        embProfile = cleanProfileName(embFirst)
-      }
-
       /** @type {string[]} */
       var embTags = []
-      for (var n = 1; n < validHashtags.length; n++) {
-        var nTok = validHashtags[n]
-        if (nTok) {
-          var embTag = cleanProfileName(nTok)
-          if (embTag && embTags.indexOf(embTag) === -1) {
-            embTags.push(embTag)
+
+      if (treatEmbeddedAsTags) {
+        var firstTag = cleanProfileName(validHashtags[0].replace(/^#+/, ""))
+        var startIndex = (firstTag && firstTag === defProf) ? 1 : 0
+        for (var n = startIndex; n < validHashtags.length; n++) {
+          var nTok = validHashtags[n]
+          if (nTok) {
+            var embTag = cleanProfileName(nTok)
+            if (embTag && embTags.indexOf(embTag) === -1) {
+              embTags.push(embTag)
+            }
+          }
+        }
+      } else {
+        var embFirst = validHashtags[0].replace(/^#+/, "")
+        if (embFirst.indexOf("/") !== -1) {
+          var embParts = embFirst.split("/")
+          embProfile = cleanProfileName(embParts[0])
+          embRepo = cleanProfileName(embParts.slice(1).join("-"))
+        } else {
+          embProfile = cleanProfileName(embFirst)
+        }
+
+        for (var n = 1; n < validHashtags.length; n++) {
+          var nTok = validHashtags[n]
+          if (nTok) {
+            var embTag = cleanProfileName(nTok)
+            if (embTag && embTags.indexOf(embTag) === -1) {
+              embTags.push(embTag)
+            }
           }
         }
       }
@@ -821,7 +839,8 @@ function parseTaskInput(input, defaultProfile) {
         title: cleanTitle,
         profile: embProfile,
         repo: embRepo,
-        tags: embTags
+        tags: embTags,
+        explicitProfile: treatEmbeddedAsTags ? null : (embProfile || null)
       }
     }
   }
@@ -830,7 +849,8 @@ function parseTaskInput(input, defaultProfile) {
     title: normalized,
     profile: defProf,
     repo: null,
-    tags: []
+    tags: [],
+    explicitProfile: null
   }
 }
 
@@ -872,11 +892,16 @@ function cloneStore(store) {
  */
 function addTodo(store, rawTitle, description, explicitProfile, reminderTime, location, explicitTags) {
   var s = cloneStore(store)
-  var parsed = parseTaskInput(rawTitle, explicitProfile || s.activeProfile)
+  var hasExplicitProfile = Boolean(explicitProfile && String(explicitProfile).trim().length > 0)
+  var parsed = parseTaskInput(
+    rawTitle,
+    explicitProfile || s.activeProfile,
+    { treatEmbeddedAsTags: hasExplicitProfile }
+  )
   var title = capitalizeTitle(parsed.title)
 
   var hasLeadingHashtag = String(rawTitle || "").trim().startsWith("#")
-  var profile = (explicitProfile && !hasLeadingHashtag && !rawTitle.match(/#\s*([a-zA-Z0-9_-]+)/))
+  var profile = (hasExplicitProfile && !hasLeadingHashtag)
     ? cleanProfileName(explicitProfile)
     : parsed.profile
 
@@ -1329,40 +1354,174 @@ function searchProfiles(store, query) {
 }
 
 /**
- * Returns all unique tags used across tasks in the store, sorted by usage frequency descending, then alphabetical.
- * @param {TodoStoreData|null|undefined} store
- * @returns {string[]}
+ * Internal tag index cache to guarantee O(1) performance during active search & typing across thousands of tasks.
  */
-function getAllTags(store) {
-  if (!store || !Array.isArray(store.todos)) return []
+var _tagCache = {
+  storeRef: null,
+  storeTodosRef: null,
+  storeTodosLen: -1,
+  storeLastUpdated: 0,
+  archiveRef: null,
+  archiveListRef: null,
+  archiveLen: -1,
+  archiveLastCompleted: 0,
+  allTags: null,
+  tagCounts: null
+}
+
+function invalidateTagCache() {
+  _tagCache.storeRef = null
+  _tagCache.storeTodosRef = null
+  _tagCache.storeTodosLen = -1
+  _tagCache.storeLastUpdated = 0
+  _tagCache.archiveRef = null
+  _tagCache.archiveListRef = null
+  _tagCache.archiveLen = -1
+  _tagCache.archiveLastCompleted = 0
+  _tagCache.allTags = null
+  _tagCache.tagCounts = null
+}
+
+function _ensureTagIndex(store, archive) {
+  var todos = (store && Array.isArray(store.todos)) ? store.todos : null
+  var todosLen = todos ? todos.length : 0
+  var lastUpdated = 0
+  if (todosLen > 0) {
+    var lastTask = todos[todosLen - 1]
+    if (lastTask) lastUpdated = Number(lastTask.updatedAt || lastTask.createdAt || 0)
+  }
+
+  var arcList = null
+  if (archive) {
+    if (Array.isArray(archive.archived)) {
+      arcList = archive.archived
+    } else if (typeof archive === "string") {
+      try {
+        var parsed = JSON.parse(archive)
+        if (parsed && Array.isArray(parsed.archived)) {
+          arcList = parsed.archived
+        }
+      } catch (_e) {
+        arcList = []
+      }
+    }
+  }
+  var arcLen = arcList ? arcList.length : 0
+  var lastCompleted = 0
+  if (arcLen > 0) {
+    var lastArc = arcList[arcLen - 1]
+    if (lastArc) lastCompleted = Number(lastArc.completedAt || lastArc.updatedAt || 0)
+  }
+
+  if (_tagCache.allTags &&
+      _tagCache.storeRef === store &&
+      _tagCache.storeTodosRef === todos &&
+      _tagCache.storeTodosLen === todosLen &&
+      _tagCache.storeLastUpdated === lastUpdated &&
+      _tagCache.archiveRef === archive &&
+      _tagCache.archiveListRef === arcList &&
+      _tagCache.archiveLen === arcLen &&
+      _tagCache.archiveLastCompleted === lastCompleted) {
+    return _tagCache
+  }
+
   /** @type {Record<string, number>} */
   var counts = {}
-  for (var i = 0; i < store.todos.length; i++) {
-    var t = store.todos[i]
-    if (Array.isArray(t.tags)) {
-      for (var j = 0; j < t.tags.length; j++) {
-        var tag = t.tags[j]
-        if (tag && typeof tag === "string") {
-          counts[tag] = (counts[tag] || 0) + 1
+  /** @type {Record<string, number>} */
+  var lastUsed = {}
+
+  function processTask(t) {
+    if (!t) return
+    if (!Array.isArray(t.tags)) return
+    var time = Number(t.updatedAt || t.completedAt || t.createdAt || 0)
+    for (var j = 0; j < t.tags.length; j++) {
+      var tag = t.tags[j]
+      if (tag && typeof tag === "string") {
+        counts[tag] = (counts[tag] || 0) + 1
+        if (time > (lastUsed[tag] || 0)) {
+          lastUsed[tag] = time
         }
       }
     }
   }
-  return Object.keys(counts).sort(function (a, b) {
+
+  if (todos) {
+    for (var i = 0; i < todosLen; i++) {
+      processTask(todos[i])
+    }
+  }
+
+  if (arcList) {
+    for (var a = 0; a < arcLen; a++) {
+      processTask(arcList[a])
+    }
+  }
+
+  var sorted = Object.keys(counts).sort(function (a, b) {
+    var timeA = lastUsed[a] || 0
+    var timeB = lastUsed[b] || 0
+    if (timeA !== timeB) {
+      return timeB - timeA
+    }
     var diff = counts[b] - counts[a]
     if (diff !== 0) return diff
     return a.localeCompare(b)
   })
+
+  _tagCache.storeRef = store
+  _tagCache.storeTodosRef = todos
+  _tagCache.storeTodosLen = todosLen
+  _tagCache.storeLastUpdated = lastUpdated
+  _tagCache.archiveRef = archive
+  _tagCache.archiveListRef = arcList
+  _tagCache.archiveLen = arcLen
+  _tagCache.archiveLastCompleted = lastCompleted
+  _tagCache.allTags = sorted
+  _tagCache.tagCounts = counts
+
+  return _tagCache
+}
+
+/**
+ * Returns all unique tags used across tasks in the store and archive,
+ * sorted by MRU (most recently used timestamp descending), then frequency descending, then alphabetical.
+ * Uses index caching to deliver scalable sub-millisecond lookups over thousands of tasks.
+ * @param {TodoStoreData|null|undefined} store
+ * @param {ArchiveData|string|null|undefined} [archive]
+ * @returns {string[]}
+ */
+function getAllTags(store, archive) {
+  if (!store && !archive) return []
+  return _ensureTagIndex(store, archive).allTags.slice()
+}
+
+/**
+ * Returns a dictionary mapping each tag to its total task count across active and archived stores.
+ * Uses index caching to eliminate repetitive O(N) loops during UI rendering.
+ * @param {TodoStoreData|null|undefined} store
+ * @param {ArchiveData|string|null|undefined} [archive]
+ * @returns {Record<string, number>}
+ */
+function getTagCounts(store, archive) {
+  if (!store && !archive) return {}
+  return _ensureTagIndex(store, archive).tagCounts
 }
 
 /**
  * Searches and returns sorted tags matching a query.
+ * When query is empty, returns tags in MRU order.
+ * When query is non-empty, filters tags by query while preserving MRU order.
  * @param {TodoStoreData|null|undefined} store
- * @param {string} [query]
+ * @param {string|ArchiveData|null|undefined} [query]
+ * @param {ArchiveData|string|null|undefined} [archive]
  * @returns {string[]}
  */
-function searchTags(store, query) {
-  var tags = getAllTags(store)
+function searchTags(store, query, archive) {
+  if (typeof query === "object" && query !== null && !archive) {
+    archive = query
+    query = ""
+  }
+  var tags = getAllTags(store, archive)
   if (!query) return tags
   var cleanQuery = String(query).replace(/^#+/, "").toLowerCase().trim()
   if (!cleanQuery) return tags
@@ -1533,6 +1692,14 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
     }
   }
 
+  var cleanFilter = (currentFilter && currentFilter !== "all") ? cleanProfileName(currentFilter) : ""
+  if (cleanFilter && !seen[cleanFilter]) {
+    seen[cleanFilter] = true
+    profList.push(cleanFilter)
+    counts[cleanFilter] = 0
+    recency[cleanFilter] = 0
+  }
+
   profList.sort(function (a, b) {
     var countA = counts[a] || 0
     var countB = counts[b] || 0
@@ -1549,7 +1716,6 @@ function getSortedProfiles(store, onlyActive, currentFilter) {
 
   if (onlyActive) {
     var activeProf = (store && store.activeProfile && store.activeProfile !== "all") ? cleanProfileName(store.activeProfile) : "personal"
-    var cleanFilter = (currentFilter && currentFilter !== "all") ? cleanProfileName(currentFilter) : ""
     profList = profList.filter(function (name) {
       return (name !== "all") && ((counts[name] > 0) || (Boolean(cleanFilter) && name === cleanFilter) || (name === activeProf))
     })
@@ -1905,7 +2071,12 @@ var PROFILE_ICON_CATALOG = [
   { glyph: "󰕧", name: "video", keywords: ["video", "movie", "recording", "camera", "media"] },
   { glyph: "󰄜", name: "mobile", keywords: ["mobile", "phone", "app", "android", "ios", "cell"] },
   { glyph: "󰌾", name: "security", keywords: ["lock", "security", "auth", "key", "password", "vault"] },
-  { glyph: "󰊖", name: "gaming", keywords: ["game", "gaming", "play", "fun", "leisure", "steam"] }
+
+  // Gaming & Strategy
+  { glyph: "󰄚", name: "castle", keywords: ["castle", "fortress", "tower", "defense", "rampart", "kingdom", "keep", "stronghold", "defender", "rts"] },
+  { glyph: "󰒘", name: "shield", keywords: ["shield", "defense", "defender", "protect", "armor", "guard", "security"] },
+  { glyph: "󰓥", name: "sword", keywords: ["sword", "blade", "attack", "combat", "melee", "weapon", "warrior", "battle"] },
+  { glyph: "󰊖", name: "gaming", keywords: ["game", "gaming", "play", "fun", "leisure", "steam", "controller"] }
 ]
 
 /**
@@ -2113,7 +2284,39 @@ var ALL_GLYPHS_CATALOG = PROFILE_ICON_CATALOG.concat([
   { glyph: "", name: "code-fa", keywords: ["code", "brackets", "tags", "html", "syntax", "source"] },
   { glyph: "", name: "circle-fa", keywords: ["circle", "dot", "disc", "round", "bullet"] },
   { glyph: "", name: "wrench-fa", keywords: ["wrench", "tool", "fix", "repair", "maintenance", "settings"] },
-  { glyph: "", name: "rocket-fa", keywords: ["rocket", "ship", "launch", "fast", "space"] }
+  { glyph: "", name: "rocket-fa", keywords: ["rocket", "ship", "launch", "fast", "space"] },
+
+  // Castle Defender, RTS & Strategy Glyphs
+  { glyph: "󰞇", name: "sword-cross", keywords: ["battle", "swords", "cross", "combat", "war", "fight", "pvp", "rts", "attack"] },
+  { glyph: "󱢾", name: "shield-sword", keywords: ["shield", "sword", "defender", "defense", "warrior", "knight", "battle", "combat"] },
+  { glyph: "󱢼", name: "shield-crown", keywords: ["shield", "crown", "kingdom", "royal", "defense", "king", "guardian"] },
+  { glyph: "", name: "shield-fa", keywords: ["shield", "defense", "protect", "armor", "defender", "guard"] },
+  { glyph: "", name: "fort-awesome", keywords: ["fort", "fortress", "castle", "defense", "bastion", "outpost"] },
+  { glyph: "", name: "chess-rook", keywords: ["tower", "rook", "chess", "defense", "turret", "castle", "defender", "siege"] },
+  { glyph: "", name: "chess-tower", keywords: ["tower", "chess", "rook", "turret", "fort", "castle", "rampart"] },
+  { glyph: "󰟾", name: "wall", keywords: ["wall", "brick", "fortress", "defense", "rampart", "barrier", "defender", "stone"] },
+  { glyph: "󱡁", name: "bow-arrow", keywords: ["bow", "arrow", "archer", "ranged", "target", "defense", "weapon", "hunter"] },
+  { glyph: "󱡂", name: "axe-battle", keywords: ["axe", "battleaxe", "war", "weapon", "melee", "viking", "barbarian", "heavy"] },
+  { glyph: "󰣈", name: "axe", keywords: ["axe", "wood", "chop", "harvest", "gather", "rts", "tool", "lumber"] },
+  { glyph: "󰢷", name: "pickaxe", keywords: ["pickaxe", "mining", "ore", "gather", "resources", "gold", "rts", "craft"] },
+  { glyph: "󱉏", name: "gold", keywords: ["gold", "bars", "wealth", "economy", "resources", "treasury", "rts", "money"] },
+  { glyph: "󰆥", name: "crown", keywords: ["crown", "king", "queen", "royalty", "monarch", "victory", "kingdom", "empire"] },
+  { glyph: "", name: "crown-fa", keywords: ["crown", "royal", "king", "queen", "leader", "throne", "ruler"] },
+  { glyph: "", name: "chess-knight", keywords: ["knight", "horse", "cavalry", "chess", "unit", "mount", "scout"] },
+  { glyph: "", name: "chess-pawn", keywords: ["pawn", "soldier", "infantry", "unit", "chess", "grunt", "footman"] },
+  { glyph: "", name: "chess-king", keywords: ["king", "monarch", "leader", "ruler", "chess", "kingdom", "general"] },
+  { glyph: "", name: "chess-queen", keywords: ["queen", "royalty", "chess", "leader", "strategy", "powerful"] },
+  { glyph: "", name: "chess", keywords: ["chess", "strategy", "board", "tactics", "rts", "game", "match"] },
+  { glyph: "󰓾", name: "target", keywords: ["target", "aim", "crosshair", "defense", "focus", "objective", "sniper"] },
+  { glyph: "", name: "skull", keywords: ["skull", "enemy", "boss", "death", "defeat", "monster", "skeleton", "dead"] },
+  { glyph: "󰯆", name: "skull-crossbones", keywords: ["skull", "crossbones", "danger", "pirate", "enemy", "hazard", "fatal"] },
+  { glyph: "󰚑", name: "bomb", keywords: ["bomb", "explosive", "cannon", "artillery", "blast", "siege", "damage"] },
+  { glyph: "", name: "bomb-fa", keywords: ["bomb", "explosive", "blast", "artillery", "siege", "fuse"] },
+  { glyph: "", name: "scroll", keywords: ["scroll", "quest", "spell", "magic", "papyrus", "contract", "map", "lore"] },
+  { glyph: "󱡄", name: "magic-staff", keywords: ["staff", "magic", "wizard", "mage", "spell", "sorcerer", "caster"] },
+  { glyph: "", name: "wand-magic", keywords: ["wand", "magic", "sparkle", "spell", "wizard", "witch", "cast"] },
+  { glyph: "", name: "dice-d20", keywords: ["dice", "d20", "rpg", "tabletop", "roll", "crit", "game", "chance"] },
+  { glyph: "", name: "map-world", keywords: ["map", "world", "territory", "minimap", "realm", "chart", "rts", "land"] }
 ])
 
 /**
@@ -3233,6 +3436,8 @@ if (typeof module !== "undefined" && module.exports) {
     searchProfiles,
     getAllTags,
     searchTags,
+    getTagCounts,
+    invalidateTagCache,
     resolveDefaultProfile,
     CURRENT_RELEASE_VERSION,
     RELEASE_HIGHLIGHTS,

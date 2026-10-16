@@ -311,7 +311,7 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   );
   assert.ok(
     quickAddContent.includes('if (root.focusSection === "tags")') &&
-      quickAddContent.includes("root.removeEditTag(root.editTags[root.tagChipIndex])"),
+      quickAddContent.includes("root.removeEditTag(root.activeTags[root.tagChipIndex])"),
     "QuickAdd must support deleting tags via x/Del/Backspace when tags section is focused"
   );
   assert.ok(
@@ -481,8 +481,16 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   assert.ok(
     profileSelectorContent.includes("function resetScroll()") &&
       profileSelectorContent.includes("padLeft = leftFadeEdge.width") &&
-      profileSelectorContent.includes("padRight = rightFadeEdge.width"),
-    "ProfileSelector must implement resetScroll and clearance padding for left and right fade edges in ensureVisible"
+      profileSelectorContent.includes("padRight = rightFadeEdge.width") &&
+      profileSelectorContent.includes("if (profileFlickable.width <= 0 || profileFlickable.contentWidth <= 0) return"),
+    "ProfileSelector must implement resetScroll, clearance padding for left and right fade edges, and geometry readiness guards in ensureVisible"
+  );
+  assert.ok(
+    quickAddContent.includes("property string baseProfile:") &&
+      quickAddContent.includes("TodoStore.parseTaskInput(text, root.baseProfile, { treatEmbeddedAsTags: true })") &&
+      quickAddContent.includes("root.selectedProfile = parsed.explicitProfile") &&
+      quickAddContent.includes("root.profileChipIndex = idx"),
+    "QuickAdd must maintain baseProfile and synchronize selectedProfile and profileChipIndex from parsedInput hashtags"
   );
   assert.ok(
     profileSelectorContent.includes("property bool wrap: false") &&
@@ -972,6 +980,7 @@ test("Default Bindings Template: tools/default-bindings.lua is valid and documen
   assert.ok(defaultBindingsMatch, "PanelLogic.js must declare DEFAULT_BINDINGS");
   const actionKeys = [...defaultBindingsMatch[1].matchAll(/([a-z_]+)\s*:/g)].map((m) => m[1]);
   assert.ok(actionKeys.length >= 15, "DEFAULT_BINDINGS must contain expected action catalog");
+  assert.ok(actionKeys.includes("open_codebase"), "DEFAULT_BINDINGS must contain open_codebase");
 
   for (const action of actionKeys) {
     assert.ok(
@@ -996,6 +1005,42 @@ test("Default Bindings Template: tools/default-bindings.lua is valid and documen
   assert.equal(res.status, 0, "Evaluation of default-bindings.lua must succeed with exit code 0");
   const parsed = JSON.parse(res.stdout.trim());
   assert.deepEqual(parsed, {}, "Default template must return an empty object so defaults remain active");
+});
+
+test("Keybindings Architecture Invariant: 5-way cross-file contract synchronization", () => {
+  const panelLogicContent = fs.readFileSync(path.join(repoDir, "PanelLogic.js"), "utf8");
+  const loadBindingsContent = fs.readFileSync(path.join(repoDir, "tools", "load-bindings.lua"), "utf8");
+  const defaultBindingsContent = fs.readFileSync(path.join(repoDir, "tools", "default-bindings.lua"), "utf8");
+  const designContent = fs.readFileSync(path.join(repoDir, "DESIGN.md"), "utf8");
+
+  // 1. DEFAULT_BINDINGS in PanelLogic.js
+  const defaultBindingsMatch = panelLogicContent.match(/var DEFAULT_BINDINGS = {([^}]+)}/s);
+  assert.ok(defaultBindingsMatch, "PanelLogic.js must declare DEFAULT_BINDINGS");
+  const panelLogicActions = [...defaultBindingsMatch[1].matchAll(/([a-z_]+)\s*:/g)].map((m) => m[1]).sort();
+
+  // 2. KNOWN_ACTIONS in tools/load-bindings.lua
+  const knownActionsMatch = loadBindingsContent.match(/local KNOWN_ACTIONS = \{([^}]+)\}/s);
+  assert.ok(knownActionsMatch, "tools/load-bindings.lua must declare KNOWN_ACTIONS");
+  const loadBindingsActions = [...knownActionsMatch[1].matchAll(/([a-z_]+)\s*=\s*true/g)].map((m) => m[1]).sort();
+
+  // 3. tools/default-bindings.lua
+  const templateActions = [...defaultBindingsContent.matchAll(/--\s*([a-z_]+)\s*=/g)].map((m) => m[1]).sort();
+
+  // 4. DESIGN.md Action Catalog table
+  const designCatalogMatch = designContent.match(/#### Action Catalog\s*\|[^\n]+\|[^\n]+\|([\s\S]+?)####/);
+  assert.ok(designCatalogMatch, "DESIGN.md must have #### Action Catalog table");
+  const designActions = [...designCatalogMatch[1].matchAll(/\|\s*`([a-z_]+)`\s*\|/g)].map((m) => m[1]).sort();
+
+  // 5. getKeybindingsList() formatted actions in PanelLogic.js
+  const getKeybindingsListMatch = panelLogicContent.match(/function getKeybindingsList\([^{]+\{([\s\S]+?)\n\}/);
+  assert.ok(getKeybindingsListMatch, "PanelLogic.js must declare getKeybindingsList");
+  const catalogFmtActions = [...new Set([...getKeybindingsListMatch[1].matchAll(/fmt\("([a-z_]+)"/g)].map((m) => m[1]))].sort();
+
+  // All 5 sets must match exactly with zero skew
+  assert.deepEqual(loadBindingsActions, panelLogicActions, "tools/load-bindings.lua KNOWN_ACTIONS must match PanelLogic.js DEFAULT_BINDINGS");
+  assert.deepEqual(templateActions, panelLogicActions, "tools/default-bindings.lua must document all PanelLogic.js DEFAULT_BINDINGS actions");
+  assert.deepEqual(designActions, panelLogicActions, "DESIGN.md Action Catalog must match PanelLogic.js DEFAULT_BINDINGS");
+  assert.deepEqual(catalogFmtActions, panelLogicActions, "PanelLogic.js getKeybindingsList() must include all DEFAULT_BINDINGS");
 });
 
 test("HelpModal: dynamic dismiss key hint and key handling", () => {
@@ -1770,5 +1815,51 @@ test("ProfileIconPicker: focus trapping, initial grid focus, vim motions, and sc
   assert.ok(
     quickAddContent.includes("profileIconPicker.isOpen") && quickAddContent.includes("event.accepted = true"),
     "QuickAdd must trap keys and set event.accepted = true when profileIconPicker is open"
+  );
+});
+
+test("QuickAdd Task Input Tag Autocompletion & Dynamic Tags Row Contract", () => {
+  const quickAddContent = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
+
+  // Autocomplete mode distinction (leading hash vs subsequent hash)
+  assert.ok(
+    quickAddContent.includes("var isLeadingHash = (hashIndex === 0 || textBeforeHash.trim().length === 0)") &&
+      quickAddContent.includes('autocompleteMode = isLeadingHash ? "profile" : "tag"'),
+    "QuickAdd must switch autocompleteMode between profile (leading hash) and tag (subsequent hash)"
+  );
+
+  // Active tags reactive property
+  assert.ok(
+    quickAddContent.includes("readonly property var activeTags:") &&
+      quickAddContent.includes("if (parsedInput && Array.isArray(parsedInput.tags))"),
+    "QuickAdd must maintain activeTags property dynamically populating from parsedInput tags"
+  );
+
+  // Tags container visibility tied to activeTags
+  assert.ok(
+    quickAddContent.includes("visible: root.isEditMode || (root.activeTags && root.activeTags.length > 0) || root.showTagSearchBox"),
+    "quickAddTagsContainer must dynamically show when activeTags are created in taskInput"
+  );
+
+  // Autocomplete search integration
+  assert.ok(
+    quickAddContent.includes('if (autocompleteMode === "tag")') &&
+      quickAddContent.includes("TodoStore.searchTags(root.store, autocompleteQuery"),
+    "QuickAdd must query TodoStore.searchTags when autocompleteMode is tag"
+  );
+
+  // Archive integration & Option 1 (new tag offer) & Scalable O(1) tagCounts lookup
+  assert.ok(
+    quickAddContent.includes("archiveStore") &&
+      quickAddContent.includes("archiveFilePath") &&
+      quickAddContent.includes("TodoStore.getTagCounts") &&
+      quickAddContent.includes('"new tag"'),
+    "QuickAdd must connect archiveStore, query getTagCounts in O(1), and offer 'new tag' for uncatalogued tags"
+  );
+
+  // Tag removal synchronizes with taskInput text
+  assert.ok(
+    quickAddContent.includes("taskInput.text.replace(new RegExp("),
+    "QuickAdd removeEditTag must remove tag from taskInput text when present as hashtag"
   );
 });

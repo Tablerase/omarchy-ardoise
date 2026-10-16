@@ -28,6 +28,7 @@ local bindings = {
   -- delete_task     = "x",           -- Delete selected task
   -- copy_task       = "y",           -- Copy selected task for LLM (compact markdown)
   -- edit_title      = "r",           -- or { "r", "F2" }: edit task title in place
+  -- open_codebase   = "o",           -- Open the task's codebase directory in editor
   -- task_menu       = "K",           -- Open the task context menu (copy for LLM, edit, open, delete)
   -- open_editor     = "e",           -- Open todos.json in editor at task line
 

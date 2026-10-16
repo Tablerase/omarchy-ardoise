@@ -36,8 +36,11 @@ Item {
     return pluginDirPath + "/data"
   })()
   readonly property string todoFilePath: dataDirPath + "/todos.json"
+  readonly property string archiveFilePath: dataDirPath + "/todos-archive.json"
+  property var archiveStore: ({ version: 1, archived: [] })
 
   property var store: TodoStore.defaultStore()
+  property string baseProfile: "personal"
   property string selectedProfile: "personal"
   property string selectedReminder: ""
   property bool showNote: false
@@ -52,7 +55,7 @@ Item {
   readonly property bool hasDraft: draftTitle.trim().length > 0 || draftDescription.trim().length > 0
 
   property bool showTitleError: false
-  readonly property var parsedInput: TodoStore.parseTaskInput(taskInput.text, root.selectedProfile)
+  readonly property var parsedInput: TodoStore.parseTaskInput(taskInput.text, root.baseProfile, { treatEmbeddedAsTags: true })
   readonly property bool hasValidTitle: Boolean(parsedInput && parsedInput.title && parsedInput.title.trim().length > 0)
   readonly property bool canSubmit: hasValidTitle
   readonly property color secondaryText: TodoStore.getReadableSecondary(Color.popups.background, Color.muted, Color.foreground)
@@ -64,20 +67,44 @@ Item {
   readonly property bool isEditMode: editingTaskId !== null && editingTaskId !== undefined
   property var editingTask: null
   property var editTags: []
+  readonly property var activeTags: {
+    var list = (Array.isArray(root.editTags) ? root.editTags.slice() : [])
+    if (parsedInput && Array.isArray(parsedInput.tags)) {
+      for (var i = 0; i < parsedInput.tags.length; i++) {
+        var t = parsedInput.tags[i]
+        if (t && list.indexOf(t) === -1) {
+          list.push(t)
+        }
+      }
+    }
+    return list
+  }
   property int profileChipIndex: 0
   property bool showProfileSearchBox: false
   property int tagChipIndex: -1
   property bool showTagSearchBox: false
 
   function removeEditTag(tag) {
-    if (!tag || !Array.isArray(root.editTags)) return
-    var next = []
-    for (var i = 0; i < root.editTags.length; i++) {
-      if (root.editTags[i] !== tag) next.push(root.editTags[i])
+    if (!tag) return
+    var clean = (typeof TodoStore !== "undefined" && typeof TodoStore.cleanProfileName === "function")
+      ? TodoStore.cleanProfileName(tag)
+      : String(tag).replace(/^#+/, "").trim()
+    if (Array.isArray(root.editTags)) {
+      var next = []
+      for (var i = 0; i < root.editTags.length; i++) {
+        if (root.editTags[i] !== tag && root.editTags[i] !== clean) next.push(root.editTags[i])
+      }
+      root.editTags = next
     }
-    root.editTags = next
-    if (root.tagChipIndex >= root.editTags.length) {
-      root.tagChipIndex = Math.max(-1, root.editTags.length - 1)
+    if (taskInput.text && taskInput.text.indexOf("#") !== -1) {
+      var escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      var newText = taskInput.text.replace(new RegExp("(^|\\s)#" + escaped + "(?=\\s|$)", "g"), " ").trim()
+      if (newText !== taskInput.text) {
+        taskInput.text = newText
+      }
+    }
+    if (root.tagChipIndex >= root.activeTags.length) {
+      root.tagChipIndex = Math.max(-1, root.activeTags.length - 1)
     }
   }
 
@@ -91,6 +118,9 @@ Item {
     if (current.indexOf(clean) === -1) {
       current.push(clean)
       root.editTags = current
+    }
+    if (taskInput.text && !taskInput.text.match(new RegExp("(^|\\s)#" + clean + "(?=\\s|$)"))) {
+      taskInput.text = taskInput.text.trim() + " #" + clean
     }
   }
 
@@ -106,12 +136,38 @@ Item {
   property int autocompleteTokenStart: -1
   property int autocompleteTokenEnd: -1
 
+  readonly property var tagCounts: (typeof TodoStore !== "undefined" && typeof TodoStore.getTagCounts === "function")
+    ? TodoStore.getTagCounts(root.store, root.archiveStore)
+    : ({})
+
   readonly property var autocompleteMatches: {
     if (!autocompleteActive) return []
     if (autocompleteMode === "tag") {
-      return (typeof TodoStore.searchTags === "function") ? TodoStore.searchTags(root.store, autocompleteQuery) : []
+      var found = (typeof TodoStore.searchTags === "function")
+        ? TodoStore.searchTags(root.store, autocompleteQuery, root.archiveStore)
+        : []
+      if (autocompleteQuery && autocompleteQuery.trim().length > 0) {
+        var cleanQ = (typeof TodoStore.cleanProfileName === "function")
+          ? TodoStore.cleanProfileName(autocompleteQuery)
+          : String(autocompleteQuery).replace(/^#+/, "").trim().toLowerCase()
+        if (cleanQ && found.indexOf(cleanQ) === -1) {
+          found = found.concat([cleanQ])
+        }
+      }
+      return found
     }
-    return (typeof TodoStore.searchProfiles === "function") ? TodoStore.searchProfiles(root.store, autocompleteQuery) : []
+    var profs = (typeof TodoStore.searchProfiles === "function")
+      ? TodoStore.searchProfiles(root.store, autocompleteQuery)
+      : []
+    if (autocompleteQuery && autocompleteQuery.trim().length > 0) {
+      var cleanP = (typeof TodoStore.cleanProfileName === "function")
+        ? TodoStore.cleanProfileName(autocompleteQuery)
+        : String(autocompleteQuery).replace(/^#+/, "").trim().toLowerCase()
+      if (cleanP && profs.indexOf(cleanP) === -1) {
+        profs = profs.concat([cleanP])
+      }
+    }
+    return profs
   }
 
   function checkAutocompleteAtCursor() {
@@ -133,7 +189,7 @@ Item {
     var hashIndex = before.length - query.length - 1
 
     var textBeforeHash = before.slice(0, hashIndex)
-    var isFirstHash = !textBeforeHash.includes("#")
+    var isLeadingHash = (hashIndex === 0 || textBeforeHash.trim().length === 0)
 
     var after = text.slice(pos)
     var afterMatch = after.match(/^[a-zA-Z0-9_\/-]*/)
@@ -141,7 +197,7 @@ Item {
 
     autocompleteTokenStart = hashIndex
     autocompleteTokenEnd = endPos
-    autocompleteMode = isFirstHash ? "profile" : "tag"
+    autocompleteMode = isLeadingHash ? "profile" : "tag"
     autocompleteQuery = query
     autocompleteActive = true
     if (autocompleteIndex >= autocompleteMatches.length) {
@@ -165,7 +221,9 @@ Item {
     taskInput.cursorPosition = newCursor
 
     if (autocompleteMode === "profile") {
-      root.selectedProfile = TodoStore.cleanProfileName(item)
+      var cleanProf = TodoStore.cleanProfileName(item)
+      root.baseProfile = cleanProf
+      root.selectedProfile = cleanProf
     }
     autocompleteActive = false
     taskInput.forceActiveFocus()
@@ -186,7 +244,7 @@ Item {
     if (root.showNote) secs.push("notes")
     if (root.showReminderOptions) secs.push("reminders")
     secs.push("profiles")
-    if (root.isEditMode || (root.editTags && root.editTags.length > 0) || root.showTagSearchBox) secs.push("tags")
+    if (root.isEditMode || (root.activeTags && root.activeTags.length > 0) || root.showTagSearchBox) secs.push("tags")
     if (Boolean(root.detectedContext && root.attachLocation)) secs.push("location")
     secs.push("actions")
     return secs
@@ -253,7 +311,8 @@ Item {
     showReminderOptions = false
     selectedReminder = ""
     refreshReminderPresets()
-    selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
+    baseProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
+    selectedProfile = baseProfile
     focusSection = "title"
     optionIndex = 0
     actionIndex = 1
@@ -306,7 +365,11 @@ Item {
       root.editingTask = targetTask
       root.editTags = Array.isArray(targetTask.tags) ? targetTask.tags.slice() : []
       taskInput.text = targetTask.title || ""
-      root.selectedProfile = targetTask.profile || "personal"
+      root.baseProfile = targetTask.profile || "personal"
+      root.selectedProfile = root.baseProfile
+      var editProfs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+      var editIdx = editProfs ? editProfs.indexOf(root.selectedProfile) : -1
+      root.profileChipIndex = editIdx >= 0 ? editIdx : 0
       if (targetTask.description && targetTask.description.trim().length > 0) {
         root.showNote = true
         Qt.callLater(function() {
@@ -336,9 +399,6 @@ Item {
         root.detectedContext = null
         root.attachLocation = false
       }
-      if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
-        quickAddProfileSelector.resetScroll()
-      }
       Qt.callLater(function() {
         root.ensureProfileVisible(root.selectedProfile)
         taskInput.forceActiveFocus()
@@ -363,7 +423,11 @@ Item {
         })
       }
       if (root.draftProfile) {
+        root.baseProfile = root.draftProfile
         root.selectedProfile = root.draftProfile
+      } else {
+        root.baseProfile = TodoStore.resolveDefaultProfile(root.store, null)
+        root.selectedProfile = root.baseProfile
       }
       if (root.draftReminder) {
         root.selectedReminder = root.draftReminder
@@ -380,11 +444,12 @@ Item {
       selectedReminder = ""
       root.detectedContext = null
       root.attachLocation = false
-      selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
-      if (quickAddProfileSelector && typeof quickAddProfileSelector.resetScroll === "function") {
-        quickAddProfileSelector.resetScroll()
-      }
+      root.baseProfile = TodoStore.resolveDefaultProfile(root.store, null)
+      root.selectedProfile = root.baseProfile
     }
+    var addProfs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+    var addIdx = addProfs ? addProfs.indexOf(root.selectedProfile) : -1
+    root.profileChipIndex = addIdx >= 0 ? addIdx : 0
     Qt.callLater(function() {
       root.ensureProfileVisible(root.selectedProfile)
       taskInput.forceActiveFocus()
@@ -436,6 +501,11 @@ Item {
   onSelectedProfileChanged: {
     if (root.opened && !root.isEditMode) {
       root.draftProfile = root.selectedProfile
+    }
+    var profs = TodoStore.getSortedProfiles(root.store, false, root.selectedProfile)
+    var idx = profs ? profs.indexOf(root.selectedProfile) : -1
+    if (idx >= 0) {
+      root.profileChipIndex = idx
     }
     Qt.callLater(function() { root.ensureProfileVisible(root.selectedProfile) })
   }
@@ -530,22 +600,33 @@ Item {
           if (res && (res.repo || res.localPath)) {
             root.detectedContext = res
             root.attachLocation = true
-            // If the user hasn't explicitly customized profile in draft, auto-resolve profile via 3-tier hierarchy
-            if (!root.hasDraft) {
-              root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, res)
+            var detectedProf = TodoStore.resolveDefaultProfile(root.store, res)
+            root.baseProfile = detectedProf
+            var parsed = TodoStore.parseTaskInput(taskInput.text, root.baseProfile)
+            var hasExplicit = Boolean(parsed && parsed.explicitProfile)
+            if (!hasExplicit && (!root.hasDraft || !root.draftProfile)) {
+              root.selectedProfile = detectedProf
             }
           } else {
             root.detectedContext = null
             root.attachLocation = false
-            if (!root.hasDraft) {
-              root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
+            var defProf = TodoStore.resolveDefaultProfile(root.store, null)
+            root.baseProfile = defProf
+            var parsed2 = TodoStore.parseTaskInput(taskInput.text, root.baseProfile)
+            var hasExplicit2 = Boolean(parsed2 && parsed2.explicitProfile)
+            if (!hasExplicit2 && (!root.hasDraft || !root.draftProfile)) {
+              root.selectedProfile = defProf
             }
           }
         } catch (_e) {
           root.detectedContext = null
           root.attachLocation = false
-          if (!root.hasDraft) {
-            root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, null)
+          var errDef = TodoStore.resolveDefaultProfile(root.store, null)
+          root.baseProfile = errDef
+          var parsed3 = TodoStore.parseTaskInput(taskInput.text, root.baseProfile)
+          var hasExplicit3 = Boolean(parsed3 && parsed3.explicitProfile)
+          if (!hasExplicit3 && (!root.hasDraft || !root.draftProfile)) {
+            root.selectedProfile = errDef
           }
         }
       }
@@ -563,6 +644,24 @@ Item {
       if (!root.opened) {
         root.selectedProfile = TodoStore.resolveDefaultProfile(root.store, root.detectedContext)
       }
+    }
+    onFileChanged: reload()
+  }
+
+  FileView {
+    id: archiveFile
+    path: root.archiveFilePath
+    watchChanges: true
+    printErrors: false
+    onLoaded: {
+      try {
+        root.archiveStore = JSON.parse(text())
+      } catch (_e) {
+        root.archiveStore = ({ version: 1, archived: [] })
+      }
+    }
+    onLoadFailed: {
+      root.archiveStore = ({ version: 1, archived: [] })
     }
     onFileChanged: reload()
   }
@@ -642,7 +741,7 @@ Item {
           if (root.focusSection === "profiles") {
             root.cycleProfileSelection(-1)
           } else if (root.focusSection === "tags") {
-            var tagCountL = root.editTags ? root.editTags.length : 0
+            var tagCountL = root.activeTags ? root.activeTags.length : 0
             if (root.tagChipIndex > -1) {
               root.tagChipIndex--
             } else {
@@ -663,7 +762,7 @@ Item {
           if (root.focusSection === "profiles") {
             root.cycleProfileSelection(1)
           } else if (root.focusSection === "tags") {
-            var tagCountR = root.editTags ? root.editTags.length : 0
+            var tagCountR = root.activeTags ? root.activeTags.length : 0
             if (root.tagChipIndex < tagCountR - 1) {
               root.tagChipIndex++
             } else {
@@ -700,8 +799,8 @@ Item {
         if (root.focusSection === "tags") {
           if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace || event.text === "x" || event.text === "X" || event.key === Qt.Key_X) {
             event.accepted = true
-            if (root.tagChipIndex >= 0 && root.editTags && root.tagChipIndex < root.editTags.length) {
-              root.removeEditTag(root.editTags[root.tagChipIndex])
+            if (root.tagChipIndex >= 0 && root.activeTags && root.tagChipIndex < root.activeTags.length) {
+              root.removeEditTag(root.activeTags[root.tagChipIndex])
             }
             return
           }
@@ -727,8 +826,8 @@ Item {
           if (root.focusSection === "tags") {
             if (root.tagChipIndex === -1) {
               root.showTagSearchBox = !root.showTagSearchBox
-            } else if (root.tagChipIndex >= 0 && root.editTags && root.tagChipIndex < root.editTags.length) {
-              root.removeEditTag(root.editTags[root.tagChipIndex])
+            } else if (root.tagChipIndex >= 0 && root.activeTags && root.tagChipIndex < root.activeTags.length) {
+              root.removeEditTag(root.activeTags[root.tagChipIndex])
             }
             return
           }
@@ -996,9 +1095,11 @@ Item {
             if (root.hasValidTitle) {
               root.showTitleError = false
             }
-            var match = text.match(/#\s*([a-zA-Z0-9_-]+)/)
-            if (match) {
-              root.selectedProfile = TodoStore.cleanProfileName(match[1])
+            var parsed = TodoStore.parseTaskInput(text, root.baseProfile, { treatEmbeddedAsTags: true })
+            if (parsed && parsed.explicitProfile) {
+              root.selectedProfile = parsed.explicitProfile
+            } else {
+              root.selectedProfile = root.baseProfile
             }
             root.checkAutocompleteAtCursor()
           }
@@ -1119,16 +1220,14 @@ Item {
                     text: {
                       if (root.autocompleteMode === "profile") {
                         var pending = TodoStore.getPendingCount(root.store, modelData)
-                        return pending > 0 ? (pending + (pending === 1 ? " task" : " tasks")) : ""
+                        if (pending > 0) return pending + (pending === 1 ? " task" : " tasks")
+                        var knownProfs = TodoStore.getSortedProfiles(root.store, false)
+                        if (knownProfs.indexOf(modelData) === -1) return "new profile"
+                        return ""
                       } else {
-                        var tagCount = 0
-                        if (root.store && Array.isArray(root.store.todos)) {
-                          for (var i = 0; i < root.store.todos.length; i++) {
-                            var t = root.store.todos[i]
-                            if (Array.isArray(t.tags) && t.tags.indexOf(modelData) !== -1) tagCount++
-                          }
-                        }
-                        return tagCount > 0 ? (tagCount + (tagCount === 1 ? " task" : " tasks")) : ""
+                        var tagCount = root.tagCounts ? (root.tagCounts[modelData] || 0) : 0
+                        if (tagCount > 0) return tagCount + (tagCount === 1 ? " task" : " tasks")
+                        return "new tag"
                       }
                     }
                     color: root.secondaryText
@@ -1464,9 +1563,17 @@ Item {
                 : -1
               isNavFocused: (root.focusSection === "profiles") && (root.profileChipIndex >= 0)
               onProfileSelected: function(name, idx) {
+                root.baseProfile = name
                 root.selectedProfile = name
                 root.profileChipIndex = idx
                 root.ensureProfileVisible(name)
+                var parsed = TodoStore.parseTaskInput(taskInput.text, name)
+                if (parsed && parsed.explicitProfile && parsed.explicitProfile !== name) {
+                  var newText = taskInput.text.replace(/#\s*[a-zA-Z0-9_\-\.\/]+/, "#" + name)
+                  if (newText !== taskInput.text) {
+                    taskInput.text = newText
+                  }
+                }
               }
               onEditIconRequested: function(name, idx) {
                 root.selectedProfile = name
@@ -1487,10 +1594,19 @@ Item {
             store: root.store
             currentProfile: root.selectedProfile
             onProfileSelected: function(prof) {
+              root.baseProfile = prof
               root.selectedProfile = prof
               root.showProfileSearchBox = false
               var profs = TodoStore.getSortedProfiles(root.store, false, prof)
               root.profileChipIndex = profs ? profs.indexOf(prof) : 0
+              root.ensureProfileVisible(prof)
+              var parsed = TodoStore.parseTaskInput(taskInput.text, prof)
+              if (parsed && parsed.explicitProfile && parsed.explicitProfile !== prof) {
+                var newText = taskInput.text.replace(/#\s*[a-zA-Z0-9_\-\.\/]+/, "#" + prof)
+                if (newText !== taskInput.text) {
+                  taskInput.text = newText
+                }
+              }
               card.forceActiveFocus()
             }
             onClosed: {
@@ -1505,7 +1621,7 @@ Item {
           id: quickAddTagsContainer
           width: parent.width
           spacing: Style.space(6)
-          visible: root.isEditMode || (root.editTags && root.editTags.length > 0) || root.showTagSearchBox
+          visible: root.isEditMode || (root.activeTags && root.activeTags.length > 0) || root.showTagSearchBox
 
           Row {
             width: parent.width
@@ -1569,7 +1685,7 @@ Item {
               Item {
                 width: Style.space(5)
                 height: Style.space(20)
-                visible: root.editTags && root.editTags.length > 0
+                visible: root.activeTags && root.activeTags.length > 0
 
                 Rectangle {
                   width: 1
@@ -1580,7 +1696,7 @@ Item {
               }
 
               Repeater {
-                model: root.editTags || []
+                model: root.activeTags || []
 
                 Ui.Chip {
                   required property string modelData
@@ -1613,7 +1729,7 @@ Item {
             width: parent.width
             mode: "tag"
             store: root.store
-            currentTags: root.editTags || []
+            currentTags: root.activeTags || []
             onTagSelected: function(tag) {
               root.addEditTag(tag)
               root.showTagSearchBox = false

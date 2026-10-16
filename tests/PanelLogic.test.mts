@@ -790,11 +790,13 @@ test("resolveBindings: defaults match DEFAULT_BINDINGS and fall back safely", ()
   assert.deepEqual(resolved.bindings.prev_task, ["k", "Up"]);
   assert.deepEqual(resolved.bindings.focus_input, ["i", "a"]);
   assert.deepEqual(resolved.bindings.open_editor, ["e"]);
+  assert.deepEqual(resolved.bindings.open_codebase, ["o"]);
   assert.deepEqual(resolved.bindings.copy_task, ["y"]);
   assert.equal(resolved.keyToAction["j"], "next_task");
   assert.equal(resolved.keyToAction["k"], "prev_task");
   assert.equal(resolved.keyToAction["i"], "focus_input");
   assert.equal(resolved.keyToAction["e"], "open_editor");
+  assert.equal(resolved.keyToAction["o"], "open_codebase");
   assert.equal(resolved.keyToAction["y"], "copy_task");
 });
 
@@ -1088,6 +1090,37 @@ test("handleTextKey: 'y' / copy_task triggers copySelectedTask on focused task",
   assert.equal(copied, false);
 });
 
+test("handleTextKey: 'o' / open_codebase triggers openCodebase on focused task with local path", () => {
+  let openedTask: any = null;
+  const mockRoot: any = {
+    focusSection: "tasks",
+    cursorIndex: 0,
+    filteredTodos: [
+      { id: 1, title: "Repo Task", location: { localPath: "~/Work/tries/omarchy-todo" } },
+      { id: 2, title: "No Repo Task" }
+    ],
+    openCodebase: (task: any) => {
+      openedTask = task;
+    }
+  };
+
+  // 'o' on task with localPath triggers openCodebase
+  handleTextKey(mockRoot, "o", TodoStore);
+  assert.equal(openedTask?.id, 1);
+
+  // 'o' on task without localPath does not trigger openCodebase
+  openedTask = null;
+  mockRoot.cursorIndex = 1;
+  handleTextKey(mockRoot, "o", TodoStore);
+  assert.equal(openedTask, null);
+
+  // 'o' when focusSection is not tasks does not trigger openCodebase
+  mockRoot.cursorIndex = 0;
+  mockRoot.focusSection = "input";
+  handleTextKey(mockRoot, "o", TodoStore);
+  assert.equal(openedTask, null);
+});
+
 test("Tag and Profile Search Chips: navigation, activation, autocompletion trigger, and deletion", () => {
   const store = TodoStore.defaultStore();
   const storeWithTags = TodoStore.addTodo(store, "Test Task with Tags #work #ui #bug", "", "work");
@@ -1198,4 +1231,336 @@ test("closeTaskSearch: resets search state and requests focus return to keycatch
   assert.equal(mockRoot.activeSearchTaskId, null);
   assert.equal(mockRoot.activeSearchMode, "");
   assert.equal(focusReturned, true, "returnFocusRequested must be called on search close");
+});
+
+test("Keybindings Invariant: exhaustive execution test for all 21 DEFAULT_BINDINGS actions (default keys & custom remap)", () => {
+  function createMock(overrides: any = {}) {
+    return {
+      focusSection: "tasks",
+      cursorIndex: 0,
+      cursorActive: true,
+      mouseMovementDetected: false,
+      expandedTaskId: -1,
+      expandedViaKeyboard: false,
+      expandedSubSection: "header",
+      showKeyHelp: false,
+      showGitModal: false,
+      filteredTodos: [
+        { id: 10, title: "Task 1", location: { localPath: "/tmp" } },
+        { id: 20, title: "Task 2" },
+        { id: 30, title: "Task 3" }
+      ],
+      store: TodoStore.defaultStore(),
+      ...overrides
+    };
+  }
+
+  // 1. help (?)
+  {
+    const r = createMock();
+    handleTextKey(r, "?", TodoStore);
+    assert.equal(r.showKeyHelp, true, "help default ?");
+    const c = resolveBindings({ help: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.showKeyHelp, false, "help remap F9");
+  }
+
+  // 2. git_undo (u)
+  {
+    const r = createMock();
+    handleTextKey(r, "u", TodoStore);
+    assert.equal(r.showGitModal, true, "git_undo default u");
+    const c = resolveBindings({ git_undo: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.showGitModal, false, "git_undo remap F9");
+  }
+
+  // 3. edit_title (r, F2)
+  {
+    let edited: any = null;
+    const r = createMock({ startEditingTask: (id: any) => { edited = id; } });
+    handleTextKey(r, "r", TodoStore);
+    assert.equal(edited, 10, "edit_title default r");
+    edited = null;
+    handleTextKey(r, "F2", TodoStore);
+    assert.equal(edited, 10, "edit_title default F2");
+    edited = null;
+    const c = resolveBindings({ edit_title: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(edited, 10, "edit_title remap F9");
+  }
+
+  // 4. copy_task (y)
+  {
+    let copied = false;
+    const r = createMock({ copySelectedTask: () => { copied = true; } });
+    handleTextKey(r, "y", TodoStore);
+    assert.equal(copied, true, "copy_task default y");
+    copied = false;
+    const c = resolveBindings({ copy_task: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(copied, true, "copy_task remap F9");
+  }
+
+  // 5. open_codebase (o)
+  {
+    let opened: any = null;
+    const r = createMock({ openCodebase: (t: any) => { opened = t; } });
+    handleTextKey(r, "o", TodoStore);
+    assert.equal(opened?.id, 10, "open_codebase default o");
+    opened = null;
+    const c = resolveBindings({ open_codebase: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(opened?.id, 10, "open_codebase remap F9");
+  }
+
+  // 6. delete_task (x)
+  {
+    let deleted: any = null;
+    const r = createMock({ startDeleteHold: (id: any) => { deleted = id; } });
+    handleTextKey(r, "x", TodoStore);
+    assert.equal(deleted, 10, "delete_task default x");
+    deleted = null;
+    const c = resolveBindings({ delete_task: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(deleted, 10, "delete_task remap F9");
+  }
+
+  // 7. toggle_done (Space)
+  {
+    let toggled: any = null;
+    const r = createMock({ toggleTodo: (id: any) => { toggled = id; } });
+    handleTextKey(r, "Space", TodoStore);
+    assert.equal(toggled, 10, "toggle_done default Space");
+    toggled = null;
+    const c = resolveBindings({ toggle_done: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(toggled, 10, "toggle_done remap F9");
+  }
+
+  // 8. toggle_expand (Return)
+  {
+    const r = createMock();
+    handleTextKey(r, "Return", TodoStore);
+    assert.equal(r.expandedTaskId, 10, "toggle_expand default Return");
+    const c = resolveBindings({ toggle_expand: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.expandedTaskId, -1, "toggle_expand remap F9");
+  }
+
+  // 9. next_task (j, Down)
+  {
+    const r = createMock({ cursorIndex: 0 });
+    handleTextKey(r, "j", TodoStore);
+    assert.equal(r.cursorIndex, 1, "next_task default j");
+    handleTextKey(r, "Down", TodoStore);
+    assert.equal(r.cursorIndex, 2, "next_task default Down");
+    const c = resolveBindings({ next_task: "F9" });
+    r.cursorIndex = 0;
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.cursorIndex, 1, "next_task remap F9");
+  }
+
+  // 10. prev_task (k, Up)
+  {
+    const r = createMock({ cursorIndex: 2 });
+    handleTextKey(r, "k", TodoStore);
+    assert.equal(r.cursorIndex, 1, "prev_task default k");
+    handleTextKey(r, "Up", TodoStore);
+    assert.equal(r.cursorIndex, 0, "prev_task default Up");
+    const c = resolveBindings({ prev_task: "F9" });
+    r.cursorIndex = 2;
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.cursorIndex, 1, "prev_task remap F9");
+  }
+
+  // 11. cycle_left (h, Left)
+  {
+    const r = createMock({ focusSection: "footer", footerButtonIndex: 2 });
+    handleTextKey(r, "h", TodoStore);
+    assert.equal(r.footerButtonIndex, 1, "cycle_left default h");
+    handleTextKey(r, "Left", TodoStore);
+    assert.equal(r.footerButtonIndex, 0, "cycle_left default Left");
+    r.footerButtonIndex = 2;
+    const c = resolveBindings({ cycle_left: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.footerButtonIndex, 1, "cycle_left remap F9");
+  }
+
+  // 12. cycle_right (l, Right)
+  {
+    const r = createMock({ focusSection: "footer", footerButtonIndex: 0 });
+    handleTextKey(r, "l", TodoStore);
+    assert.equal(r.footerButtonIndex, 1, "cycle_right default l");
+    handleTextKey(r, "Right", TodoStore);
+    assert.equal(r.footerButtonIndex, 2, "cycle_right default Right");
+    r.footerButtonIndex = 0;
+    const c = resolveBindings({ cycle_right: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.footerButtonIndex, 1, "cycle_right remap F9");
+  }
+
+  // 13. jump_top (g)
+  {
+    const r = createMock({ cursorIndex: 2 });
+    handleTextKey(r, "g", TodoStore);
+    assert.equal(r.cursorIndex, 0, "jump_top default g");
+    r.cursorIndex = 2;
+    const c = resolveBindings({ jump_top: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.cursorIndex, 0, "jump_top remap F9");
+  }
+
+  // 14. jump_bottom (G)
+  {
+    const r = createMock({ cursorIndex: 0 });
+    handleTextKey(r, "G", TodoStore);
+    assert.equal(r.cursorIndex, 2, "jump_bottom default G");
+    r.cursorIndex = 0;
+    const c = resolveBindings({ jump_bottom: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.cursorIndex, 2, "jump_bottom remap F9");
+  }
+
+  // 15. task_menu (K)
+  {
+    let menu = false;
+    const r = createMock({ openTaskMenu: () => { menu = true; } });
+    handleTextKey(r, "K", TodoStore);
+    assert.equal(menu, true, "task_menu default K");
+    menu = false;
+    const c = resolveBindings({ task_menu: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(menu, true, "task_menu remap F9");
+  }
+
+  // 16. open_editor (e)
+  {
+    let editId: any = null;
+    const r = createMock({ openEditor: (id: any) => { editId = id; } });
+    handleTextKey(r, "e", TodoStore);
+    assert.equal(editId, 10, "open_editor default e");
+    editId = null;
+    const c = resolveBindings({ open_editor: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(editId, 10, "open_editor remap F9");
+  }
+
+  // 17. clear_completed (c)
+  {
+    let cleared = false;
+    const r = createMock({ startClearHold: () => { cleared = true; } });
+    handleTextKey(r, "c", TodoStore);
+    assert.equal(cleared, true, "clear_completed default c");
+    cleared = false;
+    const c = resolveBindings({ clear_completed: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(cleared, true, "clear_completed remap F9");
+  }
+
+  // 18. open_archive (d)
+  {
+    let archive = false;
+    const r = createMock({ openArchiveModal: () => { archive = true; } });
+    handleTextKey(r, "d", TodoStore);
+    assert.equal(archive, true, "open_archive default d");
+    archive = false;
+    const c = resolveBindings({ open_archive: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(archive, true, "open_archive remap F9");
+  }
+
+  // 19. focus_input (i, a)
+  {
+    let input = false;
+    const r = createMock({ focusInputField: () => { input = true; } });
+    handleTextKey(r, "i", TodoStore);
+    assert.equal(r.focusSection, "input", "focus_input section via i");
+    assert.equal(input, true, "focus_input default i");
+    r.focusSection = "tasks";
+    input = false;
+    handleTextKey(r, "a", TodoStore);
+    assert.equal(r.focusSection, "input", "focus_input section via a");
+    assert.equal(input, true, "focus_input default a");
+    r.focusSection = "tasks";
+    input = false;
+    const c = resolveBindings({ focus_input: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(r.focusSection, "input");
+    assert.equal(input, true, "focus_input remap F9");
+  }
+
+  // 20. search (/)
+  {
+    let searched = false;
+    const r = createMock({ activateSearch: () => { searched = true; } });
+    handleTextKey(r, "/", TodoStore);
+    assert.equal(searched, true, "search default /");
+    searched = false;
+    const c = resolveBindings({ search: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(searched, true, "search remap F9");
+  }
+
+  // 21. quick_add (A)
+  {
+    let qa = false;
+    const r = createMock({ openQuickAdd: () => { qa = true; } });
+    handleTextKey(r, "A", TodoStore);
+    assert.equal(qa, true, "quick_add default A");
+    qa = false;
+    const c = resolveBindings({ quick_add: "F9" });
+    handleTextKey(r, "F9", TodoStore, c);
+    assert.equal(qa, true, "quick_add remap F9");
+  }
+});
+
+test("Keybindings Invariant: context menu shortcuts (TASK_MENU_ITEMS) execution and key swallowing", () => {
+  let activated: string | null = null;
+  let closed = false;
+  let deleted = false;
+  const mockRoot: any = {
+    showTaskMenu: true,
+    closeTaskMenu: () => { closed = true; },
+    activateTaskMenuItem: (action: string) => { activated = action; },
+    taskMenu: {
+      startHoldFor: (action: string) => {
+        if (action === "delete_task") { deleted = true; return true; }
+        return false;
+      }
+    },
+    cursorIndex: 0,
+    filteredTodos: [{ id: 1 }],
+    focusSection: "tasks"
+  };
+
+  handleTextKey(mockRoot, "y", TodoStore);
+  assert.equal(activated, "copy_llm");
+
+  handleTextKey(mockRoot, "t", TodoStore);
+  assert.equal(activated, "copy_title");
+
+  handleTextKey(mockRoot, "n", TodoStore);
+  assert.equal(activated, "copy_notes");
+
+  handleTextKey(mockRoot, "o", TodoStore);
+  assert.equal(activated, "open_codebase");
+
+  handleTextKey(mockRoot, "e", TodoStore);
+  assert.equal(activated, "edit_task");
+
+  handleTextKey(mockRoot, "r", TodoStore);
+  assert.equal(activated, "edit_title");
+
+  handleTextKey(mockRoot, "x", TodoStore);
+  assert.equal(deleted, true);
+
+  handleTextKey(mockRoot, "q", TodoStore);
+  assert.equal(closed, true);
+
+  // Stray keys swallowed when context menu is open
+  activated = null;
+  handleTextKey(mockRoot, "j", TodoStore);
+  assert.equal(activated, null);
+  assert.equal(mockRoot.cursorIndex, 0);
 });

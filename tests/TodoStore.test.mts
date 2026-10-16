@@ -65,6 +65,8 @@ const {
   searchProfiles,
   getAllTags,
   searchTags,
+  getTagCounts,
+  invalidateTagCache,
   resolveDefaultProfile,
   CURRENT_RELEASE_VERSION,
   RELEASE_HIGHLIGHTS,
@@ -429,6 +431,16 @@ test("searchIconCatalog: searches by keyword and handles custom glyphs", () => {
   assert.ok(searchIconCatalog("coffee", "all").some((i: any) => i.name === "coffee" && i.glyph === ""));
   assert.ok(searchIconCatalog("rocket", "presets").some((i: any) => i.name === "rocket" && i.glyph === "󰑣"));
   assert.ok(searchIconCatalog("rocket", "all").some((i: any) => i.name === "rocket-fa" && i.glyph === ""));
+
+  // Castle Defender, RTS & Strategy glyphs
+  assert.ok(searchIconCatalog("castle", "presets").some((i: any) => i.name === "castle" && i.glyph === "󰄚"));
+  assert.ok(searchIconCatalog("defender", "all").some((i: any) => i.name === "castle" && i.glyph === "󰄚"));
+  assert.ok(searchIconCatalog("shield", "presets").some((i: any) => i.name === "shield" && i.glyph === "󰒘"));
+  assert.ok(searchIconCatalog("sword", "presets").some((i: any) => i.name === "sword" && i.glyph === "󰓥"));
+  assert.ok(searchIconCatalog("wall", "all").some((i: any) => i.name === "wall" && i.glyph === "󰟾"));
+  assert.ok(searchIconCatalog("tower", "all").some((i: any) => i.name === "chess-rook" && i.glyph === ""));
+  assert.ok(searchIconCatalog("rts", "all").some((i: any) => i.name === "sword-cross" && i.glyph === "󰞇"));
+  assert.ok(searchIconCatalog("archer", "all").some((i: any) => i.name === "bow-arrow" && i.glyph === "󱡁"));
 });
 
 test("recentIcons: tracks MRU glyphs, caps at 18, and supports recent category", () => {
@@ -1513,6 +1525,43 @@ test("parseTaskInput: parses leading #project/repo, #tags, and preserves title",
   assert.equal(res9.repo, null);
   assert.deepEqual(res9.tags, ["ui"]);
   assert.equal(res9.title, "Fix issue #42 in C#");
+  assert.equal(res9.explicitProfile, "work");
+
+  // Verify explicitProfile contract across styles
+  assert.equal(res1.explicitProfile, "omarchy");
+  assert.equal(res2.explicitProfile, "omarchy");
+  assert.equal(res3.explicitProfile, "work");
+  assert.equal(res4.explicitProfile, "shopping");
+  assert.equal(res5.explicitProfile, null);
+  assert.equal(res6.explicitProfile, "work");
+  assert.equal(res7.explicitProfile, "work");
+  assert.equal(res8.explicitProfile, "work");
+  assert.equal(parseTaskInput("", "personal").explicitProfile, null);
+});
+
+test("parseTaskInput & getSortedProfiles: dynamic profile synchronization", () => {
+  // Input without hashtag preserves defaultProfile and reports explicitProfile: null
+  const noTag = parseTaskInput("Do building mechanic", "kensaverien");
+  assert.equal(noTag.profile, "kensaverien");
+  assert.equal(noTag.explicitProfile, null);
+
+  // Input with new hashtag reports new explicitProfile
+  const withTag = parseTaskInput("Do building mechanic #brandnew", "kensaverien");
+  assert.equal(withTag.profile, "brandnew");
+  assert.equal(withTag.explicitProfile, "brandnew");
+
+  // Input with leading hashtag reports new explicitProfile
+  const leadingTag = parseTaskInput("#superproject Do building mechanic", "kensaverien");
+  assert.equal(leadingTag.profile, "superproject");
+  assert.equal(leadingTag.explicitProfile, "superproject");
+
+  // getSortedProfiles must include the selectedProfile / currentFilter even if not in store.profiles or todos
+  const initial = defaultStore();
+  const sorted = getSortedProfiles(initial, false, "brandnew");
+  assert.ok(sorted.includes("brandnew"), "getSortedProfiles must include brandnew when passed as currentFilter");
+
+  const activeOnly = getSortedProfiles(initial, true, "brandnew");
+  assert.ok(activeOnly.includes("brandnew"), "getSortedProfiles(onlyActive=true) must include currentFilter");
 });
 
 test("parseTaskInput & addTodo: input containing only hashtags yields empty title and prevents task creation", () => {
@@ -1889,6 +1938,64 @@ test("scale performance: archive restore path (parse, filter, unarchive) over 5,
   assert.ok(res.restored, "the requested task must be restored");
   assert.equal(res.updatedArchive.archived.length, 4999);
   assert.ok(tUnarchive < 100, `unarchive over 5,000 archived tasks took ${tUnarchive}ms (expected <100ms)`);
+});
+
+test("scale performance: handles tag indexing and searching over 1,000 tasks and 5,000 archived items within strict latency budgets", () => {
+  invalidateTagCache();
+  const now = Date.now();
+  const tasks = [];
+  for (let i = 0; i < 1000; i++) {
+    tasks.push({
+      id: now + i,
+      title: `Active task #${i + 1}`,
+      tags: [`tag-${i % 25}`, "shared", `batch-${i % 5}`],
+      done: i % 10 === 0,
+      updatedAt: now - i * 1000,
+      createdAt: now - i * 2000
+    });
+  }
+
+  const archived = [];
+  for (let j = 0; j < 5000; j++) {
+    archived.push({
+      id: now + 100000 + j,
+      title: `Archived task #${j + 1}`,
+      tags: [`arch-${j % 30}`, "shared"],
+      completedAt: now - j * 500
+    });
+  }
+
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: tasks
+  };
+
+  const archive = {
+    version: 1,
+    archived: archived
+  };
+
+  // 1. Initial tag indexing across all 1,000 active + 5,000 archived tasks
+  const t0 = performance.now();
+  const allTags = getAllTags(store, archive);
+  const tInitial = performance.now() - t0;
+  assert.ok(allTags.length > 50, "must extract all distinct tags");
+  assert.ok(tInitial < 25, `initial tag indexing for 6,000 tasks took ${tInitial.toFixed(2)}ms (expected <25ms)`);
+
+  // 2. Cached retrieval on subsequent keystrokes (simulating active typing)
+  const t1 = performance.now();
+  for (let k = 0; k < 100; k++) {
+    searchTags(store, `tag-${k % 5}`, archive);
+  }
+  const tCached = performance.now() - t1;
+  assert.ok(tCached < 10, `100 successive tag searches took ${tCached.toFixed(2)}ms (expected <10ms)`);
+
+  // 3. getTagCounts provides O(1) lookup dictionary
+  const counts = getTagCounts(store, archive);
+  assert.equal(counts["shared"], 6000, "shared tag must be counted across all 1,000 active and 5,000 archived tasks");
+  assert.equal(typeof counts["tag-0"], "number");
 });
 
 test("versioning & extensibility: normalizeTask preserves unknown/future extension fields", () => {
@@ -2501,6 +2608,106 @@ test("WCAG Color Utilities: getReadableSecondary dynamically guarantees readabil
   assert.ok(clRatio >= 3.15, `Catppuccin Latte secondary contrast ratio ${clRatio} must be readable`);
   assert.ok(clFgDist >= 2.0, `Catppuccin Latte secondary must remain distinct from title (distance ${clFgDist} >= 2.0)`);
 });
+
+test("QuickAdd tagging & autocompletion contracts: parseTaskInput with treatEmbeddedAsTags, searchTags, and addTodo", () => {
+  // 1. When treatEmbeddedAsTags is enabled, embedded hashtags after title become tags and do not override defaultProfile
+  const parsed = parseTaskInput("Fix layout glitch #ui #urgent", "ardoise", { treatEmbeddedAsTags: true });
+  assert.equal(parsed.title, "Fix layout glitch");
+  assert.equal(parsed.profile, "ardoise");
+  assert.deepEqual(parsed.tags, ["ui", "urgent"]);
+  assert.equal(parsed.explicitProfile, null);
+
+  // 2. Leading hashtag still sets explicitProfile even when treatEmbeddedAsTags is enabled
+  const leading = parseTaskInput("#work Fix layout glitch #ui", "ardoise", { treatEmbeddedAsTags: true });
+  assert.equal(leading.title, "Fix layout glitch");
+  assert.equal(leading.profile, "work");
+  assert.deepEqual(leading.tags, ["ui"]);
+  assert.equal(leading.explicitProfile, "work");
+
+  // 3. TodoStore.addTodo with explicitProfile preserves tags and assigns them to created task
+  let store = defaultStore();
+  store = addTodo(store, "Fix button styling #ui #frontend", "", "ardoise", null, null);
+  const created = store.todos.find((t: any) => t.title === "Fix button styling");
+  assert.ok(created, "Created task must exist in store");
+  assert.equal(created.profile, "ardoise");
+  assert.deepEqual(created.tags, ["ui", "frontend"]);
+
+  // 4. searchTags retrieves tags matching query
+  const tagMatches = searchTags(store, "ui");
+  assert.ok(tagMatches.includes("ui"), "searchTags must return 'ui' for query 'ui'");
+  const emptyQueryTags = searchTags(store, "");
+  assert.ok(emptyQueryTags.includes("ui") && emptyQueryTags.includes("frontend"), "searchTags must return all tags for empty query");
+
+  // 5. Autocomplete simulation: check leading vs non-leading hashtag logic
+  function resolveAutocompleteMode(text: string, pos: number) {
+    const before = text.slice(0, pos);
+    const match = before.match(/(^|\s)#([a-zA-Z0-9_\/-]*)$/);
+    if (!match) return null;
+    const query = match[2];
+    const hashIndex = before.length - query.length - 1;
+    const textBeforeHash = before.slice(0, hashIndex);
+    const isLeadingHash = (hashIndex === 0 || textBeforeHash.trim().length === 0);
+    return {
+      mode: isLeadingHash ? "profile" : "tag",
+      query,
+    };
+  }
+
+  // At position 0, '#' triggers profile autocomplete
+  const ac1 = resolveAutocompleteMode("#", 1);
+  assert.ok(ac1);
+  assert.equal(ac1.mode, "profile");
+
+  // After title, '#' triggers tag autocomplete
+  const ac2 = resolveAutocompleteMode("Do task #u", 10);
+  assert.ok(ac2);
+  assert.equal(ac2.mode, "tag");
+  assert.equal(ac2.query, "u");
+
+  // Search results for 'u' in tag mode return matching tags from store
+  const tagResults = searchTags(store, ac2.query);
+  assert.ok(tagResults.includes("ui"));
+});
+
+test("getAllTags & searchTags: archives integration and MRU ordering", () => {
+  const store = {
+    version: 1,
+    activeProfile: "personal",
+    profiles: ["personal"],
+    todos: [
+      { id: 1, title: "Active 1", tags: ["frontend"], done: false, updatedAt: 1000 },
+      { id: 2, title: "Active 2", tags: ["urgent"], done: false, updatedAt: 3000 }
+    ]
+  };
+
+  const archive = {
+    version: 1,
+    archived: [
+      { id: 3, title: "Archived 1", tags: ["backend"], completedAt: 2000 },
+      { id: 4, title: "Archived 2", tags: ["security"], completedAt: 4000 }
+    ]
+  };
+
+  // MRU order: security (4000) > urgent (3000) > backend (2000) > frontend (1000)
+  const allTags = getAllTags(store, archive);
+  assert.deepStrictEqual(allTags, ["security", "urgent", "backend", "frontend"]);
+
+  // searchTags with empty query returns MRU list
+  const emptyQuery = searchTags(store, "", archive);
+  assert.deepStrictEqual(emptyQuery, ["security", "urgent", "backend", "frontend"]);
+
+  // searchTags with query filters while preserving MRU order
+  const filtered = searchTags(store, "end", archive);
+  assert.deepStrictEqual(filtered, ["backend", "frontend"]);
+
+  // Option 1 behavior: when a typed tag is new, it can be appended/suggested as a new candidate
+  const query = "newtag";
+  const existingMatches = searchTags(store, query, archive);
+  assert.deepStrictEqual(existingMatches, []);
+  const option1Matches = existingMatches.includes(query) ? existingMatches : [query];
+  assert.deepStrictEqual(option1Matches, ["newtag"]);
+});
+
 
 
 

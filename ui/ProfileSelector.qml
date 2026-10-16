@@ -33,6 +33,11 @@ Item {
 
   function ensureVisible(idx) {
     if (root.wrap || !profileRepeater || idx < 0 || idx >= profileRepeater.count) return
+    if (profileFlickable.width <= 0 || profileFlickable.contentWidth <= 0) return
+    if (profileFlickable.contentWidth <= profileFlickable.width) {
+      profileFlickable.contentX = 0
+      return
+    }
     var item = profileRepeater.itemAt(idx)
     if (!item) return
     var padLeft = leftFadeEdge.width + Style.space(4)
@@ -46,12 +51,12 @@ Item {
       profileFlickable.contentX = Math.max(0, itemLeft - padLeft)
     } else if (itemRight + padRight > profileFlickable.contentX + profileFlickable.width) {
       var maxContentX = Math.max(0, profileFlickable.contentWidth - profileFlickable.width)
-      profileFlickable.contentX = Math.min(maxContentX, itemRight + padRight - profileFlickable.width)
+      profileFlickable.contentX = Math.min(maxContentX, Math.max(0, itemRight + padRight - profileFlickable.width))
     }
   }
 
   onFocusedIndexChanged: {
-    if (!root.wrap && focusedIndex >= 0) {
+    if (!root.wrap && isNavFocused && focusedIndex >= 0) {
       ensureVisible(focusedIndex)
     }
   }
@@ -73,7 +78,9 @@ Item {
 
   Component.onCompleted: {
     if (!root.wrap) {
-      var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+      var targetIdx = (root.isNavFocused && root.focusedIndex >= 0)
+        ? root.focusedIndex
+        : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
       if (targetIdx >= 0) {
         Qt.callLater(function() { ensureVisible(targetIdx) })
       }
@@ -182,8 +189,20 @@ Item {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     onWidthChanged: {
-      if (!root.wrap) {
-        var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+      if (!root.wrap && width > 0) {
+        var targetIdx = (root.isNavFocused && root.focusedIndex >= 0)
+          ? root.focusedIndex
+          : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+        if (targetIdx >= 0) {
+          Qt.callLater(function() { root.ensureVisible(targetIdx) })
+        }
+      }
+    }
+    onContentWidthChanged: {
+      if (!root.wrap && contentWidth > width) {
+        var targetIdx = (root.isNavFocused && root.focusedIndex >= 0)
+          ? root.focusedIndex
+          : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
         if (targetIdx >= 0) {
           Qt.callLater(function() { root.ensureVisible(targetIdx) })
         }
@@ -218,7 +237,9 @@ Item {
         model: !root.wrap ? root.profiles : []
         onCountChanged: {
           if (!root.wrap) {
-            var targetIdx = root.focusedIndex >= 0 ? root.focusedIndex : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
+            var targetIdx = (root.isNavFocused && root.focusedIndex >= 0)
+              ? root.focusedIndex
+              : (root.profiles ? root.profiles.indexOf(root.selectedProfile) : -1)
             if (targetIdx >= 0) {
               Qt.callLater(function() { root.ensureVisible(targetIdx) })
             }

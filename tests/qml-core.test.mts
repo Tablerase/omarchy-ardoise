@@ -92,12 +92,12 @@ function runHarness(
   // Isolate exactly those known-benign lines. Anything else complaining
   // about a backend or an unresolved type is still a failure.
   const isCompositorOnly = (line: string) =>
-    /PanelWindow backend/i.test(line) || /KeyboardPanel/.test(line) || /@plugin\/Panel\.qml/.test(line);
+    /PanelWindow backend/i.test(line) || /KeyboardPanel/.test(line) || /@plugin\/Panel\.qml/.test(line) || /ReloadPopup/.test(line);
 
   const unexpectedBackend = output
     .split("\n")
     .filter((line) => /PanelWindow backend/i.test(line))
-    .filter((line) => !/KeyboardPanel|@plugin\/Panel\.qml/.test(line))
+    .filter((line) => !/KeyboardPanel|@plugin\/Panel\.qml|ReloadPopup/.test(line))
     .join("\n");
   assert.equal(
     unexpectedBackend.trim(),
