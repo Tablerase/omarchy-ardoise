@@ -25,6 +25,7 @@ ShellRoot {
         version: 1,
         activeProfile: "work",
         profiles: ["personal", "work"],
+        profileIcons: { "personal": "󰄛", "work": "󰅩" },
         todos: [
             {
                 id: 1,
@@ -146,7 +147,7 @@ ShellRoot {
                 }
 
                 Text {
-                    text: "Instant capture, profile tags, and background reminders.\nWipe the slate clean when you are done."
+                    text: "Instant capture, profiles & tags, and background reminders.\nWipe the slate clean when you are done."
                     color: artwork.brandSecondaryText
                     font.family: Style.font.family
                     font.pixelSize: Style.space(20)
@@ -164,7 +165,7 @@ ShellRoot {
                             { icon: "󰅙", text: "Hold-to-confirm laser progress bar for safe deletions" },
                             { icon: "󰊢", text: "Git-backed snapshots: automatic undo, rollback, & sync" },
                             { icon: "󰉋", text: "Context-aware: auto-detects active workspace (Zed, VS Code, Nvim)" },
-                            { icon: "󰆍", text: "31 shell commands over omarchy-shell tablerase.ardoise" }
+                            { icon: "󰆍", text: "38 shell commands over omarchy-shell tablerase.ardoise" }
                         ]
                         Row {
                             required property var modelData
@@ -425,6 +426,7 @@ ShellRoot {
 
                     PluginUi.ProfileSelector {
                         width: parent.width - Style.space(60)
+                        store: root.sampleStore
                         profiles: ["personal", "work"]
                         selectedProfile: "work"
                         wrap: false
