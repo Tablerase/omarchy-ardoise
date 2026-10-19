@@ -1072,14 +1072,32 @@ function updateTodo(store, id, fields) {
         t.profile = p
         if (s.profiles.indexOf(p) === -1) s.profiles.push(p)
       }
-      if (fields.repo !== undefined) t.repo = fields.repo ? String(fields.repo).trim() : null
       if (fields.tags !== undefined) {
         t.tags = Array.isArray(fields.tags)
           ? fields.tags.map(function (tg) { return cleanProfileName(tg) }).filter(Boolean)
           : []
       }
       if (fields.location !== undefined) {
+        var oldLocRepo = (t.location && t.location.repo) ? t.location.repo : null
         t.location = normalizeLocation(fields.location)
+        if (fields.repo === undefined) {
+          if (!t.repo || t.repo === oldLocRepo) {
+            t.repo = (t.location && t.location.repo) ? t.location.repo : null
+          } else if (t.location && t.repo && !t.location.repo) {
+            t.location.repo = t.repo
+          }
+        }
+      }
+      if (fields.repo !== undefined) {
+        var oldRepo = t.repo
+        t.repo = fields.repo ? String(fields.repo).trim() : null
+        if (t.location) {
+          if (t.repo && !t.location.repo) {
+            t.location.repo = t.repo
+          } else if (!t.repo && t.location.repo === oldRepo) {
+            t.location.repo = null
+          }
+        }
       }
       if (fields.done !== undefined) t.done = Boolean(fields.done)
       if (fields.reminder !== undefined) {

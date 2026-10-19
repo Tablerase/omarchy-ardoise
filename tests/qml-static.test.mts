@@ -336,8 +336,14 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
   );
   assert.ok(
     panelContent.includes('property string expandedSubSection: "header"') &&
-      panelContent.includes("root.expandedSubSection === "),
-    "PanelContent must support navigable sub-sections in expanded tasks (notes, reminders, profiles, codebase)"
+      panelContent.includes("root.expandedSubSection === ") &&
+      panelContent.includes("checkExpandedSubSectionValidity"),
+    "PanelContent must support navigable sub-sections in expanded tasks and validate sub-section validity when task context changes"
+  );
+  assert.ok(
+    quickAddContent.includes("else if (targetTask.repo)") &&
+      quickAddContent.includes("repo: finalRepo"),
+    "QuickAdd must support fallback repo context detection and pass finalRepo to updateTodo on edit submit"
   );
   assert.ok(
     panelQmlContent.includes("panelContent.handleEscape && panelContent.handleEscape()"),
