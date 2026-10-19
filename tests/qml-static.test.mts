@@ -526,8 +526,10 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       reminderPickerContent.includes("jumpToToday") &&
       reminderPickerContent.includes("jumpToMonthBound") &&
       reminderPickerContent.includes('"calendar"') &&
-      reminderPickerContent.includes("dateConfirmed"),
-    "ReminderPicker must support full keyboard Vim navigation for the calendar grid (hjkl, [/], t, g/G) and generic dateConfirmed signals"
+      reminderPickerContent.includes("dateConfirmed") &&
+      reminderPickerContent.includes("TodoStore.getMonthName") &&
+      reminderPickerContent.includes("defaultTime"),
+    "ReminderPicker must support full keyboard Vim navigation for calendar grid, month name header formatting, and defaultTime preservation"
   );
   const datePickerPath = path.join(repoDir, "ui", "DatePicker.qml");
   assert.ok(fs.existsSync(datePickerPath), "ui/DatePicker.qml must exist for reusable due-date / milestone picking");

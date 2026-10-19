@@ -45,6 +45,7 @@ const {
   parseCustomReminder,
   parseCustomDate,
   getLocaleDateOrder,
+  getMonthName,
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
@@ -773,6 +774,39 @@ test("parseCustomReminder & parseCustomDate: direct dates, European/US localizat
   assert.equal(getLocaleDateOrder("en-US"), "month-first");
   assert.equal(getLocaleDateOrder("fr-FR"), "day-first");
   assert.equal(getLocaleDateOrder("de-DE"), "day-first");
+
+  // 11. getMonthName helper returns short or full month names
+  assert.equal(getMonthName(10, true), "November");
+  assert.equal(getMonthName(10, false), "Nov");
+  assert.equal(getMonthName(5, true), "June");
+  assert.equal(getMonthName(5, false), "Jun");
+
+  // 12. formatCustomPreview uses month name (e.g. "Nov 6") so day/month are never ambiguous
+  const prevStr = formatCustomPreview(new Date(2026, 10, 6, 18, 0, 0).toISOString(), base);
+  assert.match(prevStr, /Nov\s+6/);
+  assert.match(prevStr, /\(in 18d\)/);
+
+  // 13. Ambiguous date without explicit locale resolves to future date when one is past
+  // e.g. on Oct 19, 2026, "06/11/26 18h" could be Jun 11 (-129d) or Nov 6 (+18d).
+  // Reminders favor the upcoming future date (Nov 6) and European "18h" notation.
+  const rAmbiguousFuture = parseCustomReminder("06/11/26 18h", base);
+  assert.ok(rAmbiguousFuture);
+  const dAmb = new Date(rAmbiguousFuture.iso);
+  assert.equal(dAmb.getMonth(), 10); // November
+  assert.equal(dAmb.getDate(), 6);
+  assert.equal(dAmb.getHours(), 18);
+  assert.match(rAmbiguousFuture.label, /Nov\s+6/);
+  assert.match(rAmbiguousFuture.label, /\(in 18d\)/);
+
+  // 14. defaultTime option preserves existing target hours/minutes when omitted from input
+  const rWithDefTime = parseCustomReminder("25/11/2026", base, {
+    locale: "fr-FR",
+    defaultTime: { hours: 16, minutes: 45 }
+  });
+  assert.ok(rWithDefTime);
+  const dDef = new Date(rWithDefTime.iso);
+  assert.equal(dDef.getHours(), 16);
+  assert.equal(dDef.getMinutes(), 45);
 });
 
 test("normalize: migrates legacy array format and invalid inputs to Schema v1", () => {
