@@ -26,6 +26,29 @@ Item {
   property color barForeground: root.bar ? root.bar.foreground : Color.foreground
   property color warningColor: Color.urgent
 
+  // General-purpose and due-date compatibility properties
+  property string title: "Custom Reminder"
+  property string icon: "󰥔"
+  property string confirmLabel: "Set Reminder"
+  property string clearLabel: "Clear"
+  property bool allowClear: true
+  property bool allowPastDates: false
+  property bool showTime: true
+  property bool showSteppers: true
+  property string mode: "reminder" // "reminder" | "dueDate" | "generic"
+  property string locale: "" // Optional locale string (e.g. "fr-FR", "en-US"), defaults to system
+  property string inputPlaceholder: {
+    if (root.mode === "dueDate") {
+      return "e.g. 10/03/2026, tomorrow, in 3 days, friday"
+    }
+    return "e.g. 10/03/2026, 45m, 2h, 17:30, tomorrow 9am"
+  }
+
+  // Signals
+  signal confirmed(string isoString)
+  signal cleared()
+  signal dateConfirmed(string isoString)
+  signal dateCleared()
   signal reminderConfirmed(string isoString)
   signal reminderCleared()
   signal closeRequested()
@@ -39,18 +62,29 @@ Item {
   property int calYear: 2026
   property int calMonth: 9 // 0-indexed
 
-  // Active focus section inside picker: "input" | "steppers" | "actions"
+  // Active focus section inside picker: "input" | "steppers" | "time" | "calendar" | "actions"
   property string pickerSection: "input"
   property int stepperIndex: 0
   property int actionIndex: 2 // 0: clear, 1: cancel, 2: set
+  property string timeSubFocus: "hours" // "hours" | "minutes"
 
-  readonly property var sections: ["input", "steppers", "actions"]
+  readonly property var activeSections: {
+    var s = ["input"]
+    if (root.showSteppers) s.push("steppers")
+    if (root.showTime) s.push("time")
+    s.push("calendar")
+    s.push("actions")
+    return s
+  }
+  // For backwards compatibility and tests:
+  readonly property var sections: activeSections
 
   function advanceSection(delta) {
-    var curIdx = sections.indexOf(pickerSection)
+    var secs = activeSections
+    var curIdx = secs.indexOf(pickerSection)
     if (curIdx === -1) curIdx = 0
-    var nextIdx = (curIdx + delta + sections.length) % sections.length
-    pickerSection = sections[nextIdx]
+    var nextIdx = (curIdx + delta + secs.length) % secs.length
+    pickerSection = secs[nextIdx]
     if (pickerSection === "input") {
       card.forceActiveFocus()
     }
@@ -59,8 +93,12 @@ Item {
   function cycleSubSelection(delta) {
     if (pickerSection === "steppers") {
       stepperIndex = Math.max(0, Math.min(4, stepperIndex + delta))
+    } else if (pickerSection === "time") {
+      timeSubFocus = (timeSubFocus === "hours" ? "minutes" : "hours")
+    } else if (pickerSection === "calendar") {
+      root.adjustCalendarDay(delta)
     } else if (pickerSection === "actions") {
-      var maxActions = root.initialIso ? 3 : 2
+      var maxActions = (root.initialIso && root.allowClear) ? 3 : 2
       actionIndex = (actionIndex + delta + maxActions) % maxActions
     }
   }
@@ -81,8 +119,12 @@ Item {
         if (s.deltaDays) root.adjustDays(s.deltaDays)
         else if (s.deltaMins) root.adjustMinutes(s.deltaMins)
       }
+    } else if (pickerSection === "time") {
+      root.confirm()
+    } else if (pickerSection === "calendar") {
+      root.confirm()
     } else if (pickerSection === "actions") {
-      if (root.initialIso) {
+      if (root.initialIso && root.allowClear) {
         if (actionIndex === 0) root.clearReminder()
         else if (actionIndex === 1) root.close()
         else root.confirm()
@@ -107,7 +149,8 @@ Item {
     parsedResult = null
     pickerSection = "input"
     stepperIndex = 0
-    actionIndex = (iso ? 2 : 1)
+    timeSubFocus = "hours"
+    actionIndex = (iso && root.allowClear ? 2 : 1)
     isOpen = true
     Qt.callLater(function() {
       if (manualInput && manualInput.forceActiveFocus) {
@@ -139,6 +182,53 @@ Item {
     parsedResult = null
   }
 
+  function adjustCalendarDay(deltaDays) {
+    var cur = new Date(targetDate.getTime())
+    var next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + deltaDays, cur.getHours(), cur.getMinutes(), 0, 0)
+    var todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    if (!root.allowPastDates && next.getTime() < todayStart.getTime()) {
+      next = new Date()
+      next.setHours(cur.getHours(), cur.getMinutes(), 0, 0)
+    }
+    targetDate = next
+    calYear = next.getFullYear()
+    calMonth = next.getMonth()
+    manualText = ""
+    parsedResult = null
+  }
+
+  function jumpToToday() {
+    var now = new Date()
+    var cur = new Date(targetDate.getTime())
+    var next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), cur.getHours(), cur.getMinutes(), 0, 0)
+    targetDate = next
+    calYear = now.getFullYear()
+    calMonth = now.getMonth()
+    manualText = ""
+    parsedResult = null
+  }
+
+  function jumpToMonthBound(first) {
+    var cur = new Date(targetDate.getTime())
+    var day = 1
+    if (!first) {
+      day = new Date(calYear, calMonth + 1, 0).getDate()
+    }
+    var candidate = new Date(calYear, calMonth, day, cur.getHours(), cur.getMinutes(), 0, 0)
+    var todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    if (!root.allowPastDates && candidate.getTime() < todayStart.getTime()) {
+      candidate = new Date()
+      candidate.setHours(cur.getHours(), cur.getMinutes(), 0, 0)
+    }
+    targetDate = candidate
+    calYear = candidate.getFullYear()
+    calMonth = candidate.getMonth()
+    manualText = ""
+    parsedResult = null
+  }
+
   function setTime(hours, minutes) {
     var d = new Date(targetDate.getTime())
     d.setHours(hours, minutes, 0, 0)
@@ -158,21 +248,48 @@ Item {
   }
 
   function prevMonth() {
-    if (calMonth === 0) {
-      calMonth = 11
-      calYear--
-    } else {
-      calMonth--
+    var curD = new Date(targetDate.getTime())
+    var newM = calMonth - 1
+    var newY = calYear
+    if (newM < 0) {
+      newM = 11
+      newY--
     }
+    calMonth = newM
+    calYear = newY
+    var maxDays = new Date(newY, newM + 1, 0).getDate()
+    var day = Math.min(curD.getDate(), maxDays)
+    var candidate = new Date(newY, newM, day, curD.getHours(), curD.getMinutes(), 0, 0)
+    var todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    if (!root.allowPastDates && candidate.getTime() < todayStart.getTime()) {
+      candidate = new Date()
+      candidate.setHours(curD.getHours(), curD.getMinutes(), 0, 0)
+      calMonth = candidate.getMonth()
+      calYear = candidate.getFullYear()
+    } else {
+      targetDate = candidate
+    }
+    manualText = ""
+    parsedResult = null
   }
 
   function nextMonth() {
-    if (calMonth === 11) {
-      calMonth = 0
-      calYear++
-    } else {
-      calMonth++
+    var curD = new Date(targetDate.getTime())
+    var newM = calMonth + 1
+    var newY = calYear
+    if (newM > 11) {
+      newM = 0
+      newY++
     }
+    calMonth = newM
+    calYear = newY
+    var maxDays = new Date(newY, newM + 1, 0).getDate()
+    var day = Math.min(curD.getDate(), maxDays)
+    var candidate = new Date(newY, newM, day, curD.getHours(), curD.getMinutes(), 0, 0)
+    targetDate = candidate
+    manualText = ""
+    parsedResult = null
   }
 
   function getResolvedIso() {
@@ -184,11 +301,15 @@ Item {
 
   function confirm() {
     var iso = getResolvedIso()
+    root.confirmed(iso)
+    root.dateConfirmed(iso)
     root.reminderConfirmed(iso)
     root.isOpen = false
   }
 
   function clearReminder() {
+    root.cleared()
+    root.dateCleared()
     root.reminderCleared()
     root.isOpen = false
   }
@@ -199,7 +320,12 @@ Item {
       return
     }
     if (typeof TodoStore !== "undefined" && typeof TodoStore.parseCustomReminder === "function") {
-      var res = TodoStore.parseCustomReminder(manualText, new Date())
+      var parseOpts = {
+        locale: root.locale || undefined,
+        allowPast: root.allowPastDates,
+        preserveTime: true
+      }
+      var res = TodoStore.parseCustomReminder(manualText, root.targetDate, parseOpts)
       parsedResult = res
       if (res && res.iso) {
         var d = new Date(res.iso)
@@ -247,6 +373,7 @@ Item {
         return
       }
 
+      // Quick jumps in container mode
       if (event.key === Qt.Key_I || event.key === Qt.Key_A || (event.text === "i" || event.text === "a")) {
         event.accepted = true
         root.pickerSection = "input"
@@ -254,6 +381,184 @@ Item {
         return
       }
 
+      if (event.text === "s" || event.text === "S") {
+        if (root.showSteppers) {
+          event.accepted = true
+          root.pickerSection = "steppers"
+          return
+        }
+      }
+
+      if (event.text === "c" || event.text === "C") {
+        event.accepted = true
+        root.pickerSection = "calendar"
+        return
+      }
+
+      // 1. Calendar section vim & keyboard navigation
+      if (root.pickerSection === "calendar") {
+        if (event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.adjustCalendarDay(-1)
+          return
+        }
+        if (event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          root.adjustCalendarDay(1)
+          return
+        }
+        if (event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          root.adjustCalendarDay(-7)
+          return
+        }
+        if (event.key === Qt.Key_Down || event.text === "j") {
+          event.accepted = true
+          root.adjustCalendarDay(7)
+          return
+        }
+        if (event.text === "[" || event.key === Qt.Key_PageUp || event.text === "<" || event.text === "H") {
+          event.accepted = true
+          root.prevMonth()
+          return
+        }
+        if (event.text === "]" || event.key === Qt.Key_PageDown || event.text === ">" || event.text === "L") {
+          event.accepted = true
+          root.nextMonth()
+          return
+        }
+        if (event.text === "t" || event.text === "T") {
+          event.accepted = true
+          root.jumpToToday()
+          return
+        }
+        if (event.text === "g") {
+          event.accepted = true
+          root.jumpToMonthBound(true)
+          return
+        }
+        if (event.text === "G") {
+          event.accepted = true
+          root.jumpToMonthBound(false)
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          root.confirm()
+          return
+        }
+        if (event.key === Qt.Key_Tab) {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+        if (event.key === Qt.Key_Backtab) {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+      }
+
+      // 2. Time spinner keyboard navigation
+      if (root.pickerSection === "time") {
+        if (event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.timeSubFocus = "hours"
+          return
+        }
+        if (event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          root.timeSubFocus = "minutes"
+          return
+        }
+        if (event.key === Qt.Key_Up || event.text === "k" || event.text === "+") {
+          event.accepted = true
+          if (root.timeSubFocus === "hours") root.adjustMinutes(60)
+          else root.adjustMinutes(5)
+          return
+        }
+        if (event.key === Qt.Key_Down || event.text === "j" || event.text === "-") {
+          event.accepted = true
+          if (root.timeSubFocus === "hours") root.adjustMinutes(-60)
+          else root.adjustMinutes(-5)
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          root.confirm()
+          return
+        }
+        if (event.key === Qt.Key_Tab) {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+        if (event.key === Qt.Key_Backtab) {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+      }
+
+      // 3. Quick steppers navigation
+      if (root.pickerSection === "steppers") {
+        if (event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.cycleSubSelection(-1)
+          return
+        }
+        if (event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          root.cycleSubSelection(1)
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          root.activateCurrentSection()
+          return
+        }
+        if (event.key === Qt.Key_Tab || event.key === Qt.Key_Down || event.text === "j") {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+        if (event.key === Qt.Key_Backtab || event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+      }
+
+      // 4. Actions navigation
+      if (root.pickerSection === "actions") {
+        if (event.key === Qt.Key_Left || event.text === "h") {
+          event.accepted = true
+          root.cycleSubSelection(-1)
+          return
+        }
+        if (event.key === Qt.Key_Right || event.text === "l") {
+          event.accepted = true
+          root.cycleSubSelection(1)
+          return
+        }
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          event.accepted = true
+          root.activateCurrentSection()
+          return
+        }
+        if (event.key === Qt.Key_Tab) {
+          event.accepted = true
+          root.advanceSection(1)
+          return
+        }
+        if (event.key === Qt.Key_Backtab || event.key === Qt.Key_Up || event.text === "k") {
+          event.accepted = true
+          root.advanceSection(-1)
+          return
+        }
+      }
+
+      // 5. Default container navigation (e.g. input in normal mode)
       if (event.key === Qt.Key_Tab || event.key === Qt.Key_Down || event.text === "j") {
         event.accepted = true
         root.advanceSection(1)
@@ -285,7 +590,7 @@ Item {
       }
 
       // Typing printable character when in normal mode on input section refocuses input
-      if (event.text && event.text.length === 1 && !event.modifiers) {
+      if (event.text && event.text.length === 1 && !event.modifiers && root.pickerSection === "input") {
         event.accepted = true
         root.pickerSection = "input"
         manualInput.forceActiveFocus()
@@ -332,7 +637,7 @@ Item {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: "󰥔"
+              text: root.icon
               color: root.accentColor
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.subtitle
@@ -340,7 +645,7 @@ Item {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: "Custom Reminder"
+              text: root.title
               color: root.barForeground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.subtitle
@@ -383,7 +688,7 @@ Item {
           spacing: Style.space(4)
 
           Text {
-            text: "Type relative time or date:"
+            text: (root.mode === "dueDate" ? "Type date or time:" : "Type relative time or date:")
             color: Color.muted
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
@@ -407,7 +712,7 @@ Item {
               color: root.barForeground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
-              placeholderText: "e.g. 45m, 2h, 17:30, tomorrow 9am"
+              placeholderText: root.inputPlaceholder
               placeholderTextColor: Color.muted
               background: Item {}
               selectByMouse: true
@@ -454,7 +759,7 @@ Item {
                 }
                 if (event.key === Qt.Key_Down || event.key === Qt.Key_Tab) {
                   event.accepted = true
-                  root.pickerSection = "steppers"
+                  root.advanceSection(1)
                   manualInput.focus = false
                   card.forceActiveFocus()
                   return
@@ -493,7 +798,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
                   if (root.manualText.length > 0 && !root.parsedResult) {
-                    return "Unrecognized format. Try '2h', '17:30', or 'tomorrow 9am'"
+                    return "Unrecognized format. Try '10/03/2026', '2h', '17:30', or 'tomorrow 9am'"
                   }
                   if (root.parsedResult && root.parsedResult.label) {
                     return root.parsedResult.label
@@ -515,6 +820,7 @@ Item {
 
         // 2. Quick Stepper Buttons ([-15m], [+15m], [-1h], [+1h], [+1d])
         Column {
+          visible: root.showSteppers
           width: parent.width
           spacing: Style.space(4)
 
@@ -578,6 +884,7 @@ Item {
 
         // 3. Time Spinner (HH : MM)
         Row {
+          visible: root.showTime
           anchors.horizontalCenter: parent.horizontalCenter
           spacing: Style.space(8)
 
@@ -610,7 +917,8 @@ Item {
             Rectangle {
               width: Style.space(28); height: Style.space(20); radius: 3
               color: Color.menu.selectedBackground
-              border.color: Color.menu.border; border.width: 1
+              border.color: (root.pickerSection === "time" && root.timeSubFocus === "hours") ? root.accentColor : Color.menu.border
+              border.width: (root.pickerSection === "time" && root.timeSubFocus === "hours") ? 2 : 1
               Text {
                 anchors.centerIn: parent
                 text: (root.targetDate.getHours() < 10 ? "0" : "") + root.targetDate.getHours()
@@ -663,7 +971,8 @@ Item {
             Rectangle {
               width: Style.space(28); height: Style.space(20); radius: 3
               color: Color.menu.selectedBackground
-              border.color: Color.menu.border; border.width: 1
+              border.color: (root.pickerSection === "time" && root.timeSubFocus === "minutes") ? root.accentColor : Color.menu.border
+              border.width: (root.pickerSection === "time" && root.timeSubFocus === "minutes") ? 2 : 1
               Text {
                 anchors.centerIn: parent
                 text: (root.targetDate.getMinutes() < 10 ? "0" : "") + root.targetDate.getMinutes()
@@ -720,6 +1029,29 @@ Item {
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
               font.bold: true
+            }
+
+            Rectangle {
+              visible: root.pickerSection === "calendar"
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(26)
+              anchors.verticalCenter: parent.verticalCenter
+              implicitHeight: Style.space(16)
+              implicitWidth: calKeyHintText.implicitWidth + Style.space(8)
+              radius: Style.space(4)
+              color: Util.alpha(root.accentColor, 0.15)
+              border.color: Util.alpha(root.accentColor, 0.4)
+              border.width: 1
+
+              Text {
+                id: calKeyHintText
+                anchors.centerIn: parent
+                text: "hjkl · [/] · t"
+                color: root.accentColor
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.space(8.5)
+                font.bold: true
+              }
             }
 
             Rectangle {
@@ -782,7 +1114,7 @@ Item {
                     isCurrentMonth: true,
                     isToday: isToday,
                     isSelected: isSelected,
-                    isPast: isPast,
+                    isPast: !root.allowPastDates && isPast,
                     year: year,
                     month: month
                   })
@@ -806,10 +1138,16 @@ Item {
                 color: dayCell.modelData.isSelected
                   ? root.accentColor
                   : (dayHover.hovered && !dayCell.modelData.isPast ? Color.menu.selectedBackground : "transparent")
-                border.color: dayCell.modelData.isToday && !dayCell.modelData.isSelected
-                  ? root.accentColor
-                  : "transparent"
-                border.width: 1
+                border.color: {
+                  if (dayCell.modelData.isSelected) {
+                    return (root.pickerSection === "calendar") ? root.barForeground : "white"
+                  }
+                  if (dayCell.modelData.isToday) {
+                    return root.accentColor
+                  }
+                  return "transparent"
+                }
+                border.width: (dayCell.modelData.isSelected && root.pickerSection === "calendar") ? 2 : 1
 
                 Text {
                   anchors.centerIn: parent
@@ -843,11 +1181,11 @@ Item {
           width: parent.width
           implicitHeight: Style.space(26)
 
-          // Clear button (visible when reminder is active)
+          // Clear button (visible when reminder is active and clear is allowed)
           Rectangle {
             id: clearActionBtn
-            visible: Boolean(root.initialIso)
-            readonly property bool isSelected: root.pickerSection === "actions" && Boolean(root.initialIso) && root.actionIndex === 0
+            visible: Boolean(root.initialIso) && root.allowClear
+            readonly property bool isSelected: root.pickerSection === "actions" && Boolean(root.initialIso) && root.allowClear && root.actionIndex === 0
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             implicitWidth: clearActionText.implicitWidth + Style.space(12)
@@ -860,7 +1198,7 @@ Item {
             Text {
               id: clearActionText
               anchors.centerIn: parent
-              text: "󰅖 Clear"
+              text: "󰅖 " + root.clearLabel
               color: (clearHover.hovered || clearActionBtn.isSelected) ? root.warningColor : Color.muted
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -882,7 +1220,7 @@ Item {
 
             Rectangle {
               id: cancelBtn
-              readonly property bool isSelected: root.pickerSection === "actions" && (root.initialIso ? root.actionIndex === 1 : root.actionIndex === 0)
+              readonly property bool isSelected: root.pickerSection === "actions" && (root.initialIso && root.allowClear ? root.actionIndex === 1 : root.actionIndex === 0)
               implicitWidth: cancelText.implicitWidth + Style.space(14)
               implicitHeight: Style.space(22)
               radius: height / 2
@@ -909,7 +1247,7 @@ Item {
 
             Rectangle {
               id: confirmBtn
-              readonly property bool isSelected: root.pickerSection === "actions" && (root.initialIso ? root.actionIndex === 2 : root.actionIndex === 1)
+              readonly property bool isSelected: root.pickerSection === "actions" && (root.initialIso && root.allowClear ? root.actionIndex === 2 : root.actionIndex === 1)
               implicitWidth: confirmText.implicitWidth + Style.space(16)
               implicitHeight: Style.space(22)
               radius: height / 2
@@ -934,7 +1272,7 @@ Item {
 
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
-                  text: "Set Reminder"
+                  text: root.confirmLabel
                   color: "white"
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.caption
