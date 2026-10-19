@@ -55,6 +55,8 @@ BarWidget {
   property var inspectedSnapshotTasks: []
   property var inspectedSnapshotDiff: null
   property string lastArchiveText: ""
+  property string gitRecoverFeedback: ""
+  signal gitRecoverCompleted(int count, string message, bool success)
 
   // Durable archive-operation state. Restore/purge read both files fresh from
   // disk (never the possibly-stale lastArchiveText), write the active store
@@ -524,22 +526,74 @@ BarWidget {
 
   Process {
     id: recoverProc
-    command: ["git", "-C", root.dataDirPath, "show", root.recoveringHash + ":todos.json"]
+    command: [
+      "bash", "-c",
+      'cd "$1" && git show "$2":todos.json 2>/dev/null; echo "---ARDOISE_SPLIT---"; git show "$2"^:todos.json 2>/dev/null',
+      "_",
+      root.dataDirPath,
+      root.recoveringHash
+    ]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         try {
-          var snapshotStore = JSON.parse(text)
-          var missing = TodoStore.filterMissingTasks(root.store, snapshotStore)
+          var parts = text.split("---ARDOISE_SPLIT---")
+          var commitStore = null
+          var parentStore = null
+          try { commitStore = JSON.parse(parts[0]) } catch (_) {}
+          try { parentStore = JSON.parse(parts[1]) } catch (_) {}
+
+          var candidateTasks = []
+          var seenIds = Object.create(null)
+
+          if (commitStore && Array.isArray(commitStore.todos)) {
+            for (var i = 0; i < commitStore.todos.length; i++) {
+              var t = commitStore.todos[i]
+              if (t && t.id !== undefined && !seenIds[String(t.id)]) {
+                seenIds[String(t.id)] = true
+                candidateTasks.push(t)
+              }
+            }
+          }
+
+          if (parentStore && Array.isArray(parentStore.todos)) {
+            for (var j = 0; j < parentStore.todos.length; j++) {
+              var pt = parentStore.todos[j]
+              if (pt && pt.id !== undefined && !seenIds[String(pt.id)]) {
+                seenIds[String(pt.id)] = true
+                candidateTasks.push(pt)
+              }
+            }
+          }
+
+          var missing = TodoStore.filterMissingTasks(root.store, { todos: candidateTasks })
           if (missing.length > 0) {
             var updated = TodoStore.cloneStore(root.store)
-            for (var i = 0; i < missing.length; i++) {
-              updated.todos.push(missing[i])
+            for (var k = 0; k < missing.length; k++) {
+              var rec = TodoStore.cloneTask(missing[k])
+              if (rec) {
+                rec.done = false
+                updated.todos.push(rec)
+              }
             }
             updated.todos.sort(TodoStore.compareTasks)
-            root.saveStore(updated, "Recovered " + missing.length + " missing tasks from " + root.recoveringHash.substring(0, 7))
+            var count = missing.length
+            var msg = "Recovered " + count + " deleted task" + (count === 1 ? "" : "s")
+            root.saveStore(updated, msg + " from " + root.recoveringHash.substring(0, 7))
+            root.gitRecoverFeedback = msg
+            root.gitRecoverCompleted(count, msg, true)
+            root.refreshGitHistory()
+            root.reinspectCurrentSnapshot()
+          } else {
+            var noTasksMsg = "No deleted tasks to recover"
+            root.gitRecoverFeedback = noTasksMsg
+            root.gitRecoverCompleted(0, noTasksMsg, false)
           }
-        } catch (_e) {}
+        } catch (_e) {
+          var errMsg = "Failed to recover tasks"
+          root.gitRecoverFeedback = errMsg
+          root.gitRecoverCompleted(0, errMsg, false)
+        }
       }
     }
   }
@@ -796,15 +850,37 @@ BarWidget {
   }
 
   function recoverSingleTask(task) {
-    if (!task || task.id === undefined) return false
-    if (root.store && TodoStore.getTaskById(root.store, task.id)) return false
+    if (!task || task.id === undefined) {
+      root.gitRecoverCompleted(0, "Invalid task", false)
+      return false
+    }
+    if (root.store && TodoStore.getTaskById(root.store, task.id)) {
+      root.gitRecoverCompleted(0, "Task already present in store", false)
+      return false
+    }
     var updated = TodoStore.cloneStore(root.store)
     var recovered = TodoStore.cloneTask(task)
+    if (!recovered) {
+      root.gitRecoverCompleted(0, "Could not restore task", false)
+      return false
+    }
     recovered.done = false
     updated.todos.push(recovered)
     updated.todos.sort(TodoStore.compareTasks)
-    root.saveStore(updated, "Recover task: " + String(task.title || "").substring(0, 30))
+    var titlePreview = String(task.title || "").substring(0, 25)
+    var msg = "Recovered: " + titlePreview
+    root.saveStore(updated, "Recover task: " + titlePreview)
+    root.gitRecoverFeedback = msg
+    root.gitRecoverCompleted(1, msg, true)
+    root.refreshGitHistory()
+    root.reinspectCurrentSnapshot()
     return true
+  }
+
+  function reinspectCurrentSnapshot() {
+    if (root.inspectingHash) {
+      inspectSnapshotProc.running = true
+    }
   }
 
   function inspectSnapshot(hashStr) {

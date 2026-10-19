@@ -16,6 +16,7 @@ const {
   parseTitleAndProfile,
   parseTaskInput,
   cloneStore,
+  cloneTask,
   addTodo,
   toggleTodo,
   removeTodo,
@@ -1805,6 +1806,34 @@ test("filterMissingTasks: finds tasks present in snapshot but absent currently",
   assert.equal(missing.length, 2);
   assert.equal(missing[0].id, 20);
   assert.equal(missing[1].id, 30);
+});
+
+test("cloneTask: deep copies task, normalizes schema, and strips transient diff metadata", () => {
+  const raw = {
+    id: 12345,
+    title: "clean me",
+    profile: "work",
+    done: false,
+    diffStatus: "removed",
+    diffDetail: "deleted",
+    isMissing: true,
+    extraFutureField: "preserve-me"
+  };
+
+  const cloned = cloneTask(raw);
+  assert.ok(cloned);
+  assert.equal(cloned.id, 12345);
+  assert.equal(cloned.title, "Clean me");
+  assert.equal(cloned.profile, "work");
+  assert.equal(cloned.done, false);
+  assert.equal((cloned as any).diffStatus, undefined, "diffStatus must be stripped");
+  assert.equal((cloned as any).diffDetail, undefined, "diffDetail must be stripped");
+  assert.equal((cloned as any).isMissing, undefined, "isMissing must be stripped");
+  assert.equal((cloned as any).extraFutureField, "preserve-me", "future fields must be preserved");
+
+  // Mutating original should not affect clone
+  raw.title = "mutated";
+  assert.equal(cloned.title, "Clean me");
 });
 
 test("scale performance: handles 500 active tasks within strict latency budgets", () => {
