@@ -186,6 +186,7 @@ Fullscreen overlay (`WlrLayer.Overlay`) with keyboard exclusivity. Centered card
     - Positioned above actions and divider.
     - Displays repository icon (`󰊤`) or directory icon (`󰉋`) + repository identifier / subpath + clickable dismiss `󰅖` icon + `(auto-detected)` caption.
     - In normal mode, navigated via <kbd>j</kbd>/<kbd>Down</kbd> after tags/profiles (or <kbd>k</kbd>/<kbd>Up</kbd> backward from actions). Pressing <kbd>x</kbd>, <kbd>Del</kbd>, <kbd>Backspace</kbd>, or <kbd>Enter</kbd> removes location and advances to actions.
+    - **Edit Mode Context Synchronization**: When opening an existing task in edit mode, `locationPill` initializes from `targetTask.location` (or falls back to `targetTask.repo`). Removing the context pill sets `attachLocation = false`, which clears both `location` and `repo` upon submission so panel badges and expanded context rows cleanly disappear without retaining stale context. If the task title is modified to include a new `#owner/repo`, both `task.repo` and `task.location.repo` synchronize simultaneously.
 13. **Separator**: Bottom dividing line (`PanelSeparator`).
 14. **Footer Actions Item**:
     - Left: Hint shortcuts (`󰌑 Enter • Tab/Vim Nav • Esc Dismiss • Ctrl+⌫ Discard`) anchored to action buttons with automatic right elision and a `PanelToolTip` revealed on hover when truncated (`hintHover.hovered && hintText.truncated`). When in edit mode, displays `"󰌑 Enter Save Changes • Tab/Vim Nav • Esc Cancel"`. When profiles are focused, displays `"󰍉 / Search Profile • Tab/Vim Nav • Esc Cancel"`. When tags are focused, displays `"󰆴 x/Del Tag • / Search • Tab/Vim Nav • Esc Cancel"`.
@@ -323,7 +324,7 @@ Attached dropdown panel (`WlrLayer.Top`) launched from bar widget click, desktop
        2. `"notes"`: Notes editor area is focused. Pressing <kbd>i</kbd>, <kbd>Enter</kbd>, or typing any printable character enters insert mode and appends into the notes field; <kbd>Escape</kbd> or <kbd>Enter</kbd> commits text, cleanly releases `activeFocus`, unblocks the panel's keyboard dispatcher (`PanelKeyCatcher.blocked = false`), stops hover fold timers, sets `expandedViaKeyboard = true`, and returns to normal motion mode on the `"notes"` sub-section without losing draft text. Clicking directly into the notes field focuses the editor without toggling task status. Subsequent navigation motions (<kbd>j</kbd>/<kbd>k</kbd>/<kbd>Tab</kbd>) immediately resume normal drawer navigation.
        3. `"reminders"`: Reminder presets row is focused. <kbd>h</kbd> / <kbd>l</kbd> cycles presets (with smooth auto-scroll into view via `ensureVisible`); <kbd>Space</kbd> / <kbd>Enter</kbd> applies the preset.
        4. `"profiles"`: Profile reassignment row is focused. Lateral motion (<kbd>h</kbd> / <kbd>l</kbd>) navigates between the search chip (index `-1`) and profile presets (`0..N-1`); <kbd>Space</kbd> / <kbd>Enter</kbd> reassigns task profile or opens the profile search box; pressing <kbd>/</kbd> opens the profile search box.
-       5. `"codebase"` (conditional on location): Codebase launch button is focused. <kbd>Enter</kbd> / <kbd>Space</kbd> opens editor.
+       5. `"codebase"` (conditional on location): Codebase launch button is focused. <kbd>Enter</kbd> / <kbd>Space</kbd> opens editor. If location context is removed while the drawer is expanded, `syncFilteredTodos` automatically drops `"codebase"` and resets `expandedSubSection` to `"header"`.
        6. `"tags"`: Tags row is focused. Lateral motion (<kbd>h</kbd> / <kbd>l</kbd>) navigates between the add/search chip (index `-1`) and existing tag chips (`0..N-1`); <kbd>Space</kbd> / <kbd>Enter</kbd> opens tag search (on chip `-1`) or removes the tag (on tag chips); <kbd>x</kbd> / <kbd>Delete</kbd> removes the focused tag; pressing <kbd>/</kbd> opens the tag search box.
      - Navigating with <kbd>Tab</kbd> / <kbd>j</kbd> / <kbd>↓</kbd> steps sequentially through sub-sections, then continues to the next task in the list.
      - **Inline Title Editor (`titleEditor`)**:
@@ -465,14 +466,18 @@ Quickshell taskbar widget placed in the status bar.
 | **Git Modal (Snapshots)** | `K` / `Space` / `Enter` / Right-Click | Open snapshot contextual menu (Rollback, Recover, Copy Hash) |
 | **Git Modal (Snapshots)** | `r` | Direct shortcut to rollback tasks to selected snapshot |
 | **Git Modal (Snapshots)** | `c` | Direct shortcut to recover missing/deleted tasks from selected snapshot |
+| **Git Modal (Snapshots)** | `y` | Direct shortcut to copy commit hash of selected snapshot |
 | **Git Modal (Preview)** | `j` / `k` / `↓` / `↑` | Navigate inspected snapshot tasks / diff list (at bottom transitions to `actions`, at top returns to `snapshots`) |
 | **Git Modal (Preview)** | `g` / `G` | Jump to first / last task in snapshot preview |
 | **Git Modal (Preview)** | `c` / `Enter` / `Space` | Recover focused recoverable / deleted task (or recover missing tasks from commit) |
-| **Git Modal (Preview)** | `y` | Copy title of focused task to clipboard |
+| **Git Modal (Preview)** | `y` | Copy title of focused task to clipboard (or commit hash if no task selected) |
 | **Git Modal (Preview)** | `r` | Rollback to snapshot commit |
 | **Git Modal (Actions)** | `h` / `l` / `←` / `→` | Cycle between Rollback and Recover Deleted buttons |
 | **Git Modal (Actions)** | `k` / `↑` | Return focus to `preview` tasks drawer (or `snapshots` list if preview empty) |
 | **Git Modal (Actions)** | `Enter` / `Space` | Activate focused button |
+| **Git Modal (Actions)** | `r` | Direct shortcut to rollback to selected snapshot |
+| **Git Modal (Actions)** | `c` | Direct shortcut to recover from selected snapshot |
+| **Git Modal (Actions)** | `y` | Direct shortcut to copy commit hash of selected snapshot |
 | **Git Modal (Context Menu)**| `j` / `k` / `Enter` / `Esc` | Navigate menu items, activate selection, or dismiss |
 | **Git Modal (Sync Remote)** | `Tab` / `Shift+Tab` | Cycle through controls (`remoteField` ⇄ `autoCreateRemoteBtn` ⇄ `saveRemoteBtn` ⇄ `syncNowBtn`) |
 | **Git Modal (Sync Remote)** | `h` / `l` / `←` / `→` | Navigate horizontally between action buttons (Create GitHub Repo ⇄ Save Remote ⇄ Sync Now) or return to tab 0 |

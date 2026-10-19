@@ -412,6 +412,13 @@ Rectangle {
           }
           return
         }
+        if (event.key === Qt.Key_Y || event.text === "y" || event.text === "Y") {
+          event.accepted = true
+          if (root.selectedSnapshot && root.selectedSnapshot.hash) {
+            root.copyHash(root.selectedSnapshot.hash)
+          }
+          return
+        }
       } else if (root.snapshotSection === "preview") {
         if (event.key === Qt.Key_J || event.key === Qt.Key_Down || event.text === "j") {
           event.accepted = true
@@ -464,10 +471,12 @@ Rectangle {
           root.ensureSnapshotVisible()
           return
         }
-        if (event.key === Qt.Key_Y || event.text === "y") {
+        if (event.key === Qt.Key_Y || event.text === "y" || event.text === "Y") {
           event.accepted = true
           if (root.selectedPreviewTask && root.selectedPreviewTask.title) {
             root.copyTaskTitle(root.selectedPreviewTask.title)
+          } else if (root.selectedSnapshot && root.selectedSnapshot.hash) {
+            root.copyHash(root.selectedSnapshot.hash)
           }
           return
         }
@@ -534,6 +543,13 @@ Rectangle {
         if (event.key === Qt.Key_C || event.text === "c") {
           event.accepted = true
           recoverBtn.clicked()
+          return
+        }
+        if (event.key === Qt.Key_Y || event.text === "y" || event.text === "Y") {
+          event.accepted = true
+          if (root.selectedSnapshot && root.selectedSnapshot.hash) {
+            root.copyHash(root.selectedSnapshot.hash)
+          }
           return
         }
       }
