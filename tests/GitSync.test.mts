@@ -696,5 +696,99 @@ test("diagnoseSnapshotError: identifies signing and key lock failures without fa
   assert.equal(diagnoseSnapshotError("", 1), "Automatic snapshot failed (exit code 1)");
 });
 
+test("snapshot rollback & task recovery: restores past state or recovers deleted tasks without corruption", () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ardoise-gitmodal-test-"));
+  try {
+    spawnSync("git", ["init", "-b", "main", tmpRoot]);
+    spawnSync("git", ["-C", tmpRoot, "config", "user.name", "TestUser"]);
+    spawnSync("git", ["-C", tmpRoot, "config", "user.email", "test@example.com"]);
+    spawnSync("git", ["-C", tmpRoot, "config", "commit.gpgsign", "false"]);
+
+    // Commit A: Task 1 and Task 2
+    const storeA = {
+      version: 1,
+      activeProfile: "default",
+      profiles: ["default"],
+      todos: [
+        { id: 101, title: "Keep me", done: false, profile: "default", createdAt: 1000 },
+        { id: 102, title: "Delete me later", done: false, profile: "default", createdAt: 1001 }
+      ]
+    };
+    fs.writeFileSync(path.join(tmpRoot, "todos.json"), JSON.stringify(storeA, null, 2), "utf8");
+    fs.writeFileSync(path.join(tmpRoot, "todos-archive.json"), JSON.stringify({ version: 1, archived: [] }), "utf8");
+    spawnSync("git", ["-C", tmpRoot, "add", "-A"]);
+    spawnSync("git", ["-C", tmpRoot, "commit", "-m", "[omarchy] Commit A: initial tasks"]);
+
+    const hashA = spawnSync("git", ["-C", tmpRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+
+    // Commit B: Task 2 deleted, Task 3 added
+    const storeB = {
+      version: 1,
+      activeProfile: "default",
+      profiles: ["default"],
+      todos: [
+        { id: 101, title: "Keep me", done: false, profile: "default", createdAt: 1000 },
+        { id: 103, title: "Newly added", done: false, profile: "default", createdAt: 1002 }
+      ]
+    };
+    fs.writeFileSync(path.join(tmpRoot, "todos.json"), JSON.stringify(storeB, null, 2), "utf8");
+    spawnSync("git", ["-C", tmpRoot, "add", "-A"]);
+    spawnSync("git", ["-C", tmpRoot, "commit", "-m", "[omarchy] Commit B: deleted task 102, added 103"]);
+
+    const hashB = spawnSync("git", ["-C", tmpRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+
+    // 1. Recovery inspection logic: inspect commit B and parent commit A
+    const showB = spawnSync("git", ["-C", tmpRoot, "show", `${hashB}:todos.json`], { encoding: "utf8" });
+    const showParent = spawnSync("git", ["-C", tmpRoot, "show", `${hashB}^:todos.json`], { encoding: "utf8" });
+    assert.equal(showB.status, 0);
+    assert.equal(showParent.status, 0);
+
+    const bTasks = JSON.parse(showB.stdout).todos;
+    const parentTasks = JSON.parse(showParent.stdout).todos;
+
+    // Diff against current active store (storeB)
+    const currentTasks = storeB.todos;
+    const diff = computeSnapshotDiff(bTasks, parentTasks, currentTasks);
+
+    // Task 102 was deleted in Commit B -> diff identifies it as removed & recoverable
+    const removedTask = diff.tasks.find((t: any) => t.id === 102);
+    assert.ok(removedTask, "Task deleted in snapshot must be identified from parent commit");
+    assert.equal(removedTask.diffStatus, "removed");
+    assert.equal(removedTask.isMissing, true);
+
+    // 2. Recovery execution: cloneTask strips diff metadata and safely re-inserts into current store
+    const cloned = TodoStore.cloneTask(removedTask);
+    assert.equal(cloned.id, 102);
+    assert.equal(cloned.title, "Delete me later");
+    assert.equal(cloned.diffStatus, undefined);
+    assert.equal(cloned.isMissing, undefined);
+
+    const recoveredStore = TodoStore.cloneStore(storeB);
+    cloned.done = false;
+    recoveredStore.todos.push(cloned);
+    recoveredStore.todos.sort(TodoStore.compareTasks);
+
+    assert.equal(recoveredStore.todos.length, 3, "Store must now contain 3 tasks");
+    assert.ok(recoveredStore.todos.some((t: any) => t.id === 101));
+    assert.ok(recoveredStore.todos.some((t: any) => t.id === 102));
+    assert.ok(recoveredStore.todos.some((t: any) => t.id === 103));
+
+    // 3. Rollback execution: rollback to Commit A
+    const rollbackCmd = `git checkout "${hashA}" -- todos.json todos-archive.json && printf '[omarchy] Restored snapshot %s\\n' "${hashA.substring(0, 7)}" | git commit -F -`;
+    const rollbackRes = spawnSync("bash", ["-c", rollbackCmd], { cwd: tmpRoot, encoding: "utf8" });
+    assert.equal(rollbackRes.status, 0, `Rollback command must succeed: ${rollbackRes.stderr}`);
+
+    const storeAfterRollback = JSON.parse(fs.readFileSync(path.join(tmpRoot, "todos.json"), "utf8"));
+    assert.equal(storeAfterRollback.todos.length, 2);
+    assert.equal(storeAfterRollback.todos[0].id, 101);
+    assert.equal(storeAfterRollback.todos[1].id, 102);
+
+    const logRes = spawnSync("git", ["-C", tmpRoot, "log", "-n", "1", "--pretty=%s"], { encoding: "utf8" });
+    assert.equal(logRes.stdout.trim(), `[omarchy] Restored snapshot ${hashA.substring(0, 7)}`);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 
 
