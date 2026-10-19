@@ -1938,13 +1938,44 @@ test("GitModal Action Wiring, Context Menu & Visual Feedback Invariants", () => 
     "GitModal must trigger GitContextMenu exclusively on uppercase Shift+K while lowercase k navigates"
   );
 
-  // Clipboard copy actions with visual feedback icon '󰅍'
+  // Clipboard copy actions with visual feedback icon '󰅍' outside contextual menu
   assert.ok(
     gitModal.includes("id: copyHashProc") &&
       gitModal.includes('root.showFeedback("Copied hash: " + root.pendingCopyHash.slice(0, 7), false, "󰅍")') &&
       gitModal.includes("id: copyTitleProc") &&
       gitModal.includes('root.showFeedback("Copied: " + root.pendingCopyTitle.substring(0, 25), false, "󰅍")'),
     "GitModal must trigger copyHashProc and copyTitleProc and display feedback with copy icon '󰅍'"
+  );
+
+  // Direct 'y' shortcut must work outside contextual menu across snapshots, preview, and actions sections
+  const snapshotsSectionBlock = gitModal.slice(
+    gitModal.indexOf('if (root.snapshotSection === "snapshots") {\n        if (event.key === Qt.Key_J'),
+    gitModal.lastIndexOf('} else if (root.snapshotSection === "preview") {')
+  );
+  const previewSectionBlock = gitModal.slice(
+    gitModal.lastIndexOf('} else if (root.snapshotSection === "preview") {'),
+    gitModal.lastIndexOf('} else { // snapshotSection === "actions"')
+  );
+  const actionsSectionBlock = gitModal.slice(
+    gitModal.lastIndexOf('} else { // snapshotSection === "actions"'),
+    gitModal.lastIndexOf('} else if (root.activeTab === 1) {')
+  );
+
+  assert.ok(
+    snapshotsSectionBlock.includes('event.key === Qt.Key_Y || event.text === "y"') &&
+      snapshotsSectionBlock.includes("root.copyHash(root.selectedSnapshot.hash)"),
+    "GitModal snapshots list must handle key 'y' to copy commit hash directly outside contextual menu"
+  );
+  assert.ok(
+    previewSectionBlock.includes('event.key === Qt.Key_Y || event.text === "y"') &&
+      previewSectionBlock.includes("root.copyTaskTitle(root.selectedPreviewTask.title)") &&
+      previewSectionBlock.includes("root.copyHash(root.selectedSnapshot.hash)"),
+    "GitModal preview drawer must handle key 'y' to copy task title or commit hash directly outside contextual menu"
+  );
+  assert.ok(
+    actionsSectionBlock.includes('event.key === Qt.Key_Y || event.text === "y"') &&
+      actionsSectionBlock.includes("root.copyHash(root.selectedSnapshot.hash)"),
+    "GitModal action buttons must handle key 'y' to copy commit hash directly outside contextual menu"
   );
 
   // Snapshot warning banner actions
@@ -2017,4 +2048,33 @@ test("GitModal Action Wiring, Context Menu & Visual Feedback Invariants", () => 
     "GitContextMenu signals must be cleanly connected to BarWidget and GitModal actions"
   );
 });
+
+test("QuickAdd & PanelContent Task Context Modification & Removal Synchronization", () => {
+  const quickAdd = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
+  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
+
+  // 1. QuickAdd edit mode initialization attaches repo fallback when location is absent
+  assert.ok(
+    quickAdd.includes("if (targetTask.location) {") &&
+      quickAdd.includes("root.detectedContext = targetTask.location") &&
+      quickAdd.includes("} else if (targetTask.repo) {") &&
+      quickAdd.includes("root.detectedContext = { repo: targetTask.repo, subpath: null, localPath: null }"),
+    "QuickAdd edit mode must fall back to targetTask.repo when location object is null"
+  );
+
+  // 2. QuickAdd edit mode submit computes finalRepo and synchronizes repo with TodoStore.updateTodo
+  assert.ok(
+    quickAdd.includes("var finalRepo = (parsed && parsed.repo) ? parsed.repo : (loc && loc.repo ? loc.repo : null)") &&
+      quickAdd.includes("repo: finalRepo"),
+    "QuickAdd edit mode must compute finalRepo and pass repo: finalRepo to TodoStore.updateTodo"
+  );
+
+  // 3. PanelContent syncFilteredTodos resets expandedSubSection when codebase subsection is no longer valid
+  assert.ok(
+    panelContent.includes('if (root.expandedTaskId && root.expandedSubSection === "codebase")') &&
+      panelContent.includes('root.expandedSubSection = "header"'),
+    "PanelContent syncFilteredTodos must fall back expandedSubSection to header if task loses codebase location"
+  );
+});
+
 

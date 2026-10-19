@@ -333,7 +333,7 @@ Rectangle {
       root.restoreSelected()
       return
     }
-    if (event.text === "y") {
+    if (event.key === Qt.Key_Y || event.text === "y" || event.text === "Y") {
       event.accepted = true
       root.copySelected()
       return
