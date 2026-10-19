@@ -43,6 +43,8 @@ const {
   computePresetReminder,
   formatCustomPreview,
   parseCustomReminder,
+  parseCustomDate,
+  getLocaleDateOrder,
   normalizeArchive,
   archiveCompleted,
   getArchivedCount,
@@ -660,6 +662,117 @@ test("parseCustomReminder: specific dates and fallback ISO parsing", () => {
   assert.equal(parseCustomReminder(""), null);
   assert.equal(parseCustomReminder(null), null);
   assert.equal(parseCustomReminder("not a real reminder"), null);
+});
+
+test("parseCustomReminder & parseCustomDate: direct dates, European/US localization, and time notations", () => {
+  // Base date: Monday Oct 19, 2026, 12:00:00
+  const base = new Date(2026, 9, 19, 12, 0, 0, 0);
+
+  // 1. Direct date: 10/03/2026 with European locale (DD/MM/YYYY -> 10 March 2026)
+  const rEu = parseCustomReminder("10/03/2026", base, { locale: "fr-FR" });
+  assert.ok(rEu);
+  const dEu = new Date(rEu.iso);
+  assert.equal(dEu.getFullYear(), 2026);
+  assert.equal(dEu.getMonth(), 2); // March = 2
+  assert.equal(dEu.getDate(), 10);
+  assert.equal(dEu.getHours(), 9);
+
+  // 2. Direct date: 10/03/2026 with US locale (MM/DD/YYYY -> October 3, 2026)
+  const rUs = parseCustomReminder("10/03/2026", base, { locale: "en-US" });
+  assert.ok(rUs);
+  const dUs = new Date(rUs.iso);
+  assert.equal(dUs.getFullYear(), 2026);
+  assert.equal(dUs.getMonth(), 9); // October = 9
+  assert.equal(dUs.getDate(), 3);
+  assert.equal(dUs.getHours(), 9);
+
+  // 3. Unambiguous dates (> 12) regardless of locale
+  const rUnambigEu = parseCustomReminder("25/03/2026", base, { locale: "en-US" });
+  assert.ok(rUnambigEu);
+  const dUnambigEu = new Date(rUnambigEu.iso);
+  assert.equal(dUnambigEu.getMonth(), 2);
+  assert.equal(dUnambigEu.getDate(), 25);
+
+  const rUnambigUs = parseCustomReminder("03/25/2026", base, { locale: "fr-FR" });
+  assert.ok(rUnambigUs);
+  const dUnambigUs = new Date(rUnambigUs.iso);
+  assert.equal(dUnambigUs.getMonth(), 2);
+  assert.equal(dUnambigUs.getDate(), 25);
+
+  // 4. Dot and dash date separators (e.g. 10.03.2026 and 10-03-2026)
+  const rDot = parseCustomReminder("10.03.2026", base, { locale: "de-DE" });
+  assert.ok(rDot);
+  const dDot = new Date(rDot.iso);
+  assert.equal(dDot.getMonth(), 2);
+  assert.equal(dDot.getDate(), 10);
+
+  const rDash = parseCustomReminder("10-03-2026", base, { locale: "fr-FR" });
+  assert.ok(rDash);
+  const dDash = new Date(rDash.iso);
+  assert.equal(dDash.getMonth(), 2);
+  assert.equal(dDash.getDate(), 10);
+
+  // 5. 2-digit year (10/03/26)
+  const r2Digit = parseCustomReminder("10/03/26", base, { locale: "fr-FR" });
+  assert.ok(r2Digit);
+  assert.equal(new Date(r2Digit.iso).getFullYear(), 2026);
+
+  // 6. Direct date combined with time notations: European "14h30", "14h", "14.30", "2:30pm"
+  const rEuTime = parseCustomReminder("10/03/2026 14h30", base, { locale: "fr-FR" });
+  assert.ok(rEuTime);
+  const dEuTime = new Date(rEuTime.iso);
+  assert.equal(dEuTime.getDate(), 10);
+  assert.equal(dEuTime.getMonth(), 2);
+  assert.equal(dEuTime.getHours(), 14);
+  assert.equal(dEuTime.getMinutes(), 30);
+
+  const rEuHourOnly = parseCustomReminder("10/03/2026 14h", base, { locale: "fr-FR" });
+  assert.ok(rEuHourOnly);
+  const dEuHour = new Date(rEuHourOnly.iso);
+  assert.equal(dEuHour.getHours(), 14);
+  assert.equal(dEuHour.getMinutes(), 0);
+
+  const rUsTime = parseCustomReminder("10/03/2026 at 2pm", base, { locale: "en-US" });
+  assert.ok(rUsTime);
+  const dUsTime = new Date(rUsTime.iso);
+  assert.equal(dUsTime.getMonth(), 9);
+  assert.equal(dUsTime.getDate(), 3);
+  assert.equal(dUsTime.getHours(), 14);
+
+  // 7. Short date without year ("10/03" rolls forward if past or keeps if future)
+  const rShort = parseCustomReminder("25/11", base, { locale: "fr-FR" });
+  assert.ok(rShort);
+  const dShort = new Date(rShort.iso);
+  assert.equal(dShort.getMonth(), 10); // November = 10
+  assert.equal(dShort.getDate(), 25);
+  assert.equal(dShort.getFullYear(), 2026);
+
+  // 8. Weekday targets: "friday", "friday 14:00", "next monday"
+  const rFri = parseCustomReminder("friday", base);
+  assert.ok(rFri);
+  const dFri = new Date(rFri.iso);
+  assert.equal(dFri.getDay(), 5); // Friday
+  assert.equal(dFri.getDate(), 23); // Oct 23, 2026
+
+  const rNextMon = parseCustomReminder("next monday 10:00", base);
+  assert.ok(rNextMon);
+  const dNextMon = new Date(rNextMon.iso);
+  assert.equal(dNextMon.getDay(), 1); // Monday
+  assert.equal(dNextMon.getDate(), 26); // Oct 26, 2026
+  assert.equal(dNextMon.getHours(), 10);
+
+  // 9. parseCustomDate alias (for due date feature and generic date picking)
+  const rDueDate = parseCustomDate("15/04/2027", base, { locale: "fr-FR" });
+  assert.ok(rDueDate);
+  const dDue = new Date(rDueDate.iso);
+  assert.equal(dDue.getFullYear(), 2027);
+  assert.equal(dDue.getMonth(), 3); // April
+  assert.equal(dDue.getDate(), 15);
+
+  // 10. getLocaleDateOrder helper returns "day-first" for fr-FR/de-DE and "month-first" for en-US
+  assert.equal(getLocaleDateOrder("en-US"), "month-first");
+  assert.equal(getLocaleDateOrder("fr-FR"), "day-first");
+  assert.equal(getLocaleDateOrder("de-DE"), "day-first");
 });
 
 test("normalize: migrates legacy array format and invalid inputs to Schema v1", () => {

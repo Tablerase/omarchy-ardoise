@@ -521,6 +521,23 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       reminderPickerContent.includes("manualInput.forceActiveFocus()"),
     "ReminderPicker must adhere to Two-Stage Escape: never wipe draft text on Escape, blur to card container mode, support re-entry via i/a, and provide nav focus styling"
   );
+  assert.ok(
+    reminderPickerContent.includes("adjustCalendarDay") &&
+      reminderPickerContent.includes("jumpToToday") &&
+      reminderPickerContent.includes("jumpToMonthBound") &&
+      reminderPickerContent.includes('"calendar"') &&
+      reminderPickerContent.includes("dateConfirmed"),
+    "ReminderPicker must support full keyboard Vim navigation for the calendar grid (hjkl, [/], t, g/G) and generic dateConfirmed signals"
+  );
+  const datePickerPath = path.join(repoDir, "ui", "DatePicker.qml");
+  assert.ok(fs.existsSync(datePickerPath), "ui/DatePicker.qml must exist for reusable due-date / milestone picking");
+  const datePickerContent = fs.readFileSync(datePickerPath, "utf8");
+  assert.ok(
+    datePickerContent.includes("ReminderPicker {") &&
+      datePickerContent.includes('mode: "dueDate"') &&
+      datePickerContent.includes("allowPastDates: true"),
+    "DatePicker must inherit ReminderPicker and default to dueDate mode with allowPastDates: true"
+  );
 
   // 4e. Expanded Drawer Title Reveal (long titles must be readable, not truncated)
   assert.ok(
