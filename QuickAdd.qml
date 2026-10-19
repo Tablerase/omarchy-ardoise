@@ -395,6 +395,9 @@ Item {
       if (targetTask.location) {
         root.detectedContext = targetTask.location
         root.attachLocation = true
+      } else if (targetTask.repo) {
+        root.detectedContext = { repo: targetTask.repo, subpath: null, localPath: null }
+        root.attachLocation = true
       } else {
         root.detectedContext = null
         root.attachLocation = false
@@ -559,13 +562,18 @@ Item {
           if (pt && mergedTags.indexOf(pt) === -1) mergedTags.push(pt)
         }
       }
+      var finalRepo = (parsed && parsed.repo) ? parsed.repo : (loc && loc.repo ? loc.repo : null)
+      if (loc && finalRepo && !loc.repo) {
+        loc.repo = finalRepo
+      }
       var newStore = TodoStore.updateTodo(root.store, root.editingTaskId, {
         title: finalTitle,
         description: desc,
         profile: finalProfile,
         tags: mergedTags,
         reminder: rem,
-        location: loc
+        location: loc,
+        repo: finalRepo
       })
       root.store = newStore
       todoFile.setText(JSON.stringify(newStore, null, 2) + "\n")

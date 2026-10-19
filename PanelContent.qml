@@ -570,15 +570,34 @@ Item {
 
   property var filteredTodos: []
 
+  function checkExpandedSubSectionValidity(list) {
+    if (root.expandedTaskId && root.expandedSubSection === "codebase") {
+      var expTask = null
+      if (Array.isArray(list)) {
+        for (var k = 0; k < list.length; k++) {
+          if (list[k].id === root.expandedTaskId) {
+            expTask = list[k]
+            break
+          }
+        }
+      }
+      if (!expTask || !expTask.location || !expTask.location.localPath) {
+        root.expandedSubSection = "header"
+      }
+    }
+  }
+
   function syncFilteredTodos() {
     var next = TodoStore.getFilteredTodos(root.store, root.currentFilter, "all", "all", root.searchQuery)
     if (!root.filteredTodos || root.filteredTodos.length !== next.length) {
       root.filteredTodos = next
+      root.checkExpandedSubSectionValidity(next)
       return
     }
     for (var i = 0; i < next.length; i++) {
       if (root.filteredTodos[i].id !== next[i].id || root.filteredTodos[i].done !== next[i].done) {
         root.filteredTodos = next
+        root.checkExpandedSubSectionValidity(next)
         return
       }
     }
@@ -606,6 +625,7 @@ Item {
         }
       }
     }
+    root.checkExpandedSubSectionValidity(next)
   }
 
   onSearchQueryChanged: syncFilteredTodos()

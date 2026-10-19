@@ -1679,6 +1679,40 @@ test("addTodo & updateTodo: stores repo, tags, and location, and supports tag/re
     subpath: null,
     localPath: "~/Custom/Path"
   });
+  assert.equal(updatedTask?.repo, null);
+
+  // Re-attach context with repo and localPath
+  store = updateTodo(store, task.id, {
+    location: { repo: "Tablerase/omarchy-ardoise", localPath: "~/Work/ardoise" }
+  });
+  const reattached = store.todos.find((t: any) => t.id === task.id);
+  assert.equal(reattached?.repo, "Tablerase/omarchy-ardoise");
+  assert.deepEqual(reattached?.location, {
+    repo: "Tablerase/omarchy-ardoise",
+    subpath: null,
+    localPath: "~/Work/ardoise"
+  });
+
+  // Removing context via location: null also clears repo
+  store = updateTodo(store, task.id, {
+    location: null
+  });
+  const stripped = store.todos.find((t: any) => t.id === task.id);
+  assert.equal(stripped?.location, null);
+  assert.equal(stripped?.repo, null);
+
+  // Explicitly passing repo: null and location: null
+  store = updateTodo(store, task.id, {
+    location: { repo: "foo/bar", localPath: "/tmp" },
+    repo: "foo/bar"
+  });
+  store = updateTodo(store, task.id, {
+    location: null,
+    repo: null
+  });
+  const fullyCleared = store.todos.find((t: any) => t.id === task.id);
+  assert.equal(fullyCleared?.location, null);
+  assert.equal(fullyCleared?.repo, null);
 });
 
 test("mergeStores: 3-way conflict-free store merging", () => {
