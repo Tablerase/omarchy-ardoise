@@ -323,9 +323,9 @@ Item {
       var parseOpts = {
         locale: root.locale || undefined,
         allowPast: root.allowPastDates,
-        preserveTime: true
+        defaultTime: { hours: root.targetDate.getHours(), minutes: root.targetDate.getMinutes() }
       }
-      var res = TodoStore.parseCustomReminder(manualText, root.targetDate, parseOpts)
+      var res = TodoStore.parseCustomReminder(manualText, new Date(), parseOpts)
       parsedResult = res
       if (res && res.iso) {
         var d = new Date(res.iso)
@@ -1022,8 +1022,11 @@ Item {
             Text {
               anchors.centerIn: parent
               text: {
-                var d = new Date(root.calYear, root.calMonth, 1)
-                return d.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+                if (typeof TodoStore !== "undefined" && typeof TodoStore.getMonthName === "function") {
+                  return TodoStore.getMonthName(root.calMonth, true) + " " + root.calYear
+                }
+                var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+                return (months[root.calMonth] || "") + " " + root.calYear
               }
               color: root.barForeground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family

@@ -2553,8 +2553,24 @@ function computePresetReminder(presetIndexOrId, baseDate) {
   return null
 }
 
+var MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+var MONTH_NAMES_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+var DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+/**
+ * Returns month name for a given 0-indexed month.
+ * @param {number} monthIndex
+ * @param {boolean} [longFormat]
+ * @returns {string}
+ */
+function getMonthName(monthIndex, longFormat) {
+  var idx = Math.max(0, Math.min(11, Math.floor(monthIndex || 0)))
+  return longFormat ? MONTH_NAMES_LONG[idx] : MONTH_NAMES_SHORT[idx]
+}
+
 /**
  * Formats an ISO reminder date into a user-friendly preview string with relative diff.
+ * Uses month names (e.g. "Fri, Nov 6 at 18:00") so day and month numbers are never ambiguous.
  * @param {string} isoDate
  * @param {Date|number|string} [baseDate]
  * @returns {string}
@@ -2590,7 +2606,13 @@ function formatCustomPreview(isoDate, baseDate) {
   if (isTomorrow) {
     return "Tomorrow at " + timeStr + " (" + rel + ")"
   }
-  var dayStr = target.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+  var dayName = DAY_NAMES_SHORT[target.getDay()] || "Day"
+  var monthName = MONTH_NAMES_SHORT[target.getMonth()] || "Month"
+  var dayNum = target.getDate()
+  var yearNum = target.getFullYear()
+  var nowYear = now.getFullYear()
+  var yearSuffix = (yearNum !== nowYear) ? " " + yearNum : ""
+  var dayStr = dayName + ", " + monthName + " " + dayNum + yearSuffix
   return dayStr + " at " + timeStr + " (" + rel + ")"
 }
 
@@ -2708,6 +2730,9 @@ function parseCustomReminder(input, baseDate, options) {
 
   // Helper to resolve default hours/minutes when omitted from date string
   function getDefaultTime() {
+    if (options && options.defaultTime && typeof options.defaultTime.hours === "number") {
+      return { hours: options.defaultTime.hours, minutes: options.defaultTime.minutes || 0 }
+    }
     if (options && options.preserveTime && baseDate instanceof Date && !isNaN(baseDate.getTime())) {
       return { hours: baseDate.getHours(), minutes: baseDate.getMinutes() }
     }
@@ -2795,6 +2820,24 @@ function parseCustomReminder(input, baseDate, options) {
       } else if (n1 <= 12 && n2 <= 12) {
         // Ambiguous: resolve using locale date order
         var order = getLocaleDateOrder(options && options.locale)
+        // If no explicit locale was passed, use contextual disambiguation:
+        if (!options || !options.locale) {
+          var candDmy = new Date(dmyYear, n2 - 1, n1, dmyTime.hours, dmyTime.minutes, 0, 0)
+          var candMdy = new Date(dmyYear, n1 - 1, n2, dmyTime.hours, dmyTime.minutes, 0, 0)
+          var dmyFuture = candDmy.getTime() > now.getTime()
+          var mdyFuture = candMdy.getTime() > now.getTime()
+          var hasEuropeanTime = dmyMatch[4] && /[hH]/.test(dmyMatch[4])
+          var hasDotSeparator = str.indexOf(".") !== -1
+          if (hasEuropeanTime || hasDotSeparator) {
+            order = "day-first"
+          } else if (!options || !options.allowPast) {
+            if (dmyFuture && !mdyFuture) {
+              order = "day-first"
+            } else if (mdyFuture && !dmyFuture) {
+              order = "month-first"
+            }
+          }
+        }
         if (order === "month-first") {
           resMonth = n1 - 1
           resDay = n2
@@ -2830,6 +2873,24 @@ function parseCustomReminder(input, baseDate, options) {
         sDay = sn2
       } else if (sn1 <= 12 && sn2 <= 12) {
         var sOrder = getLocaleDateOrder(options && options.locale)
+        if (!options || !options.locale) {
+          var curY = now.getFullYear()
+          var sCandDmy = new Date(curY, sn2 - 1, sn1, shortTime.hours, shortTime.minutes, 0, 0)
+          var sCandMdy = new Date(curY, sn1 - 1, sn2, shortTime.hours, shortTime.minutes, 0, 0)
+          var sDmyFuture = sCandDmy.getTime() > now.getTime()
+          var sMdyFuture = sCandMdy.getTime() > now.getTime()
+          var sHasEuropeanTime = shortDateMatch[3] && /[hH]/.test(shortDateMatch[3])
+          var sHasDotSeparator = str.indexOf(".") !== -1
+          if (sHasEuropeanTime || sHasDotSeparator) {
+            sOrder = "day-first"
+          } else if (!options || !options.allowPast) {
+            if (sDmyFuture && !sMdyFuture) {
+              sOrder = "day-first"
+            } else if (sMdyFuture && !sDmyFuture) {
+              sOrder = "month-first"
+            }
+          }
+        }
         if (sOrder === "month-first") {
           sMonth = sn1 - 1
           sDay = sn2
@@ -3603,6 +3664,7 @@ if (typeof module !== "undefined" && module.exports) {
     parseCustomReminder,
     parseCustomDate,
     getLocaleDateOrder,
+    getMonthName,
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,
