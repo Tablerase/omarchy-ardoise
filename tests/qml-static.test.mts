@@ -1903,3 +1903,118 @@ test("QuickAdd Task Input Tag Autocompletion & Dynamic Tags Row Contract", () =>
     "QuickAdd removeEditTag must remove tag from taskInput text when present as hashtag"
   );
 });
+
+test("GitModal Action Wiring, Context Menu & Visual Feedback Invariants", () => {
+  const gitModal = fs.readFileSync(path.join(repoDir, "ui", "GitModal.qml"), "utf8");
+  const barWidget = fs.readFileSync(path.join(repoDir, "BarWidget.qml"), "utf8");
+  const gitContextMenu = fs.readFileSync(path.join(repoDir, "ui", "GitContextMenu.qml"), "utf8");
+
+  // 1. Tab 0: Action Buttons & Keybindings
+  // Rollback button & shortcut 'r'
+  assert.ok(
+    gitModal.includes("id: rollbackBtn") &&
+      gitModal.includes("root.barWidget.rollbackToCommit(root.selectedSnapshot.hash)") &&
+      gitModal.includes('event.key === Qt.Key_R || event.text === "r"') &&
+      gitModal.includes("rollbackBtn.clicked()"),
+    "GitModal must wire rollbackBtn and key 'r' to barWidget.rollbackToCommit"
+  );
+
+  // Recover button, shortcut 'c', and preview task recover
+  assert.ok(
+    gitModal.includes("id: recoverBtn") &&
+      gitModal.includes("root.barWidget.recoverFromCommit(root.selectedSnapshot.hash)") &&
+      gitModal.includes('event.key === Qt.Key_C || event.text === "c"') &&
+      gitModal.includes("recoverBtn.clicked()") &&
+      gitModal.includes("root.barWidget.recoverSingleTask(root.selectedPreviewTask)"),
+    "GitModal must wire recoverBtn, shortcut 'c', and preview item recovery to barWidget"
+  );
+
+  // Context Menu trigger: uppercase K opens, bare k navigates
+  assert.ok(
+    gitModal.includes('event.text === "K" || (event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier))') &&
+      gitModal.includes("root.openContextMenuForSelected()") &&
+      gitModal.includes('event.key === Qt.Key_K && !(event.modifiers & Qt.ShiftModifier)') &&
+      gitModal.includes("root.selectedIndex = Math.max(0, root.selectedIndex - 1)"),
+    "GitModal must trigger GitContextMenu exclusively on uppercase Shift+K while lowercase k navigates"
+  );
+
+  // Clipboard copy actions with visual feedback icon '󰅍'
+  assert.ok(
+    gitModal.includes("id: copyHashProc") &&
+      gitModal.includes('root.showFeedback("Copied hash: " + root.pendingCopyHash.slice(0, 7), false, "󰅍")') &&
+      gitModal.includes("id: copyTitleProc") &&
+      gitModal.includes('root.showFeedback("Copied: " + root.pendingCopyTitle.substring(0, 25), false, "󰅍")'),
+    "GitModal must trigger copyHashProc and copyTitleProc and display feedback with copy icon '󰅍'"
+  );
+
+  // Snapshot warning banner actions
+  assert.ok(
+    gitModal.includes("id: signingFixBtn") &&
+      gitModal.includes("root.barWidget.disableLocalSigning()") &&
+      gitModal.includes('root.showFeedback("Commit signing disabled", false, "󰄲")') &&
+      gitModal.includes("id: retryBtn") &&
+      gitModal.includes('root.barWidget.triggerAutoCommit("Manual retry snapshot")') &&
+      gitModal.includes('root.showFeedback("Retrying snapshot...", false, "󰑐")'),
+    "GitModal warning banner must wire signingFixBtn and retryBtn to show immediate visual feedback"
+  );
+
+  // 2. Tab 1: Remote Configuration & Sync Actions
+  assert.ok(
+    gitModal.includes("id: autoCreateRemoteBtn") &&
+      gitModal.includes("root.barWidget.autoSetupGitRemote(remoteField.text)") &&
+      gitModal.includes('root.showFeedback("Setting up GitHub repo...", false, "󰊤")') &&
+      gitModal.includes("id: saveRemoteBtn") &&
+      gitModal.includes("root.barWidget.setRemoteUrl(remoteField.text)") &&
+      gitModal.includes('root.showFeedback("Remote URL saved", false, "󰄲")') &&
+      gitModal.includes("id: syncNowBtn") &&
+      gitModal.includes("root.barWidget.syncWithRemote()") &&
+      gitModal.includes('root.showFeedback("Syncing with remote...", false, "󰁯")'),
+    "GitModal Tab 1 must wire autoCreateRemoteBtn, saveRemoteBtn, and syncNowBtn with action-specific visual feedback"
+  );
+
+  // Remote field enter / return key confirms and triggers visual feedback
+  assert.ok(
+    gitModal.includes("Keys.onReturnPressed: function(event) {") &&
+      gitModal.includes("Keys.onEnterPressed: function(event) {") &&
+      gitModal.includes('root.showFeedback("Remote URL saved", false, "󰄲")'),
+    "GitModal remoteField must trigger visual feedback when saving via Return or Enter"
+  );
+
+  // 3. Visual Feedback Parity: Pill indicators in Tab 0 and Tab 1
+  assert.ok(
+    gitModal.includes("id: feedbackPill") &&
+      gitModal.includes("id: syncFeedbackPill") &&
+      gitModal.includes("text: root.feedbackIcon") &&
+      gitModal.includes("text: root.feedbackMessage"),
+    "Both Tab 0 and Tab 1 must render feedback pills bound to feedbackIcon and feedbackMessage"
+  );
+
+  // 4. BarWidget completion signals & GitModal Connections
+  assert.ok(
+    barWidget.includes("signal gitRecoverCompleted(int count, string message, bool success)") &&
+      barWidget.includes("signal gitRollbackCompleted(string hash, string message, bool success)") &&
+      barWidget.includes("root.gitRollbackCompleted(h, rollbackMsg, true)"),
+    "BarWidget must declare and emit gitRecoverCompleted and gitRollbackCompleted signals"
+  );
+  assert.ok(
+    gitModal.includes("function onGitRecoverCompleted(count, message, success)") &&
+      gitModal.includes("function onGitRollbackCompleted(hash, message, success)") &&
+      gitModal.includes("function onGitSyncStatusChanged()"),
+    "GitModal Connections must handle gitRecoverCompleted, gitRollbackCompleted, and gitSyncStatusChanged"
+  );
+
+  // 5. GitContextMenu Signal Handlers in GitModal
+  assert.ok(
+    gitContextMenu.includes("signal rollbackRequested(string hash)") &&
+      gitContextMenu.includes("signal recoverRequested(string hash)") &&
+      gitContextMenu.includes("signal copyHashRequested(string hash)") &&
+      gitModal.includes("onRollbackRequested: function(hash) {") &&
+      gitModal.includes("root.barWidget.rollbackToCommit(hash)") &&
+      gitModal.includes("onRecoverRequested: function(hash) {") &&
+      gitModal.includes("root.barWidget.recoverFromCommit(hash)") &&
+      gitModal.includes("onCopyHashRequested: function(hash) {") &&
+      gitModal.includes("root.copyHash(hash)"),
+    "GitContextMenu signals must be cleanly connected to BarWidget and GitModal actions"
+  );
+});
+
