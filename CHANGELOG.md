@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Initial Git Repository Setup**: Ensured local git snapshot repository and initial commit are cleanly provisioned on fresh installations.
 - **Keybindings Bracket Cycling**: Fixed profile cycling shortcuts (`[` and `]`) in `PanelLogic.js` when custom bindings are loaded.
 
+---
 
 ## [1.1.0] - 2026-10-11
 
@@ -81,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Ensured note draft text is committed before releasing focus and firing escape handlers, cleanly returning active keyboard dispatch to `PanelKeyCatcher` in motion mode.
   - Synchronized `cursorIndex` to follow `expandedTaskId` when task lists update, preventing selection drift.
 
+---
 
 ## [1.0.1] - 2026-10-08
 
