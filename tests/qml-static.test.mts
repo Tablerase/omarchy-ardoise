@@ -1431,6 +1431,10 @@ test("Right-click, archive menu/delete, and data-loss safeguards: contracts", ()
     !archiveModal.includes('if (event.key === Qt.Key_K || event.text === "K")'),
     "ArchiveModal must not open the menu on lowercase k (navigation)"
   );
+  assert.ok(
+    !gitModal.includes('if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k")'),
+    "GitModal must not allow bare Key_K to swallow uppercase K contextual menu trigger"
+  );
 
   // Data-loss safeguards: pure store helpers + durable BarWidget path.
   assert.ok(
@@ -1534,6 +1538,7 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
   const gitModal = fs.readFileSync(path.join(repoDir, "ui/GitModal.qml"), "utf8");
   const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
   const archiveModal = fs.readFileSync(path.join(repoDir, "ui/ArchiveModal.qml"), "utf8");
+  const todoStore = fs.readFileSync(path.join(repoDir, "TodoStore.js"), "utf8");
 
   // 1. Commit action must use semantic verbs and profile names without interpolating user title or notes
   assert.ok(
@@ -1581,8 +1586,18 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
   );
   assert.ok(
     barWidget.includes('property var inspectedSnapshotDiff: null') &&
-      barWidget.includes('function recoverSingleTask(task) {'),
-    "BarWidget must provide inspectedSnapshotDiff property and recoverSingleTask method"
+      barWidget.includes('function recoverSingleTask(task) {') &&
+      barWidget.includes('signal gitRecoverCompleted(int count, string message, bool success)') &&
+      barWidget.includes('reinspectCurrentSnapshot()') &&
+      barWidget.includes('echo "---ARDOISE_SPLIT---"') &&
+      todoStore.includes('function cloneTask('),
+    "BarWidget and TodoStore must implement complete deleted task recovery inspecting both commit and parent with completion signaling"
+  );
+  assert.ok(
+    gitModal.includes('id: feedbackPill') &&
+      gitModal.includes('function onGitRecoverCompleted') &&
+      gitModal.includes('function showFeedback('),
+    "GitModal must listen to gitRecoverCompleted and render visual feedback pill"
   );
   assert.ok(
     gitModal.includes('readonly property color secondaryText: TodoStore.getReadableSecondary') &&

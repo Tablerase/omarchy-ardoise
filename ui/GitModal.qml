@@ -25,6 +25,38 @@ Rectangle {
   property int previewIndex: 0
   property int actionButtonIndex: 0 // 0: rollback, 1: recover
   property alias contextMenu: contextMenu
+  property string feedbackMessage: ""
+  property bool feedbackIsError: false
+
+  Timer {
+    id: feedbackTimer
+    interval: 3500
+    repeat: false
+    onTriggered: {
+      root.feedbackMessage = ""
+    }
+  }
+
+  function showFeedback(message, isError) {
+    if (!message) return
+    root.feedbackMessage = message
+    root.feedbackIsError = Boolean(isError)
+    feedbackTimer.restart()
+    Quickshell.execDetached([
+      "notify-send",
+      "-a", "Ardoise",
+      "-i", isError ? "dialog-information" : "edit-undo",
+      "Task Recovery",
+      message
+    ])
+  }
+
+  Connections {
+    target: root.barWidget
+    function onGitRecoverCompleted(count, message, success) {
+      root.showFeedback(message, !success && count === 0)
+    }
+  }
 
   // Snapshot search filter state
   property bool searchActive: false
@@ -236,6 +268,15 @@ Rectangle {
     }
 
     if (root.activeTab === 0) {
+      // Uppercase K opens the snapshot contextual menu (lowercase k is list navigation)
+      if (event.text === "K" || (event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier))) {
+        event.accepted = true
+        if (root.selectedSnapshot) {
+          root.openContextMenuForSelected()
+        }
+        return
+      }
+
       // Tab / Shift+Tab section transitions in Tab 0: snapshots -> preview -> actions
       if (event.key === Qt.Key_Tab) {
         event.accepted = true
@@ -306,7 +347,7 @@ Rectangle {
           }
           return
         }
-        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+        if (event.key === Qt.Key_Up || (event.key === Qt.Key_K && !(event.modifiers & Qt.ShiftModifier)) || event.text === "k") {
           event.accepted = true
           if (root.filteredSnapshots && root.filteredSnapshots.length > 0) {
             root.selectedIndex = Math.max(0, root.selectedIndex - 1)
@@ -336,7 +377,7 @@ Rectangle {
           }
           return
         }
-        if (event.text === "K" || (event.key === Qt.Key_K && (event.modifiers & Qt.ShiftModifier)) || event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Menu) {
+        if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Menu || event.text === "m") {
           event.accepted = true
           if (root.selectedSnapshot) {
             root.openContextMenuForSelected()
@@ -371,7 +412,7 @@ Rectangle {
           }
           return
         }
-        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+        if (event.key === Qt.Key_Up || (event.key === Qt.Key_K && !(event.modifiers & Qt.ShiftModifier)) || event.text === "k") {
           event.accepted = true
           if (root.previewIndex > 0) {
             root.previewIndex--
@@ -450,7 +491,7 @@ Rectangle {
           root.actionButtonIndex = 1
           return
         }
-        if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+        if (event.key === Qt.Key_Up || (event.key === Qt.Key_K && !(event.modifiers & Qt.ShiftModifier)) || event.text === "k") {
           event.accepted = true
           if (root.previewTasks && root.previewTasks.length > 0) {
             root.snapshotSection = "preview"
@@ -500,7 +541,7 @@ Rectangle {
         }
         return
       }
-      if (event.key === Qt.Key_K || event.key === Qt.Key_Up || event.text === "k") {
+      if (event.key === Qt.Key_Up || (event.key === Qt.Key_K && !(event.modifiers & Qt.ShiftModifier)) || event.text === "k") {
         event.accepted = true
         if (root.syncFocusIndex > 0) {
           root.syncFocusIndex = 0
@@ -1483,6 +1524,43 @@ Rectangle {
               description: "Recover deleted tasks from snapshot"
               shortcut: "c"
               fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            }
+          }
+
+          // Visual feedback pill for recovery and snapshot actions
+          Rectangle {
+            id: feedbackPill
+            visible: Boolean(root.feedbackMessage)
+            anchors.verticalCenter: parent.verticalCenter
+            implicitHeight: feedbackContent.implicitHeight + Style.space(6)
+            implicitWidth: feedbackContent.implicitWidth + Style.space(14)
+            radius: Style.cornerRadius * 0.4
+            color: root.feedbackIsError ? Util.alpha(Color.urgent, 0.16) : Util.alpha(Color.accent, 0.16)
+            border.width: 1
+            border.color: root.feedbackIsError ? Util.alpha(Color.urgent, 0.45) : Util.alpha(Color.accent, 0.45)
+
+            Row {
+              id: feedbackContent
+              anchors.centerIn: parent
+              spacing: Style.space(6)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.feedbackIsError ? "󰅖" : "󰄲"
+                color: root.feedbackIsError ? Color.urgent : Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.95
+              }
+
+              Text {
+                id: feedbackText
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.feedbackMessage
+                color: root.feedbackIsError ? Color.urgent : Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.85
+                font.bold: true
+              }
             }
           }
         }

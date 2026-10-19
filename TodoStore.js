@@ -537,6 +537,22 @@ function normalizeTask(raw) {
 }
 
 /**
+ * Clones a task object, normalizing fields and stripping any transient diff/UI properties.
+ * @param {any} raw
+ * @returns {Task|null}
+ */
+function cloneTask(raw) {
+  if (!raw || typeof raw !== "object") return null
+  var task = normalizeTask(raw)
+  if (task) {
+    delete task.diffStatus
+    delete task.diffDetail
+    delete task.isMissing
+  }
+  return task
+}
+
+/**
  * Normalizes raw JSON or object into a Schema v1 TodoStoreData structure.
  * Handles legacy raw arrays and schema migrations.
  * @param {any} raw
@@ -3389,6 +3405,7 @@ if (typeof module !== "undefined" && module.exports) {
     parseTitleAndProfile,
     parseTaskInput,
     cloneStore,
+    cloneTask,
     addTodo,
     toggleTodo,
     removeTodo,
