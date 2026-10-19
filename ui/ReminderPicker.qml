@@ -1096,7 +1096,7 @@ Item {
             columns: 7
             width: parent.width
 
-            // Computes model of 42 cells representing the calendar page
+            // Computes model of slots representing the calendar page (aligned with Mo-Su headers)
             readonly property var cellData: {
               var year = root.calYear
               var month = root.calMonth
@@ -1104,8 +1104,9 @@ Item {
               var daysInMonth = new Date(year, month + 1, 0).getDate()
               var today = new Date()
 
+              var totalSlots = Math.ceil((firstDayIndex + daysInMonth) / 7) * 7
               var cells = []
-              for (var i = 0; i < 42; i++) {
+              for (var i = 0; i < totalSlots; i++) {
                 var dayNum = i - firstDayIndex + 1
                 if (dayNum >= 1 && dayNum <= daysInMonth) {
                   var cellDate = new Date(year, month, dayNum)
@@ -1137,11 +1138,13 @@ Item {
                 width: contentCol.width / 7
                 height: Style.space(22)
                 radius: height / 2
-                visible: dayCell.modelData.isCurrentMonth
+                // Must remain visible for QML Grid to allocate column slots; invisible items are skipped by Grid!
+                opacity: dayCell.modelData.isCurrentMonth ? 1 : 0
                 color: dayCell.modelData.isSelected
                   ? root.accentColor
                   : (dayHover.hovered && !dayCell.modelData.isPast ? Color.menu.selectedBackground : "transparent")
                 border.color: {
+                  if (!dayCell.modelData.isCurrentMonth) return "transparent"
                   if (dayCell.modelData.isSelected) {
                     return (root.pickerSection === "calendar") ? root.barForeground : "white"
                   }
