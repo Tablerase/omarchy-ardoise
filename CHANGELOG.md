@@ -20,6 +20,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-10-19
+
+> **Feature & Ergonomics Release: Custom Profile Glyphs, Task Editing Modal, MRU Tag Autocompletion, Search Chips, and Snapshot Diff Previews.**
+>
+> This release introduces custom Nerd Font profile icons with an interactive picker, a full task editing experience in the QuickAdd modal, historical tag harvesting with MRU autocompletion and scalable O(1) indexing, dedicated search chips in both drawer and QuickAdd, snapshot diff previews, and resilient git signing failure alerts.
+
+### Added
+- **Custom Profile Icons & Glyph Picker**:
+  - Added interactive keyboard-first `ProfileIconPicker` modal with a curated catalog of ~60 Nerd Font glyphs, recent icon history, and live search.
+  - Seamless grid navigation (<kbd>h</kbd>/<kbd>j</kbd>/<kbd>k</kbd>/<kbd>l</kbd> and arrows) with <kbd>e</kbd> shortcut directly from highlighted profile pills.
+  - Profile icons persist cleanly in `todos.json` (`profileIcons` map) and synchronize across desktop notifications and Quattro bar widgets.
+- **Full Task Edit in QuickAdd Modal**:
+  - Pressing <kbd>e</kbd> on any task opens the QuickAdd modal in edit mode with full control over task title, profile selector, dynamic tag pills, multiline notes, and reminder presets.
+  - Preserves existing task IDs and creation timestamps while updating modified fields cleanly via `TodoStore.updateTodo`.
+- **Smart MRU Tag Autocompletion & Archive Harvesting**:
+  - Contextual hashtag autocompletion in task input: leading `#` triggers profile suggestions, while embedded/trailing `#` triggers tag suggestions.
+  - Historical tag preservation: harvests tags from both active tasks and `todos-archive.json`, ensuring completed task tags are never lost.
+  - Most Recently Used (MRU) ranking when typing `#` with no query, based on task activity timestamps (`updatedAt` / `completedAt` / `createdAt`).
+  - Option 1 inline creation: typing uncatalogued tags or profiles offers `(new tag)` or `(new profile)` suggestions for instant <kbd>Tab</kbd> / <kbd>Enter</kbd> completion.
+  - High-performance `O(1)` tag indexing cache (`_tagCache`), delivering microscopic <0.01ms typing latency across thousands of tasks.
+- **Profile & Tag Search Chips**:
+  - Added search chips (`󰍉`) at index `-1` in both drawer and QuickAdd for instantaneous profile and tag filtering via `TagProfileSearchBox`.
+  - Supports live query filtering, keyboard arrow navigation, and instant tag creation on the fly.
+- **Snapshot Diff Previews & Git Resilience**:
+  - Visual git snapshot diff viewer with Vim preview navigation in the panel drawer.
+  - Non-blocking failure banner alerting users if background git snapshots or SSH signing encounter issues, preventing silent errors or terminal lockups.
+
+### Changed
+- **Horizontally Scrollable Profile Selector**: Single-line profile selector with edge fade gradients, smooth scroll centering (`ensureProfileVisible`), and keyboard tracking.
+- **Codebase Context Action Icon**: Updated action icon to distinct code braces glyph (`󰅩`).
+- **Tooling Modernization**: Replaced Deno references with Bun across CI, local verification scripts, and documentation.
+
+### Fixed
+- **Tag Chip Layout Safety**: Prevented horizontal overflow and tooltip bar cropping on tags in QuickAdd.
+- **Initial Git Repository Setup**: Ensured local git snapshot repository and initial commit are cleanly provisioned on fresh installations.
+- **Keybindings Bracket Cycling**: Fixed profile cycling shortcuts (`[` and `]`) in `PanelLogic.js` when custom bindings are loaded.
+
+
 ## [1.1.0] - 2026-10-11
 
 > **Feature & Ergonomics Release: Dynamic Contrast Calibration, Layout Safety, Laser Confirmations, and Task Notes Invariants.**

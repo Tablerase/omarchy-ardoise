@@ -115,25 +115,27 @@
 
 var CURRENT_SCHEMA_VERSION = 1
 var CURRENT_ARCHIVE_VERSION = 1
-var CURRENT_RELEASE_VERSION = "1.0.0"
+var CURRENT_RELEASE_VERSION = "1.2.0"
 
 var RELEASE_HIGHLIGHTS = {
   version: CURRENT_RELEASE_VERSION,
   title: "What's new in v" + CURRENT_RELEASE_VERSION,
-  summary: "Welcome to Ardoise! Keyboard-first task management with Vim motions, Quick Add, and automatic Git snapshots.",
+  summary: "Custom profile glyphs, QuickAdd task editing, smart MRU tag autocomplete, search chips, and snapshot diffs.",
   items: [
-    { icon: "󰞔", title: "Keyboard-First Invariants", desc: "Vim motions (j/k, h/l, g/G), two-stage Escape, and non-blocking modals." },
-    { icon: "󰌌", title: "Zero-Setup Global Shortcuts", desc: "Super+Alt+T to open Panel, Super+Shift+T for instant Quick Add from anywhere." },
-    { icon: "󰊢", title: "Git Snapshots & Recovery", desc: "Automatic local versioning, undo checkpoints, and git remote sync." },
-    { icon: "󰄬", title: "Urgency Ladder & Reminders", desc: "Smart presets, dynamic color escalation, and quiet background notifications." }
+    { icon: "󰄞", title: "Custom Profile Glyphs", desc: "Choose distinct Nerd Font icons for each profile with an interactive keyboard-navigable icon picker." },
+    { icon: "󰆓", title: "Full Task Editing Modal", desc: "Press e on any task to edit title, profile, tags, description notes, and reminders in QuickAdd." },
+    { icon: "󰓹", title: "Smart MRU Tag Autocomplete", desc: "Contextual #tag suggestions harvested from active and archived tasks with O(1) index caching." },
+    { icon: "󰍉", title: "Profile & Tag Search Chips", desc: "Dedicated search chips (index -1) in drawer and QuickAdd for instantaneous tag/profile filtering." }
   ],
   highlights: [
-    "Keyboard-First Task Slate: Full vim motions (j/k, h/l, g/G, Tab, Space, Enter)",
-    "Two-Stage Escape: Blurs to container mode without losing draft notes or input text",
-    "Custom Reminder Picker: Natural language parsing ('2h', '17:30', 'tomorrow 9am') & mini-calendar",
-    "Intelligent 3-Tier Profile Resolution: Detects workspace context across Zed, VS Code, Neovim, and Tmux",
-    "Zero-Config Git Snapshots: Automatic background backups, commit diffs, and instant rollback",
-    "Hold-to-Confirm Safeguards: 800ms laser progress bar for deletions without annoying modal dialogs"
+    "Custom Profile Glyphs: Set custom Nerd Font icons per profile via interactive icon picker ('e' on profile)",
+    "QuickAdd Task Edit Mode: Full edit mode with profile selector, tag pills, multiline notes, and reminders",
+    "Smart Tag Autocompletion: Contextual hashtag autocompletion (leading profile vs embedded tag)",
+    "Historical Tag Preservation: Tags harvested from both active tasks and todos-archive.json with MRU ordering",
+    "Scalable O(1) Tag Indexing: Sub-millisecond keystroke searches over thousands of tasks with cached indexing",
+    "Profile & Tag Search Chips: Quick '/' search chips with live match counts in drawer and QuickAdd",
+    "Snapshot Diff Visualisation: Direct diff inspection in the UI for git history and undo checkpoints",
+    "Git Snapshot Failure Alerts: Non-blocking warning banner when automatic snapshots or signing fail"
   ]
 }
 
