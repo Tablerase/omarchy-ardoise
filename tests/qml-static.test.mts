@@ -528,8 +528,10 @@ test("UI Ergonomics & Shortcuts Integrity: Action buttons focus, help Backspace 
       reminderPickerContent.includes('"calendar"') &&
       reminderPickerContent.includes("dateConfirmed") &&
       reminderPickerContent.includes("TodoStore.getMonthName") &&
-      reminderPickerContent.includes("defaultTime"),
-    "ReminderPicker must support full keyboard Vim navigation for calendar grid, month name header formatting, and defaultTime preservation"
+      reminderPickerContent.includes("defaultTime") &&
+      reminderPickerContent.includes("opacity: dayCell.modelData.isCurrentMonth ? 1 : 0") &&
+      !reminderPickerContent.includes("visible: dayCell.modelData.isCurrentMonth"),
+    "ReminderPicker must support full keyboard Vim navigation for calendar grid, month name header formatting, and preserve grid column alignment via opacity: 0"
   );
   const datePickerPath = path.join(repoDir, "ui", "DatePicker.qml");
   assert.ok(fs.existsSync(datePickerPath), "ui/DatePicker.qml must exist for reusable due-date / milestone picking");
