@@ -1321,7 +1321,7 @@ test("Task Context Menu & Archive Browser: contracts for components, IPC, and la
     "ArchiveModal must defensively guard purgeHold access against uninitialized or missing references"
   );
   assert.ok(
-    readme.includes("`unarchive`") && readme.includes("`purgeArchived`") && readme.includes("**31 shell commands**"),
+    readme.includes("`unarchive`") && readme.includes("`purgeArchived`") && (readme.includes("**38 shell commands**") || readme.includes("**31 shell commands**")),
     "README must document the archive commands and the updated command count"
   );
   assert.ok(

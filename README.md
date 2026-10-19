@@ -21,15 +21,10 @@ lock-in, point any tool you like at the file and it reacts instantly.
 <!-- </div> -->
 
 > [!NOTE]
-> **Initial Public Release (`v1.0.0`)**: Ardoise is fully
-functional, offline-first, and backed by a comprehensive test suite.
-As this is its first public outing on Omarchy, UI ergonomics,
-shortcut defaults, and CLI/IPC hooks may receive quick refinements
-based on community feedback.
->
+> **Ardoise `v1.2.0`**: Fully functional, offline-first, and backed by a comprehensive test suite.
 > If you encounter edge cases or have workflow suggestions, please
-[open an issue](https://github.com/Tablerase/omarchy-ardoise/issues)
-or share your thoughts!
+> [open an issue](https://github.com/Tablerase/omarchy-ardoise/issues)
+> or share your thoughts!
 
 ---
 
@@ -67,15 +62,16 @@ ignore until you want it.
   <img src="./screenshots/hold-to-confirm.png" alt="Ardoise Hold-to-Confirm Progress Bar" width="440" />
 </p>
 
-- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add**: a fullscreen capture bar. Type, <kbd>Enter</kbd>, and you're done.
+- <img src="https://api.iconify.design/mdi:lightning-bolt-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Quick Add & task editor**: a fullscreen capture bar and task editor. Type, <kbd>Enter</kbd>, and you're done. Press <kbd>e</kbd> on any task in the panel to edit title, profile, tags, notes, and reminders in the Quick Add modal.
 
 <p align="center">
   <img src="./screenshots/quick-add.png" alt="Ardoise Quick Add Capture Modal" width="440">
 </p>
 
-- <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles & tags.** `#work`, `#space work`, and custom profiles all work.
-  `#perso` and `#personal` resolve to the same profile. Horizontal pill rows feature edge breathing room so scaled chips are never cropped.
-  Each profile supports custom Nerd Font icon customization with live search directly in Quick Add (<kbd>e</kbd>) or via CLI.
+- <img src="https://api.iconify.design/mdi:tag-multiple-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **Profiles, tags & smart autocompletion.** `#work`, `#space work`, and custom profiles all work.
+  Leading `#` suggests profiles; trailing `#tag` suggests tags harvested from active and archived tasks with MRU (most recently used) ranking and $O(1)$ index caching.
+  Dedicated search chips (<kbd>/</kbd>) in drawer and Quick Add let you filter or create profiles and tags on the fly.
+  Each profile supports custom Nerd Font icon customization with an interactive picker modal (<kbd>e</kbd> on profile) or via CLI.
 
 </details>
 
@@ -148,7 +144,7 @@ Your data directory is a git repository, so every change is a snapshot.
 <details>
 <summary><img src="https://api.iconify.design/mdi:console-line.svg?color=%2358a6ff" width="14" height="14" alt="" /> <b>Scripting & AI integration</b></summary>
 
-- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **31 shell commands** over `omarchy-shell tablerase.ardoise` (see
+- <img src="https://api.iconify.design/mdi:terminal.svg?color=%2358a6ff" width="13" height="13" alt="" /> **38 shell commands** over `omarchy-shell tablerase.ardoise` (see
   [Scripting](#scripting-automation)).
 - <img src="https://api.iconify.design/mdi:file-eye-outline.svg?color=%2358a6ff" width="13" height="13" alt="" /> **React to writes.** The data file is watched, so external tools, git hooks,
   and AI agents can write to it and the UI updates immediately.
