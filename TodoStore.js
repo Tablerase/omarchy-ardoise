@@ -2577,12 +2577,42 @@ function formatCustomPreview(isoDate, baseDate) {
 }
 
 /**
- * Parses a custom or natural language reminder string into an ISO timestamp and friendly label.
+ * Detects whether the current system or specified locale prefers month-first (US: MM/DD/YYYY)
+ * or day-first (EU/UK/DE/FR/etc.: DD/MM/YYYY).
+ * @param {string} [locale]
+ * @returns {"month-first"|"day-first"}
+ */
+function getLocaleDateOrder(locale) {
+  try {
+    var d = new Date(2026, 0, 22) // Jan 22, 2026: month is 1 (index 0), day is 22
+    var s = locale ? d.toLocaleDateString(locale) : d.toLocaleDateString()
+    var mIdx = s.indexOf("1")
+    var dIdx = s.indexOf("22")
+    if (mIdx !== -1 && dIdx !== -1) {
+      return mIdx < dIdx ? "month-first" : "day-first"
+    }
+  } catch (e) {}
+  return "day-first"
+}
+
+/**
+ * Parses a custom or natural language reminder or date string into an ISO timestamp and friendly label.
+ * Supports:
+ * - Relative durations ("45m", "2h", "1.5h", "3d", "45")
+ * - Day keywords ("tomorrow", "tom", "tonight", "today 16:00")
+ * - Weekdays ("monday", "friday 14:00", "next tuesday")
+ * - Direct date formats with locale awareness ("10/03/2026", "10.03.2026", "10-03-2026", "10/03")
+ * - ISO dates ("2026-10-15 14:00", "2026/10/15")
+ * - Times with European notation ("14h30", "14h", "14:30", "2:30pm", "9am")
+ * - Month names ("oct 15 14:00", "15 oct")
+ * - ISO string fallback
+ *
  * @param {string|null|undefined} input
  * @param {Date|number|string} [baseDate]
+ * @param {{ locale?: string, preserveTime?: boolean, allowPast?: boolean }} [options]
  * @returns {{ iso: string, label: string }|null}
  */
-function parseCustomReminder(input, baseDate) {
+function parseCustomReminder(input, baseDate, options) {
   if (!input) return null
   var raw = String(input).trim()
   if (!raw) return null
@@ -2640,24 +2670,33 @@ function parseCustomReminder(input, baseDate) {
   }
 
   /**
+   * Parses time portion supporting: "14:30", "14.30", "14h30", "14h", "2:30pm", "9am", "at 17:00"
    * @param {string} timeStr
    * @returns {{ hours: number, minutes: number }|null}
    */
   function parseTimePart(timeStr) {
     if (!timeStr) return null
-    var t = timeStr.trim().toLowerCase()
-    var tm = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/)
+    var t = timeStr.trim().toLowerCase().replace(/^at\s+/, "")
+    var tm = t.match(/^(\d{1,2})(?:[:.hH](\d{2}))?\s*(h)?\s*(am|pm)?$/i)
     if (!tm) return null
     var hh = Number(tm[1])
     var mm = tm[2] ? Number(tm[2]) : 0
-    var ampm = tm[3]
+    var ampm = (tm[4] || "").toLowerCase()
     if (ampm === "pm" && hh < 12) hh += 12
     if (ampm === "am" && hh === 12) hh = 0
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
     return { hours: hh, minutes: mm }
   }
 
-  // 4. Day keyword + time (e.g. "tomorrow 14:00", "today 5pm", "tom 9am")
+  // Helper to resolve default hours/minutes when omitted from date string
+  function getDefaultTime() {
+    if (options && options.preserveTime && baseDate instanceof Date && !isNaN(baseDate.getTime())) {
+      return { hours: baseDate.getHours(), minutes: baseDate.getMinutes() }
+    }
+    return { hours: 9, minutes: 0 }
+  }
+
+  // 4. Day keyword + time (e.g. "tomorrow 14:00", "today 5pm", "tom 9am", "today at 16h30")
   var dayKeyMatch = str.match(/^(today|tomorrow|tom)\s+(.+)$/)
   if (dayKeyMatch) {
     var dayWord = dayKeyMatch[1]
@@ -2676,7 +2715,126 @@ function parseCustomReminder(input, baseDate) {
     }
   }
 
-  // 5. Plain time of day (e.g. "14:30", "9:00", "9am", "5:30pm", "21:15")
+  // 5. Weekday target (e.g. "monday", "friday 14:00", "next tuesday 9am", "thu 18h30")
+  var weekDays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+  var shortDays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+  var dayRegex = "(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)"
+  var weekMatch = str.match(new RegExp("^(?:(next)\\s+)?(" + dayRegex + ")(?:\\s+(.+))?$"))
+  if (weekMatch) {
+    var isNext = Boolean(weekMatch[1])
+    var dayName = weekMatch[2]
+    var timeStr = weekMatch[3]
+    var targetDayIdx = weekDays.indexOf(dayName)
+    if (targetDayIdx === -1) targetDayIdx = shortDays.indexOf(dayName)
+    if (targetDayIdx !== -1) {
+      var tpWeek = timeStr ? parseTimePart(timeStr) : getDefaultTime()
+      if (tpWeek) {
+        var currentDayIdx = now.getDay()
+        var diff = targetDayIdx - currentDayIdx
+        if (diff <= 0 || isNext) diff += 7
+        var dWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff, tpWeek.hours, tpWeek.minutes, 0, 0)
+        var isoWeek = dWeek.toISOString()
+        return { iso: isoWeek, label: formatCustomPreview(isoWeek, now) }
+      }
+    }
+  }
+
+  // 6. Direct date: Year-first YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD [time]
+  var ymdMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[ ,t]+(.+))?$/)
+  if (ymdMatch) {
+    var ymdYear = Number(ymdMatch[1])
+    var ymdMonth = Number(ymdMatch[2]) - 1
+    var ymdDay = Number(ymdMatch[3])
+    var ymdTime = ymdMatch[4] ? parseTimePart(ymdMatch[4]) : getDefaultTime()
+    if (ymdTime && ymdMonth >= 0 && ymdMonth <= 11 && ymdDay >= 1 && ymdDay <= 31) {
+      var dYmd = new Date(ymdYear, ymdMonth, ymdDay, ymdTime.hours, ymdTime.minutes, 0, 0)
+      if (!isNaN(dYmd.getTime())) {
+        var isoYmd = dYmd.toISOString()
+        return { iso: isoYmd, label: formatCustomPreview(isoYmd, now) }
+      }
+    }
+  }
+
+  // 7. Direct date: Day/Month/Year or Month/Day/Year (e.g. "10/03/2026", "10.03.2026", "10-03-2026", "10/03/26")
+  var dmyMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})(?:[ ,t]+(.+))?$/)
+  if (dmyMatch) {
+    var n1 = Number(dmyMatch[1])
+    var n2 = Number(dmyMatch[2])
+    var dmyYear = Number(dmyMatch[3])
+    if (dmyYear < 100) dmyYear += 2000
+    var dmyTime = dmyMatch[4] ? parseTimePart(dmyMatch[4]) : getDefaultTime()
+    if (dmyTime) {
+      var resDay = 0
+      var resMonth = 0
+      if (n1 > 12 && n2 <= 12) {
+        // Unambiguous day-first: DD/MM/YYYY
+        resDay = n1
+        resMonth = n2 - 1
+      } else if (n2 > 12 && n1 <= 12) {
+        // Unambiguous month-first: MM/DD/YYYY
+        resMonth = n1 - 1
+        resDay = n2
+      } else if (n1 <= 12 && n2 <= 12) {
+        // Ambiguous: resolve using locale date order
+        var order = getLocaleDateOrder(options && options.locale)
+        if (order === "month-first") {
+          resMonth = n1 - 1
+          resDay = n2
+        } else {
+          resDay = n1
+          resMonth = n2 - 1
+        }
+      }
+      if (resDay >= 1 && resDay <= 31 && resMonth >= 0 && resMonth <= 11) {
+        var dDmy = new Date(dmyYear, resMonth, resDay, dmyTime.hours, dmyTime.minutes, 0, 0)
+        if (!isNaN(dDmy.getTime())) {
+          var isoDmy = dDmy.toISOString()
+          return { iso: isoDmy, label: formatCustomPreview(isoDmy, now) }
+        }
+      }
+    }
+  }
+
+  // 8. Short date without year: "10/03", "10.03", "10-03" [time]
+  var shortDateMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})(?:[ ,t]+(.+))?$/)
+  if (shortDateMatch) {
+    var sn1 = Number(shortDateMatch[1])
+    var sn2 = Number(shortDateMatch[2])
+    var shortTime = shortDateMatch[3] ? parseTimePart(shortDateMatch[3]) : getDefaultTime()
+    if (shortTime) {
+      var sDay = 0
+      var sMonth = 0
+      if (sn1 > 12 && sn2 <= 12) {
+        sDay = sn1
+        sMonth = sn2 - 1
+      } else if (sn2 > 12 && sn1 <= 12) {
+        sMonth = sn1 - 1
+        sDay = sn2
+      } else if (sn1 <= 12 && sn2 <= 12) {
+        var sOrder = getLocaleDateOrder(options && options.locale)
+        if (sOrder === "month-first") {
+          sMonth = sn1 - 1
+          sDay = sn2
+        } else {
+          sDay = sn1
+          sMonth = sn2 - 1
+        }
+      }
+      if (sDay >= 1 && sDay <= 31 && sMonth >= 0 && sMonth <= 11) {
+        var curYear = now.getFullYear()
+        var dShort = new Date(curYear, sMonth, sDay, shortTime.hours, shortTime.minutes, 0, 0)
+        if ((!options || !options.allowPast) && dShort.getTime() <= now.getTime()) {
+          dShort.setFullYear(curYear + 1)
+        }
+        if (!isNaN(dShort.getTime())) {
+          var isoShort = dShort.toISOString()
+          return { iso: isoShort, label: formatCustomPreview(isoShort, now) }
+        }
+      }
+    }
+  }
+
+  // 9. Plain time of day (e.g. "14:30", "14h30", "14h", "9:00", "9am", "5:30pm", "21:15")
   var plainTime = parseTimePart(str)
   if (plainTime) {
     var dTime = new Date(now.getTime())
@@ -2689,25 +2847,7 @@ function parseCustomReminder(input, baseDate) {
     return { iso: isoTime, label: formatCustomPreview(isoTime, now) }
   }
 
-  // 6. ISO Date YYYY-MM-DD [HH:MM]
-  var isoDateMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ t](\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?$/)
-  if (isoDateMatch) {
-    var y = Number(isoDateMatch[1])
-    var m = Number(isoDateMatch[2]) - 1
-    var day = Number(isoDateMatch[3])
-    var h = isoDateMatch[4] ? Number(isoDateMatch[4]) : 9
-    var min = isoDateMatch[5] ? Number(isoDateMatch[5]) : 0
-    var ap = isoDateMatch[6]
-    if (ap === "pm" && h < 12) h += 12
-    if (ap === "am" && h === 12) h = 0
-    var dIsoParsed = new Date(y, m, day, h, min, 0, 0)
-    if (!isNaN(dIsoParsed.getTime())) {
-      var isoParsed = dIsoParsed.toISOString()
-      return { iso: isoParsed, label: formatCustomPreview(isoParsed, now) }
-    }
-  }
-
-  // 7. Month name + day (e.g. "oct 15 14:00", "15 oct 9am", "october 15")
+  // 10. Month name + day (e.g. "oct 15 14:00", "15 oct 9am", "october 15")
   var monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
   var monthRegex = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
   var mNameMatch1 = str.match(new RegExp("^(" + monthRegex + ")\\s+(\\d{1,2})(?:\\s+(.+))?$"))
@@ -2727,11 +2867,11 @@ function parseCustomReminder(input, baseDate) {
   if (mNameMonth && mNameDay >= 1 && mNameDay <= 31) {
     var monthIdx = monthNames.indexOf(mNameMonth)
     if (monthIdx !== -1) {
-      var parsedTime = mNameTimePart ? parseTimePart(mNameTimePart) : { hours: 9, minutes: 0 }
+      var parsedTime = mNameTimePart ? parseTimePart(mNameTimePart) : getDefaultTime()
       if (parsedTime) {
         var dMonth = new Date(now.getFullYear(), monthIdx, mNameDay, parsedTime.hours, parsedTime.minutes, 0, 0)
         // If date has already passed in current year, schedule for next year
-        if (dMonth.getTime() <= now.getTime()) {
+        if ((!options || !options.allowPast) && dMonth.getTime() <= now.getTime()) {
           dMonth.setFullYear(now.getFullYear() + 1)
         }
         var isoMonth = dMonth.toISOString()
@@ -2740,7 +2880,7 @@ function parseCustomReminder(input, baseDate) {
     }
   }
 
-  // 8. General Date fallback (e.g. standard ISO-8601 string)
+  // 11. General Date fallback (e.g. standard ISO-8601 string)
   var fallbackDate = new Date(raw)
   if (!isNaN(fallbackDate.getTime())) {
     var isoFallback = fallbackDate.toISOString()
@@ -2748,6 +2888,17 @@ function parseCustomReminder(input, baseDate) {
   }
 
   return null
+}
+
+/**
+ * General-purpose date and time parser (usable for due dates, milestones, reminders).
+ * @param {string|null|undefined} input
+ * @param {Date|number|string} [baseDate]
+ * @param {{ locale?: string, preserveTime?: boolean, allowPast?: boolean }} [options]
+ * @returns {{ iso: string, label: string }|null}
+ */
+function parseCustomDate(input, baseDate, options) {
+  return parseCustomReminder(input, baseDate, options)
 }
 
 /**
@@ -3432,6 +3583,8 @@ if (typeof module !== "undefined" && module.exports) {
     computePresetReminder,
     formatCustomPreview,
     parseCustomReminder,
+    parseCustomDate,
+    getLocaleDateOrder,
     normalizeArchive,
     archiveCompleted,
     getArchivedCount,

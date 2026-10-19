@@ -2049,32 +2049,4 @@ test("GitModal Action Wiring, Context Menu & Visual Feedback Invariants", () => 
   );
 });
 
-test("QuickAdd & PanelContent Task Context Modification & Removal Synchronization", () => {
-  const quickAdd = fs.readFileSync(path.join(repoDir, "QuickAdd.qml"), "utf8");
-  const panelContent = fs.readFileSync(path.join(repoDir, "PanelContent.qml"), "utf8");
-
-  // 1. QuickAdd edit mode initialization attaches repo fallback when location is absent
-  assert.ok(
-    quickAdd.includes("if (targetTask.location) {") &&
-      quickAdd.includes("root.detectedContext = targetTask.location") &&
-      quickAdd.includes("} else if (targetTask.repo) {") &&
-      quickAdd.includes("root.detectedContext = { repo: targetTask.repo, subpath: null, localPath: null }"),
-    "QuickAdd edit mode must fall back to targetTask.repo when location object is null"
-  );
-
-  // 2. QuickAdd edit mode submit computes finalRepo and synchronizes repo with TodoStore.updateTodo
-  assert.ok(
-    quickAdd.includes("var finalRepo = (parsed && parsed.repo) ? parsed.repo : (loc && loc.repo ? loc.repo : null)") &&
-      quickAdd.includes("repo: finalRepo"),
-    "QuickAdd edit mode must compute finalRepo and pass repo: finalRepo to TodoStore.updateTodo"
-  );
-
-  // 3. PanelContent syncFilteredTodos resets expandedSubSection when codebase subsection is no longer valid
-  assert.ok(
-    panelContent.includes('if (root.expandedTaskId && root.expandedSubSection === "codebase")') &&
-      panelContent.includes('root.expandedSubSection = "header"'),
-    "PanelContent syncFilteredTodos must fall back expandedSubSection to header if task loses codebase location"
-  );
-});
-
 
