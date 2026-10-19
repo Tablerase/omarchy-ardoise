@@ -1594,10 +1594,18 @@ test("Security & Privacy Baseline: Git commit shell safety and notification argv
     "BarWidget and TodoStore must implement complete deleted task recovery inspecting both commit and parent with completion signaling"
   );
   assert.ok(
+    barWidget.includes('signal gitRollbackCompleted('),
+    "BarWidget must declare gitRollbackCompleted signal"
+  );
+  assert.ok(
     gitModal.includes('id: feedbackPill') &&
+      gitModal.includes('id: syncFeedbackPill') &&
+      gitModal.includes('feedbackIcon') &&
       gitModal.includes('function onGitRecoverCompleted') &&
+      gitModal.includes('function onGitRollbackCompleted') &&
+      gitModal.includes('function onGitSyncStatusChanged') &&
       gitModal.includes('function showFeedback('),
-    "GitModal must listen to gitRecoverCompleted and render visual feedback pill"
+    "GitModal must listen to gitRecoverCompleted, gitRollbackCompleted, gitSyncStatusChanged and render visual feedback pills"
   );
   assert.ok(
     gitModal.includes('readonly property color secondaryText: TodoStore.getReadableSecondary') &&

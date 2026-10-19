@@ -57,6 +57,7 @@ BarWidget {
   property string lastArchiveText: ""
   property string gitRecoverFeedback: ""
   signal gitRecoverCompleted(int count, string message, bool success)
+  signal gitRollbackCompleted(string hash, string message, bool success)
 
   // Durable archive-operation state. Restore/purge read both files fresh from
   // disk (never the possibly-stale lastArchiveText), write the active store
@@ -834,10 +835,13 @@ BarWidget {
       h,
       root.deviceName
     ])
+    var rollbackMsg = "Rolled back to " + h.substring(0, 7)
+    root.gitRollbackCompleted(h, rollbackMsg, true)
     Qt.callLater(function() {
       todoFile.reload()
       archiveFile.reload()
       root.refreshGitHistory()
+      root.reinspectCurrentSnapshot()
     })
   }
 

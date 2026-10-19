@@ -27,6 +27,7 @@ Rectangle {
   property alias contextMenu: contextMenu
   property string feedbackMessage: ""
   property bool feedbackIsError: false
+  property string feedbackIcon: "󰄲"
 
   Timer {
     id: feedbackTimer
@@ -37,16 +38,17 @@ Rectangle {
     }
   }
 
-  function showFeedback(message, isError) {
+  function showFeedback(message, isError, customIcon) {
     if (!message) return
     root.feedbackMessage = message
     root.feedbackIsError = Boolean(isError)
+    root.feedbackIcon = customIcon ? customIcon : (isError ? "󰅖" : "󰄲")
     feedbackTimer.restart()
     Quickshell.execDetached([
       "notify-send",
       "-a", "Ardoise",
       "-i", isError ? "dialog-information" : "edit-undo",
-      "Task Recovery",
+      "Ardoise Git",
       message
     ])
   }
@@ -54,7 +56,19 @@ Rectangle {
   Connections {
     target: root.barWidget
     function onGitRecoverCompleted(count, message, success) {
-      root.showFeedback(message, !success && count === 0)
+      root.showFeedback(message, !success && count === 0, success ? "󰄲" : "󰅖")
+    }
+    function onGitRollbackCompleted(hash, message, success) {
+      root.showFeedback(message, !success, success ? "󰄲" : "󰅖")
+    }
+    function onGitSyncStatusChanged() {
+      if (!root.barWidget) return
+      var status = root.barWidget.gitSyncStatus
+      if (status === "success") {
+        root.showFeedback(root.barWidget.gitSyncMessage || "Sync complete", false, "󰄲")
+      } else if (status === "error") {
+        root.showFeedback(root.barWidget.gitSyncMessage || "Sync failed", true, "󰅖")
+      }
     }
   }
 
@@ -829,6 +843,7 @@ Rectangle {
               onClicked: {
                 if (root.barWidget && typeof root.barWidget.disableLocalSigning === "function") {
                   root.barWidget.disableLocalSigning()
+                  root.showFeedback("Commit signing disabled", false, "󰄲")
                 }
               }
             }
@@ -843,6 +858,7 @@ Rectangle {
               onClicked: {
                 if (root.barWidget && typeof root.barWidget.triggerAutoCommit === "function") {
                   root.barWidget.triggerAutoCommit("Manual retry snapshot")
+                  root.showFeedback("Retrying snapshot...", false, "󰑐")
                 }
               }
             }
@@ -1546,7 +1562,7 @@ Rectangle {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.feedbackIsError ? "󰅖" : "󰄲"
+                text: root.feedbackIcon
                 color: root.feedbackIsError ? Color.urgent : Color.accent
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption * 0.95
@@ -1656,6 +1672,7 @@ Rectangle {
             event.accepted = true
             if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
               root.barWidget.setRemoteUrl(remoteField.text)
+              root.showFeedback("Remote URL saved", false, "󰄲")
             }
             remoteField.focus = false
             root.syncFocusIndex = 1
@@ -1665,6 +1682,7 @@ Rectangle {
             event.accepted = true
             if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
               root.barWidget.setRemoteUrl(remoteField.text)
+              root.showFeedback("Remote URL saved", false, "󰄲")
             }
             remoteField.focus = false
             root.syncFocusIndex = 1
@@ -1684,6 +1702,7 @@ Rectangle {
             onClicked: {
               if (root.barWidget && typeof root.barWidget.autoSetupGitRemote === "function") {
                 root.barWidget.autoSetupGitRemote(remoteField.text)
+                root.showFeedback("Setting up GitHub repo...", false, "󰊤")
               }
               root.forceActiveFocus()
             }
@@ -1706,6 +1725,7 @@ Rectangle {
             onClicked: {
               if (root.barWidget && typeof root.barWidget.setRemoteUrl === "function") {
                 root.barWidget.setRemoteUrl(remoteField.text)
+                root.showFeedback("Remote URL saved", false, "󰄲")
               }
               root.forceActiveFocus()
             }
@@ -1728,6 +1748,7 @@ Rectangle {
             onClicked: {
               if (root.barWidget && typeof root.barWidget.syncWithRemote === "function") {
                 root.barWidget.syncWithRemote()
+                root.showFeedback("Syncing with remote...", false, "󰁯")
               }
               root.forceActiveFocus()
             }
@@ -1738,6 +1759,43 @@ Rectangle {
               description: "Synchronize with remote repository"
               shortcut: "Enter / s"
               fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+            }
+          }
+
+          // Visual feedback pill for remote and sync actions
+          Rectangle {
+            id: syncFeedbackPill
+            visible: Boolean(root.feedbackMessage)
+            anchors.verticalCenter: parent.verticalCenter
+            implicitHeight: syncFeedbackContent.implicitHeight + Style.space(6)
+            implicitWidth: syncFeedbackContent.implicitWidth + Style.space(14)
+            radius: Style.cornerRadius * 0.4
+            color: root.feedbackIsError ? Util.alpha(Color.urgent, 0.16) : Util.alpha(Color.accent, 0.16)
+            border.width: 1
+            border.color: root.feedbackIsError ? Util.alpha(Color.urgent, 0.45) : Util.alpha(Color.accent, 0.45)
+
+            Row {
+              id: syncFeedbackContent
+              anchors.centerIn: parent
+              spacing: Style.space(6)
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.feedbackIcon
+                color: root.feedbackIsError ? Color.urgent : Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.95
+              }
+
+              Text {
+                id: syncFeedbackText
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.feedbackMessage
+                color: root.feedbackIsError ? Color.urgent : Color.accent
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption * 0.85
+                font.bold: true
+              }
             }
           }
         }
@@ -1796,7 +1854,7 @@ Rectangle {
     }
     onExited: function(code) {
       if (code === 0 && root.pendingCopyHash) {
-        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Commit hash copied", root.pendingCopyHash.slice(0, 7)])
+        root.showFeedback("Copied hash: " + root.pendingCopyHash.slice(0, 7), false, "󰅍")
       }
     }
   }
@@ -1822,7 +1880,7 @@ Rectangle {
     }
     onExited: function(code) {
       if (code === 0 && root.pendingCopyTitle) {
-        Quickshell.execDetached(["notify-send", "-a", "Ardoise", "-i", "edit-copy", "Task title copied", root.pendingCopyTitle.substring(0, 40)])
+        root.showFeedback("Copied: " + root.pendingCopyTitle.substring(0, 25), false, "󰅍")
       }
     }
   }
